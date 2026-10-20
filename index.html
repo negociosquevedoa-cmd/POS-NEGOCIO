@@ -1,0 +1,2206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QUEVEDO ABARROTES - Sistema POS</title>
+    <style>
+
+        /* Si el body tiene la clase 'rol-vendedor', se ocultan todos los bloques de costo */
+body.rol-vendedor .campo-costo-admin {
+    display: none !important;
+}
+
+     /* Mostrar u ocultar costos dependiendo del rol en el body */
+    body.rol-vendedor .campo-costo-admin,
+    body.rol-vendedor .col-costo-admin {
+        display: none !important;
+    }
+
+    body:not(.rol-vendedor) .campo-costo-admin {
+        display: block !important;
+    }
+
+    body:not(.rol-vendedor) .col-costo-admin {
+        display: table-cell !important;
+    }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f172a;
+            color: #ffffff;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        /* Navbar Header */
+        header {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .brand-section h1 { font-size: 20px; color: #ffffff; display: flex; align-items: center; gap: 10px; }
+        .caja-status { font-size: 13px; color: #4ade80; margin-top: 4px; font-weight: 500; }
+        .nav-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .search-input {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            color: white;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 14px;
+            width: 180px;
+        }
+        .nav-btn {
+            background-color: #334155;
+            color: #cbd5e1;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .nav-btn:hover { background-color: #475569; color: white; }
+        .nav-btn.active { background-color: #2563eb; color: white; }
+        .nav-btn.cierre { background-color: #854d0e; color: #fef08a; }
+        .nav-btn.cierre:hover { background-color: #a16207; }
+        .nav-btn.salir { background-color: #991b1b; color: #fecaca; }
+        .nav-btn.salir:hover { background-color: #dc2626; }
+
+        /* Contenedores de Vistas */
+        .tab-content { display: none; }
+        .tab-content.active { display: grid; }
+
+        /* Estilos de Tarjetas y Grillas */
+        .ventas-grid { grid-template-columns: 2fr 1fr; gap: 20px; }
+        .compras-grid { grid-template-columns: 2fr 1fr; gap: 20px; }
+        .inventario-grid { grid-template-columns: 360px 1fr; gap: 20px; }
+        .kardex-grid { grid-template-columns: 1fr; gap: 20px; }
+        
+        .reportes-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .report-card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 18px;
+        }
+        .report-card-title { font-size: 12px; color: #94a3b8; font-weight: bold; margin-bottom: 8px; }
+        .report-card-val { font-size: 24px; font-weight: bold; color: #4ade80; }
+        .report-card-val.purple { color: #c084fc; }
+        .report-card-val.blue { color: #38bdf8; }
+        .report-card-val.red { color: #f87171; }
+
+        .card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 20px;
+            min-height: 250px;
+            display: flex;
+            flex-direction: column;
+        }
+        .card-header { font-size: 18px; font-weight: bold; color: #ffffff; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+
+        /* Catálogo Visual */
+        .catalogo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 12px;
+            width: 100%;
+        }
+        .prod-card {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .prod-card img {
+            width: 100%;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 6px;
+            margin-bottom: 6px;
+        }
+        .prod-title { font-size: 13px; font-weight: bold; color: #fff; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .select-pres {
+            width: 100%;
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            color: #38bdf8;
+            padding: 4px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-bottom: 6px;
+            font-weight: bold;
+        }
+        .btn-add-cart {
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            padding: 6px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn-add-cart:hover { background-color: #1d4ed8; }
+
+        /* Lista de Carrito / Compras */
+        .cart-list { flex: 1; overflow-y: auto; margin-bottom: 15px; }
+        .cart-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .cart-item-info { font-size: 12px; }
+        .cart-item-title { font-weight: bold; color: white; }
+        .cart-item-sub { color: #94a3b8; font-size: 11px; }
+        .cart-controls { display: flex; align-items: center; gap: 4px; }
+        .input-qty {
+            width: 50px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #4ade80;
+            font-weight: bold;
+            font-size: 13px;
+            text-align: center;
+            padding: 3px;
+            border-radius: 4px;
+        }
+        .btn-qty {
+            background-color: #334155;
+            color: white;
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .btn-qty:hover { background-color: #475569; }
+        .btn-del { background-color: #7f1d1d; color: #fca5a5; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+
+        /* Formulario Desplegable */
+        details {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 8px;
+        }
+        summary {
+            font-size: 12px;
+            font-weight: bold;
+            color: #38bdf8;
+            cursor: pointer;
+            outline: none;
+        }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+        .form-group { margin-bottom: 8px; }
+        .form-group label { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px; font-weight: 600; }
+        .form-control {
+            width: 100%;
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            color: white;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .btn-primary {
+            width: 100%;
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 15px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        /* Tabla Inventario, Kárdex y Reportes */
+        .table-wrapper { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+        th { border-bottom: 1px solid #334155; color: #94a3b8; padding: 10px; font-weight: 600; }
+        td { border-bottom: 1px solid #334155; padding: 10px; color: #cbd5e1; vertical-align: middle; }
+        
+        /* Precios y Stock apilados uno debajo del otro */
+        .price-badge {
+            display: block;
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-bottom: 3px;
+            width: fit-content;
+        }
+/* Si el body tiene la clase 'rol-vendedor', se ocultan todos los bloques de costo */
+body.rol-vendedor .campo-costo-admin {
+    display: none !important;
+}
+        /* Carrito Footer */
+        .cart-empty { flex: 1; display: flex; justify-content: center; align-items: center; color: #64748b; font-size: 15px; }
+        .cart-footer { border-top: 1px solid #334155; padding-top: 15px; margin-top: auto; }
+        .total-row { display: flex; justify-content: space-between; align-items: center; font-size: 20px; font-weight: bold; margin-bottom: 15px; }
+        .total-amount { color: #4ade80; font-size: 24px; }
+        .btn-procesar { width: 100%; background-color: #334155; color: #94a3b8; border: none; padding: 12px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: not-allowed; }
+        .btn-procesar.active { background-color: #16a34a; color: white; cursor: pointer; }
+        .btn-procesar.active:hover { background-color: #15803d; }
+
+        /* MODALES */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 25px;
+            width: 480px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+        .modal-card h3 { color: #38bdf8; margin-bottom: 10px; }
+
+        .modal-alerta-card {
+            background-color: #ffffff;
+            color: #1e293b;
+            border-radius: 12px;
+            width: 450px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: left;
+        }
+        .modal-alerta-header {
+            background-color: #16a34a;
+            color: #ffffff;
+            padding: 16px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .modal-alerta-body {
+            padding: 20px;
+            max-height: 280px;
+            overflow-y: auto;
+            font-size: 13px;
+        }
+        .modal-alerta-footer {
+            padding: 12px 20px;
+            background-color: #f1f5f9;
+            text-align: right;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .pago-options { display: flex; gap: 10px; margin: 15px 0; }
+        .btn-pago-opt {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            border: 2px solid #334155;
+            background: #0f172a;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-pago-opt.selected { border-color: #38bdf8; background: #1e3a8a; }
+
+        .caja-efectivo {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: left;
+        }
+        .caja-efectivo label { display: block; font-size: 12px; color: #cbd5e1; margin-bottom: 4px; }
+        .caja-efectivo input {
+            width: 100%;
+            padding: 10px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #4ade80;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        .vuelto-box { font-size: 15px; font-weight: bold; color: #38bdf8; text-align: right; }
+
+        .qr-yape-box {
+            display: none;
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .qr-yape-box img {
+            width: 180px;
+            height: auto;
+            border-radius: 8px;
+            border: 2px solid #a855f7;
+            margin-bottom: 6px;
+        }
+        .qr-yape-box p { font-size: 12px; color: #cbd5e1; font-weight: bold; }
+
+        /* TICKET COMPROBANTE CON TEXTO NEGRO PARA IMPRESIÓN */
+        .ticket-modal {
+            background: #ffffff !important;
+            color: #000000 !important;
+            padding: 20px;
+            border-radius: 8px;
+            width: 380px;
+            font-family: 'Courier New', Courier, monospace;
+            text-align: left;
+        }
+        .ticket-header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; color: #000000 !important; }
+        .ticket-title { font-size: 16px; font-weight: bold; color: #000000 !important; }
+        .ticket-info { font-size: 11px; margin-bottom: 8px; color: #000000 !important; }
+        .ticket-table { width: 100%; font-size: 11px; border-collapse: collapse; margin-bottom: 10px; color: #000000 !important; }
+        .ticket-table th, .ticket-table td { text-align: left; padding: 4px 0; border-bottom: 1px dotted #888; color: #000000 !important; }
+        .ticket-total { font-weight: bold; border-top: 1px dashed #000; padding-top: 6px; text-align: right; font-size: 13px; color: #000000 !important; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #modal-ticket, #modal-ticket * { visibility: visible; color: #000000 !important; }
+            #modal-ticket { position: absolute; left: 0; top: 0; width: 100%; background: white !important; }
+            .no-print { display: none !important; }
+        }
+
+        .costo-item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #0f172a;
+            border: 1px solid #334155;
+            padding: 10px 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            text-align: left;
+            font-size: 13px;
+        }
+        .costo-item-input {
+            width: 100px;
+            background: #1e293b;
+            border: 1px solid #38bdf8;
+            color: #4ade80;
+            font-weight: bold;
+            padding: 6px;
+            border-radius: 6px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Principal -->
+    <header>
+        <div class="brand-section">
+            <h1>🛒 QUEVEDO ABARROTES</h1>
+            <div class="caja-status" id="info-caja">
+                🟢 Caja Abierta por <span id="usuario-rol">admin</span> (Monto inicial: S/ <span id="monto-inicial">0.00</span>)
+            </div>
+        </div>
+
+        <div class="nav-actions">
+            <button class="nav-btn active" id="btn-tab-ventas" onclick="cambiarTab('ventas')">🛒 Ventas</button>
+            <button class="nav-btn" id="btn-tab-compras" onclick="cambiarTab('compras')">🛍️ Compras Directas</button>
+            <button class="nav-btn" id="btn-tab-inventario" onclick="cambiarTab('inventario')">📦 Inventario</button>
+            <button class="nav-btn" id="btn-tab-caja" onclick="cambiarTab('caja')">💵 Caja (Cuadre Diario)</button>
+            <button class="nav-btn" id="btn-tab-kardex" onclick="cambiarTab('kardex')">📋 Kárdex</button>
+            <button class="nav-btn" id="btn-tab-reportes" onclick="cambiarTab('reportes')">📊 Reportes Mensuales</button>
+            <button class="nav-btn cierre" onclick="cerrarCaja()">🔒 Cierre / Arqueo de Caja</button>
+            <button class="nav-btn salir" onclick="cerrarSesion()">📁 Salir</button>
+        </div>
+    </header>
+
+    <!-- VISTA VENTAS -->
+    <div id="tab-ventas" class="tab-content ventas-grid active">
+        <div class="card">
+            <div class="card-header">
+                <span id="titulo-catalogo">Catálogo (0)</span>
+                <input type="text" class="search-input" placeholder="🔍 Buscar producto..." oninput="filtrarProductos(this.value)">
+            </div>
+            <div id="catalogo-productos" class="catalogo-grid">
+                <!-- Se insertan productos -->
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Resumen de Venta</div>
+            
+            <div id="contenedor-carrito" class="cart-empty">
+                El carrito está vacío
+            </div>
+
+            <div class="cart-footer">
+                <div class="total-row">
+                    <span>Total:</span>
+                    <span class="total-amount" id="monto-total">S/ 0.00</span>
+                </div>
+                <button class="btn-procesar" id="btn-pago" onclick="abrirModalPago()" disabled>💳 Procesar Pago</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA COMPRAS DIRECTAS -->
+    <div id="tab-compras" class="tab-content compras-grid">
+        <div class="card">
+            <div class="card-header">
+                <span>Catálogo para Pedido a Proveedor</span>
+                <input type="text" class="search-input" placeholder="🔍 Buscar producto..." oninput="renderizarCompras(this.value)">
+            </div>
+            <div id="catalogo-compras" class="catalogo-grid">
+                <!-- Se insertan productos para pedir -->
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header" style="flex-wrap: wrap; gap: 8px;">
+                <span>Resumen de Compra</span>
+                <button id="btn-mis-comandas-vendedor" onclick="abrirModalMisComandas()" style="background: #d97706; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; display: none;">📦 Mis Comandas Pendientes</button>
+            </div>
+            
+            <div id="contenedor-carrito-compras" class="cart-empty">
+                No hay productos en la solicitud
+            </div>
+
+            <div class="cart-footer">
+                <button class="btn-procesar" id="btn-enviar-compra" onclick="enviarSolicitudCompra()" disabled style="background:#2563eb; cursor:pointer;">📨 Enviar Pedido a Admin</button>
+            </div>
+        </div>
+
+        <div class="card" style="grid-column: 1 / -1; min-height: 250px; margin-top: 10px;">
+            <div class="card-header">
+                <span>📋 Registro de Comandas Realizadas (Historial de Tickets)</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>N° Comanda</th>
+                            <th>Fecha y Hora</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-registro-comandas-vendedor">
+                        <!-- Historial dinámico -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA INVENTARIO -->
+    <div id="tab-inventario" class="tab-content inventario-grid">
+        <div class="card">
+            <div class="card-header" id="titulo-form-producto">Registrar / Editar Producto</div>
+            <form id="form-producto" onsubmit="guardarProductoLocal(event)">
+                <input type="hidden" id="p-id-edit">
+                
+                <div class="form-group">
+                    <label>Nombre del Producto</label>
+                    <input type="text" id="p-nombre" class="form-control" placeholder="Ej. Arroz Superior" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Categoría</label>
+                        <select id="p-categoria" class="form-control" onchange="actualizarNombresPresentaciones()">
+                            <option value="Abarrotes">Abarrotes</option>
+                            <option value="ARROZ">ARROZ</option>
+                            <option value="AZUCAR">AZUCAR</option>
+                            <option value="Bebidas">Bebidas</option>
+                            <option value="Detergente">Detergente</option>
+                            <option value="Galletas">Galletas</option>
+                            <option value="Golosinas">Golosinas</option>
+                            <option value="Lácteos">Lácteos</option>
+                            <option value="Limpieza">Limpieza</option>
+                            <option value="Mantequilla">Mantequilla</option>
+                            <option value="Yogurt">Yogurt</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Código de Barras</label>
+                        <input type="text" id="p-codigo" class="form-control" placeholder="Opcional">
+                    </div>
+                </div>
+
+                <details open>
+    <summary id="sum-pres-1">1. VENTAS POR UNIDAD</summary>
+    <div class="form-row">
+        <div class="form-group campo-costo-admin">
+    <label id="lbl-costo-1">Costo Unid (S/)</label>
+    <input type="number" step="0.01" id="p-costo-unid" class="form-control input-costo" placeholder="0.00">
+</div>
+        <div class="form-group">
+            <label id="lbl-precio-1">Precio Venta Unid (S/)</label>
+            <input type="number" step="0.01" id="p-precio-unid" class="form-control" placeholder="0.70" required>
+        </div>
+        <div class="form-group">
+            <label id="lbl-stock-1">Stock Inicial Unid</label>
+            <input type="number" step="0.1" id="p-stock-unid" class="form-control" placeholder="100" value="0" required>
+        </div>
+    </div>
+</details>
+
+<details>
+    <summary id="sum-pres-2">2. VENTAS POR DOCENA</summary>
+    <div class="form-row">
+        <div class="form-group campo-costo-admin">
+    <label id="lbl-costo-2">Costo Docena (S/)</label>
+    <input type="number" step="0.01" id="p-costo-doc" class="form-control input-costo" placeholder="0.00">
+</div>
+        <div class="form-group">
+            <label id="lbl-precio-2">Precio Venta Docena (S/)</label>
+            <input type="number" step="0.01" id="p-precio-doc" class="form-control" placeholder="35.00">
+        </div>
+        <div class="form-group">
+            <label id="lbl-stock-2">Stock Inicial Docena</label>
+            <input type="number" id="p-stock-doc" class="form-control" placeholder="10" value="0">
+        </div>
+    </div>
+</details>
+
+<details>
+    <summary id="sum-pres-3">3. VENTAS POR PQTE</summary>
+    <div class="form-row">
+        <div class="form-group campo-costo-admin">
+    <label id="lbl-costo-3">Costo Pqte (S/)</label>
+    <input type="number" step="0.01" id="p-costo-paq" class="form-control input-costo" placeholder="0.00">
+</div>
+        <div class="form-group">
+            <label id="lbl-precio-3">Precio Venta Pqte (S/)</label>
+            <input type="number" step="0.01" id="p-precio-paq" class="form-control" placeholder="75.00">
+        </div>
+        <div class="form-group">
+            <label id="lbl-stock-3">Stock Inicial Pqte</label>
+            <input type="number" id="p-stock-paq" class="form-control" placeholder="5" value="0">
+        </div>
+    </div>
+</details>
+
+<details>
+    <summary id="sum-pres-4">4. VENTAS POR CAJA</summary>
+    <div class="form-row">
+        <div class="form-group campo-costo-admin">
+    <label id="lbl-costo-4">Costo Caja (S/)</label>
+    <input type="number" step="0.01" id="p-costo-caja" class="form-control input-costo" placeholder="0.00">
+</div>
+        <div class="form-group">
+            <label id="lbl-precio-4">Precio Venta Caja (S/)</label>
+            <input type="number" step="0.01" id="p-precio-caja" class="form-control" placeholder="100.00">
+        </div>
+        <div class="form-group">
+            <label id="lbl-stock-4">Stock Inicial Caja</label>
+            <input type="number" id="p-stock-caja" class="form-control" placeholder="2" value="0">
+        </div>
+    </div>
+</details>
+
+                <div class="form-group" style="margin-top: 10px;">
+                    <label>Imagen del Producto</label>
+                    <input type="file" id="input-imagen" class="form-control" accept="image/*" style="padding: 6px;">
+                    <input type="hidden" id="imagen-base64">
+                    <div id="vista-previa" style="margin-top: 8px; text-align: center; display: none;">
+                        <img id="img-preview" src="" style="max-height: 70px; border-radius: 6px; border: 1px solid #334155;">
+                    </div>
+                </div>
+
+                <button type="submit" id="btn-submit-prod" class="btn-primary">⚡ Guardar Producto</button>
+                <button type="button" id="btn-cancelar-edit" onclick="cancelarEdicion()" class="btn-primary" style="background:#475569; display:none; margin-top:6px;">Cancelar Edición</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <span>Inventario Actual</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr id="header-tabla-inventario">
+    <th>Producto</th>
+    <th>Categoría</th>
+    <th class="col-costo-admin">Costo</th>
+    <th>Precios de Venta</th>
+    <th>Stock Disponible</th>
+    <th id="col-header-acciones">Acciones</th>
+</tr>
+                    </thead>
+                    <tbody id="tabla-inventario">
+                        <!-- Llenado dinámico -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA CAJA (CUADRE DIARIO DE TURNO) -->
+    <div id="tab-caja" class="tab-content kardex-grid">
+        <div class="reportes-cards">
+            <div class="report-card">
+                <div class="report-card-title">💵 INICIO DE CAJA (Efectivo Base)</div>
+                <div class="report-card-val blue" id="caja-card-inicio">S/ 0.00</div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-title">📱 VENTAS POR YAPE (Turno Hoy)</div>
+                <div class="report-card-val purple" id="caja-card-yape">S/ 0.00</div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-title">💵 VENTAS EN EFECTIVO (Turno Hoy)</div>
+                <div class="report-card-val" id="caja-card-efectivo">S/ 0.00</div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-title">📉 SALIDAS / PAGOS REALIZADOS</div>
+                <div class="report-card-val red" id="caja-card-gastos">S/ 0.00</div>
+            </div>
+        </div>
+
+        <!-- CUADRE FÍSICO DIARIO -->
+        <div class="card" style="background: #0f172a; border: 2px solid #38bdf8; margin-bottom: 15px;">
+            <div class="card-header" style="color: #38bdf8;">
+                <span>🎯 Resumen de Cuadre / Efectivo Esperado en Cajón (Turno)</span>
+                <button onclick="imprimirArqueoTurno()" style="background: #16a34a; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer;">🧾 Imprimir Cuadre de Caja</button>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; text-align: center;">
+                <div style="background: #1e293b; padding: 12px; border-radius: 8px;">
+                    <span style="font-size: 12px; color: #94a3b8;">Total Cobrado en Efectivo:</span>
+                    <div style="font-size: 20px; font-weight: bold; color: #4ade80;" id="cuadre-efectivo-cobrado">S/ 0.00</div>
+                </div>
+                <div style="background: #1e293b; padding: 12px; border-radius: 8px;">
+                    <span style="font-size: 12px; color: #94a3b8;">Total Pagos / Salidas:</span>
+                    <div style="font-size: 20px; font-weight: bold; color: #f87171;" id="cuadre-gastos-salida">- S/ 0.00</div>
+                </div>
+                <div style="background: #1e293b; padding: 12px; border-radius: 8px; border: 1px solid #4ade80;" id="box-efectivo-final-container">
+                    <span style="font-size: 12px; color: #cbd5e1; font-weight: bold;">EFECTIVO FINAL EN CAJÓN:</span>
+                    <div style="font-size: 22px; font-weight: bold; color: #38bdf8;" id="cuadre-efectivo-cajon">S/ 0.00</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <span>📉 Registrar Pago / Salida de Dinero (Boletas, Comandas, Personal)</span>
+            </div>
+            
+            <form id="form-registro-gasto" onsubmit="registrarGastoDia(event)" style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; background: #0f172a; padding: 15px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 15px;">
+                <div>
+                    <label style="font-size: 11px; color: #94a3b8; font-weight: bold; display: block; margin-bottom: 4px;">Tipo / Concepto de Gasto</label>
+                    <select id="gasto-tipo" class="form-control" onchange="evaluarTipoGasto(this.value)">
+                        <option value="Pago de personal (Semanal)">Pago de personal (Semanal)</option>
+                        <option value="Pago de Boleta/Factura (Diario)">Pago de Boleta/Factura (Diario)</option>
+                        <option value="Pago de comanda">Pago de comanda (Por cobrar)</option>
+                        <option value="Gastos Varios / Insumos">Gastos Varios / Insumos</option>
+                    </select>
+                </div>
+
+                <div id="box-gasto-comanda" style="display: none;">
+                    <label style="font-size: 11px; color: #fbbf24; font-weight: bold; display: block; margin-bottom: 4px;">Seleccionar Comanda (Por Cobrar)</label>
+                    <select id="gasto-comanda-select" class="form-control" onchange="seleccionarComandaCobrar(this.value)" style="color: #fbbf24; font-weight: bold;">
+                    </select>
+                </div>
+
+                <div>
+                    <label style="font-size: 11px; color: #94a3b8; font-weight: bold; display: block; margin-bottom: 4px;">Detalle / N° Documento / Recibo</label>
+                    <input type="text" id="gasto-detalle" class="form-control" placeholder="Ej. Pago servicio luz Octubre" required>
+                </div>
+
+                <div>
+                    <label style="font-size: 11px; color: #94a3b8; font-weight: bold; display: block; margin-bottom: 4px;">Monto de Gasto (S/)</label>
+                    <input type="number" step="0.01" id="gasto-monto" class="form-control" placeholder="0.00" required>
+                </div>
+
+                <button type="submit" class="btn-primary" style="background: #dc2626; margin-top: 0; padding: 10px 16px;">➕ Registrar Salida</button>
+            </form>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            <th>Concepto / Tipo</th>
+                            <th>Detalle de Documento / Desglose</th>
+                            <th>Monto Restado (S/)</th>
+                            <th>Registrado Por</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-gastos-dia">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- HISTORIAL DE CIERRES DE CAJA GUARDADOS -->
+        <div class="card">
+            <div class="card-header">
+                <span>📁 Historial de Cierres / Arqueos de Caja Guardados por Día</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID Cierre</th>
+                            <th>Fecha y Hora</th>
+                            <th>Usuario</th>
+                            <th>Efectivo Final Cajon</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-historial-cierres">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card" id="seccion-historial-diario-admin">
+            <div class="card-header">
+                <span>📊 Historial Consolidado Diario (Resumen General)</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Inicio de Caja</th>
+                            <th>Ventas Yape</th>
+                            <th>Ventas Efectivo</th>
+                            <th>Gastos del Día</th>
+                            <th>Total Neto en Caja</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-historial-diario">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA KÁRDEX -->
+    <div id="tab-kardex" class="tab-content" style="grid-template-columns: 1fr;">
+        <div class="card" style="min-height: 400px;">
+            <div class="card-header">Historial de Movimientos (Kárdex)</div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Producto</th>
+                            <th>Tipo de Movimiento</th>
+                            <th>Cantidad / Cambio Detallado</th>
+                            <th>Usuario / Detalle</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-kardex">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA REPORTES (EXCLUSIVO ADMINISTRADOR - CONSOLIDADO MENSUAL) -->
+    <div id="tab-reportes" class="tab-content" style="grid-template-columns: 1fr;">
+        <div>
+            <div class="reportes-cards">
+                <div class="report-card">
+                    <div class="report-card-title">Stock Total (Unidades)</div>
+                    <div class="report-card-val blue" id="rep-stock-total">0</div>
+                </div>
+                <div class="report-card">
+                    <div class="report-card-title">Valor en Inventario</div>
+                    <div class="report-card-val" id="rep-valor-inventario">S/ 0.00</div>
+                </div>
+                <div class="report-card">
+                    <div class="report-card-title">Ventas Efectivo Acumuladas</div>
+                    <div class="report-card-val" id="rep-ventas-efectivo">S/ 0.00</div>
+                </div>
+                <div class="report-card">
+                    <div class="report-card-title">Ventas Yape Acumuladas</div>
+                    <div class="report-card-val purple" id="rep-ventas-yape">S/ 0.00</div>
+                </div>
+            </div>
+
+            <!-- PANEL GERENCIAL MENSUAL DE UTILIDAD NETO -->
+            <div class="card" style="background: #0f172a; border: 1px solid #38bdf8; margin-bottom: 20px;">
+                <div class="card-header" style="color: #38bdf8;">
+                    <span>📊 Balance Financiero Neto del Mes (Exclusivo Administrador)</span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; text-align: center;">
+                    <div style="background: #1e293b; padding: 15px; border-radius: 8px;">
+                        <span style="font-size: 11px; color: #94a3b8;">(+) Total Ingresos Mes</span>
+                        <div style="font-size: 20px; font-weight: bold; color: #4ade80;" id="mes-total-ingresos">S/ 0.00</div>
+                    </div>
+                    <div style="background: #1e293b; padding: 15px; border-radius: 8px;">
+                        <span style="font-size: 11px; color: #94a3b8;">(-) Egresos Diarios / Comandas</span>
+                        <div style="font-size: 20px; font-weight: bold; color: #f87171;" id="mes-gastos-diarios">S/ 0.00</div>
+                    </div>
+                    <div style="background: #1e293b; padding: 15px; border-radius: 8px;">
+                        <span style="font-size: 11px; color: #94a3b8;">(-) Planilla / Pago Personal</span>
+                        <div style="font-size: 20px; font-weight: bold; color: #fbbf24;" id="mes-gastos-personal">S/ 0.00</div>
+                    </div>
+                    <div style="background: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #4ade80;">
+                        <span style="font-size: 11px; color: #cbd5e1; font-weight: bold;">(=) UTILIDAD NETA MENSUAL</span>
+                        <div style="font-size: 22px; font-weight: bold; color: #38bdf8;" id="mes-utilidad-neta">S/ 0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="min-height: 400px;">
+                <div class="card-header">
+                    <span>Historial de Ventas Registradas</span>
+                    <button onclick="abrirModalComandasLista()" style="background: #d97706; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px;">📦 COMANDAS <span id="badge-comandas-count" style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 4px;">0</span></button>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID Ticket</th>
+                                <th>Fecha</th>
+                                <th>Vendedor</th>
+                                <th>Método / Estado</th>
+                                <th>Total</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-reportes-ventas">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALES -->
+    <div class="modal-overlay" id="modal-alerta-stock">
+        <div class="modal-alerta-card">
+            <div class="modal-alerta-header">
+                ⚠️ <span>ALERTA DE STOCK BAJO</span>
+            </div>
+            <div class="modal-alerta-body" id="modal-alerta-contenido"></div>
+            <div class="modal-alerta-footer">
+                <button onclick="cerrarModalAlerta()" style="background: #16a34a; color: white; border: none; padding: 8px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px;">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-mis-comandas">
+        <div class="modal-card" style="width: 520px;">
+            <h3 style="color: #fbbf24; margin-bottom: 4px;">📦 Mis Comandas Pendientes</h3>
+            <p style="font-size: 12px; color: #94a3b8; margin-bottom: 15px;">Aquí puedes revisar tus pedidos enviados al administrador o eliminarlos si te equivocaste:</p>
+            <div id="contenedor-mis-comandas" style="max-height: 320px; overflow-y: auto; margin-bottom: 15px;"></div>
+            <button class="btn-primary" style="background: #475569;" onclick="cerrarModalMisComandas()">Cerrar</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-comandas-lista">
+        <div class="modal-card">
+            <h3 style="color: #fbbf24; margin-bottom: 4px;">Comandas / Solicitudes de Compra</h3>
+            <p style="font-size: 12px; color: #94a3b8; margin-bottom: 15px;">Selecciona una orden enviada por el vendedor para ingresar sus costos directos:</p>
+            <div id="contenedor-comandas-pendientes" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px;"></div>
+            <button class="btn-primary" style="background: #475569;" onclick="cerrarModalComandasLista()">Cerrar</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-costos-comanda">
+        <div class="modal-card">
+            <h3 style="color: #38bdf8; margin-bottom: 4px;">Ingresar Precios de Costo Proveedor</h3>
+            <p style="font-size: 12px; color: #94a3b8; margin-bottom: 15px;" id="subtitulo-comanda-id">Comanda N°</p>
+            <div style="background: #0f172a; border: 1px solid #334155; padding: 10px; border-radius: 8px; margin-bottom: 15px; text-align: left;">
+                <label style="font-size: 12px; color: #cbd5e1; font-weight: bold; display: block; margin-bottom: 4px;">Estado del Pago de la Comanda:</label>
+                <select id="select-estado-comanda" class="form-control" style="background: #1e293b; color: #4ade80; font-weight: bold;">
+                    <option value="CANCELADO">✅ CANCELADO (Pagado)</option>
+                    <option value="POR PAGAR">⏳ POR PAGAR (Pendiente)</option>
+                </select>
+            </div>
+            <div id="lista-items-costos" style="max-height: 220px; overflow-y: auto; margin-bottom: 15px;"></div>
+            <button class="btn-primary" style="background: #16a34a;" onclick="confirmarCostosComanda()">✅ Guardar y Registrar Comanda</button>
+            <button class="btn-primary" style="background: #475569; margin-top: 6px;" onclick="cerrarModalCostos()">Regresar</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-pago">
+        <div class="modal-card" style="width: 380px;">
+            <h3>Selecciona Método de Pago</h3>
+            <p id="modal-monto" style="font-size: 24px; font-weight: bold; color: #4ade80; margin-bottom: 10px;">S/ 0.00</p>
+            <div class="pago-options">
+                <button class="btn-pago-opt selected" id="btn-efectivo" onclick="seleccionarMetodo('Efectivo')">💵 Efectivo</button>
+                <button class="btn-pago-opt" id="btn-yape" onclick="seleccionarMetodo('Yape')">📱 Yape</button>
+            </div>
+            <div class="caja-efectivo" id="panel-efectivo">
+                <label>Paga con (S/):</label>
+                <input type="number" step="0.10" id="monto-recibido" placeholder="0.00" oninput="calcularVuelto()">
+                <div class="vuelto-box">Vuelto: S/ <span id="monto-vuelto">0.00</span></div>
+            </div>
+            <div class="qr-yape-box" id="panel-yape">
+                <img src="https://i.ibb.co/3sS7L4F/yape-qr.jpg" alt="QR Yape" id="img-qr-yape">
+                <p>Jackeline Lizbeth Quevedo Agurto</p>
+            </div>
+            <button class="btn-primary" style="background: #16a34a;" onclick="confirmarCobro()">Confirmar y Cobrar</button>
+            <button class="btn-primary" style="background: #475569; margin-top: 6px;" onclick="cerrarModalPago()">Cancelar</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-ticket">
+        <div class="ticket-modal">
+            <div class="ticket-header">
+                <div class="ticket-title" id="t-titulo-comprobante">QUEVEDO ABARROTES</div>
+                <div>RUC: 10458963211</div>
+                <div>Talara, Piura - Perú</div>
+            </div>
+            <div class="ticket-info">
+                <div><strong>Comprobante / Comanda N°:</strong> <span id="t-id">TK-000</span></div>
+                <div><strong>Fecha y Hora:</strong> <span id="t-fecha">--/--/----</span></div>
+                <div><strong>Usuario:</strong> <span id="t-vendedor">--</span></div>
+                <div><strong>Estado / Tipo:</strong> <span id="t-metodo">--</span></div>
+            </div>
+            <table class="ticket-table">
+                <thead>
+                    <tr>
+                        <th id="th-t-col1">Descripción / Producto</th>
+                        <th id="th-t-col2">Cant.</th>
+                        <th style="text-align: right;" id="th-t-col3">Total</th>
+                    </tr>
+                </thead>
+                <tbody id="t-items"></tbody>
+            </table>
+            <div class="ticket-total" id="t-footer-total">TOTAL: S/ <span id="t-total">0.00</span></div>
+            <div class="no-print" style="margin-top: 15px; display: flex; gap: 8px;">
+                <button class="btn-primary" style="background: #16a34a; margin-top: 0;" onclick="window.print()">🖨️ Imprimir Ticket</button>
+                <button class="btn-primary" style="background: #475569; margin-top: 0;" onclick="cerrarTicket()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+    <script>
+        function obtenerRol() {
+            const raw = (localStorage.getItem('usuario_rol') || localStorage.getItem('rol_usuario') || localStorage.getItem('rol') || 'admin').trim().toLowerCase();
+            if (raw === 'administrador' || raw === 'admin') return 'admin';
+            if (raw === 'vendedor') return 'vendedor';
+            return raw;
+        }
+
+        const rol = obtenerRol();
+        let montoInicialCaja = (rol === 'vendedor') ? parseFloat(localStorage.getItem('caja_inicial') || '50.00') : 0.00;
+
+        document.getElementById('usuario-rol').textContent = rol === 'vendedor' ? 'vendedor' : 'administrador';
+        document.getElementById('monto-inicial').textContent = montoInicialCaja.toFixed(2);
+
+        function aplicarMenuPorRol() {
+            const esVendedor = obtenerRol() === 'vendedor';
+            document.body.classList.toggle('rol-vendedor', esVendedor);
+            document.body.setAttribute('data-rol', esVendedor ? 'vendedor' : 'admin');
+
+            const setDisp = (id, visible, displayValue) => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = visible ? (displayValue || '') : 'none';
+            };
+
+            setDisp('btn-tab-ventas', true, 'inline-block');
+            setDisp('btn-tab-inventario', true, 'inline-block');
+            setDisp('btn-tab-caja', true, 'inline-block');
+            setDisp('btn-tab-kardex', true, 'inline-block');
+            setDisp('btn-tab-compras', esVendedor, 'inline-block');
+            setDisp('btn-tab-reportes', !esVendedor, 'inline-block');
+            setDisp('seccion-historial-diario-admin', !esVendedor, 'block');
+            setDisp('btn-mis-comandas-vendedor', esVendedor, 'inline-block');
+            setDisp('col-header-acciones', !esVendedor, 'table-cell');
+        }
+
+        aplicarMenuPorRol();
+
+        function cambiarTab(tab) {
+            const esVendedor = obtenerRol() === 'vendedor';
+            if (tab === 'compras' && !esVendedor) tab = 'ventas';
+            if (tab === 'reportes' && esVendedor) tab = 'ventas';
+
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+
+            if(tab === 'ventas') {
+                document.getElementById('tab-ventas').classList.add('active');
+                document.getElementById('btn-tab-ventas').classList.add('active');
+            } else if(tab === 'compras') {
+                document.getElementById('tab-compras').classList.add('active');
+                document.getElementById('btn-tab-compras').classList.add('active');
+                renderizarCompras();
+            } else if(tab === 'inventario') {
+                document.getElementById('tab-inventario').classList.add('active');
+                document.getElementById('btn-tab-inventario').classList.add('active');
+                actualizarNombresPresentaciones();
+            } else if(tab === 'caja') {
+                document.getElementById('tab-caja').classList.add('active');
+                document.getElementById('btn-tab-caja').classList.add('active');
+                renderizarVistaCaja();
+            } else if(tab === 'kardex') {
+                document.getElementById('tab-kardex').classList.add('active');
+                document.getElementById('btn-tab-kardex').classList.add('active');
+                renderizarKardex();
+            } else if(tab === 'reportes') {
+                document.getElementById('tab-reportes').classList.add('active');
+                document.getElementById('btn-tab-reportes').classList.add('active');
+                renderizarReportes();
+            }
+        }
+
+        function actualizarNombresPresentaciones() {
+            const catVal = document.getElementById('p-categoria').value.trim().toUpperCase();
+            const esArrozAzucar = (catVal === 'ARROZ' || catVal === 'AZUCAR');
+
+            if (esArrozAzucar) {
+                document.getElementById('sum-pres-1').textContent = '1. VENTAS KG';
+                document.getElementById('lbl-precio-1').textContent = 'Precio Venta KG (S/)';
+                document.getElementById('lbl-stock-1').textContent = 'Stock Inicial KG';
+                document.getElementById('sum-pres-2').textContent = '2. VENTAS 10 KG';
+                document.getElementById('lbl-precio-2').textContent = 'Precio Venta 10 KG (S/)';
+                document.getElementById('lbl-stock-2').textContent = 'Stock Inicial 10 KG';
+                document.getElementById('sum-pres-3').textContent = '3. VENTAS 1/2 SACO';
+                document.getElementById('lbl-precio-3').textContent = 'Precio Venta 1/2 Saco (S/)';
+                document.getElementById('lbl-stock-3').textContent = 'Stock Inicial 1/2 Saco';
+                document.getElementById('sum-pres-4').textContent = '4. VENTAS SACO';
+                document.getElementById('lbl-precio-4').textContent = 'Precio Venta Saco (S/)';
+                document.getElementById('lbl-stock-4').textContent = 'Stock Inicial Saco';
+            } else {
+                document.getElementById('sum-pres-1').textContent = '1. VENTAS POR UNIDAD';
+                document.getElementById('lbl-precio-1').textContent = 'Precio Venta Unid (S/)';
+                document.getElementById('lbl-stock-1').textContent = 'Stock Inicial Unid';
+                document.getElementById('sum-pres-2').textContent = '2. VENTAS POR DOCENA';
+                document.getElementById('lbl-precio-2').textContent = 'Precio Venta Docena (S/)';
+                document.getElementById('lbl-stock-2').textContent = 'Stock Inicial Docena';
+                document.getElementById('sum-pres-3').textContent = '3. VENTAS POR PQTE';
+                document.getElementById('lbl-precio-3').textContent = 'Precio Venta Pqte (S/)';
+                document.getElementById('lbl-stock-3').textContent = 'Stock Inicial Pqte';
+                document.getElementById('sum-pres-4').textContent = '4. VENTAS POR CAJA';
+                document.getElementById('lbl-precio-4').textContent = 'Precio Venta Caja (S/)';
+                document.getElementById('lbl-stock-4').textContent = 'Stock Inicial Caja';
+            }
+        }
+
+        document.getElementById('input-imagen').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    document.getElementById('imagen-base64').value = evt.target.result;
+                    document.getElementById('img-preview').src = evt.target.result;
+                    document.getElementById('vista-previa').style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        let productos = JSON.parse(localStorage.getItem('lista_productos')) || [];
+        let kardex = JSON.parse(localStorage.getItem('lista_kardex')) || [];
+        let comandas = JSON.parse(localStorage.getItem('lista_comandas')) || [];
+        let historialComandasRealizadas = JSON.parse(localStorage.getItem('historial_comandas_realizadas')) || [];
+        let gastosDelDia = JSON.parse(localStorage.getItem('lista_gastos_dia')) || [];
+        let historialCierresCaja = JSON.parse(localStorage.getItem('historial_cierres_caja')) || [];
+        let carrito = [];
+        let carritoCompras = [];
+        let comandaActualAprobar = null;
+        let metodoPagoSeleccionado = 'Efectivo';
+        let totalPagarActual = 0;
+
+        function verificarAlertaStockUnidades() {
+            let productosAlertados = [];
+            productos.forEach(p => {
+                const catUpper = p.categoria ? p.categoria.toUpperCase() : '';
+                if (catUpper === 'ARROZ' || catUpper === 'AZUCAR') {
+                    if (p.stockUnid < 33) productosAlertados.push(`• <strong>${p.nombre}</strong> (${p.categoria}): <span style="color:#dc2626; font-weight:bold;">${p.stockUnid} Kg</span>`);
+                } else {
+                    if (p.stockUnid < 4) productosAlertados.push(`• <strong>${p.nombre}</strong> (${p.categoria}): <span style="color:#dc2626; font-weight:bold;">${p.stockUnid} Unid</span>`);
+                }
+            });
+            if (productosAlertados.length > 0) {
+                const contenedor = document.getElementById('modal-alerta-contenido');
+                contenedor.innerHTML = `<p style="margin-bottom: 12px; font-weight: 500;">Atención, los siguientes productos requieren reabastecimiento:</p>${productosAlertados.join('<br>')}`;
+                document.getElementById('modal-alerta-stock').style.display = 'flex';
+            }
+        }
+        function cerrarModalAlerta() { document.getElementById('modal-alerta-stock').style.display = 'none'; }
+
+        function abrirModalMisComandas() {
+            const cont = document.getElementById('contenedor-mis-comandas');
+            cont.innerHTML = '';
+            const misComandas = comandas.filter(c => c.usuario === rol);
+            if (misComandas.length === 0) {
+                cont.innerHTML = `<div style="text-align: center; color: #64748b; padding: 20px;">No has enviado ninguna comanda pendiente.</div>`;
+            } else {
+                misComandas.forEach(cmd => {
+                    let detalleStr = cmd.items.map(i => `${i.nombre} (${i.tipoPres}) x${i.cantidad}`).join(', ');
+                    cont.innerHTML += `
+                        <div class="costo-item-row" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+                            <div style="display: flex; justify-content: space-between; width: 100%;">
+                                <strong style="color: #fbbf24;">${cmd.comandaId}</strong>
+                                <span style="font-size: 11px; color: #94a3b8;">${cmd.fecha}</span>
+                            </div>
+                            <div style="font-size: 12px; color: #cbd5e1;"><strong>Detalle:</strong> ${detalleStr}</div>
+                            <button onclick="eliminarComandaVendedor('${cmd.comandaId}')" style="background:#991b1b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px; width:100%; margin-top:4px;">🗑️ Eliminar Pedido</button>
+                        </div>
+                    `;
+                });
+            }
+            document.getElementById('modal-mis-comandas').style.display = 'flex';
+        }
+        function cerrarModalMisComandas() { document.getElementById('modal-mis-comandas').style.display = 'none'; }
+
+        function eliminarComandaVendedor(comandaId) {
+            if (confirm(`¿Estás seguro de eliminar el pedido ${comandaId}?`)) {
+                comandas = comandas.filter(c => c.comandaId !== comandaId);
+                historialComandasRealizadas = historialComandasRealizadas.filter(c => c.comandaId !== comandaId);
+                localStorage.setItem('lista_comandas', JSON.stringify(comandas));
+                localStorage.setItem('historial_comandas_realizadas', JSON.stringify(historialComandasRealizadas));
+                abrirModalMisComandas();
+                renderizarRegistroComandasVendedor();
+            }
+        }
+
+        function guardarProductoLocal(e) {
+            e.preventDefault();
+            const editId = document.getElementById('p-id-edit').value;
+            const productoData = {
+                id: editId ? parseInt(editId) : Date.now(),
+                nombre: document.getElementById('p-nombre').value,
+                categoria: document.getElementById('p-categoria').value,
+                codigo: document.getElementById('p-codigo').value || 'Sin código',
+                precioUnid: parseFloat(document.getElementById('p-precio-unid').value).toFixed(2),
+                stockUnid: parseFloat(document.getElementById('p-stock-unid').value) || 0,
+                precioPaq: document.getElementById('p-precio-paq').value ? parseFloat(document.getElementById('p-precio-paq').value).toFixed(2) : null,
+                stockPaq: parseInt(document.getElementById('p-stock-paq').value) || 0,
+                precioDoc: document.getElementById('p-precio-doc').value ? parseFloat(document.getElementById('p-precio-doc').value).toFixed(2) : null,
+                stockDoc: parseInt(document.getElementById('p-stock-doc').value) || 0,
+                precioCaja: document.getElementById('p-precio-caja').value ? parseFloat(document.getElementById('p-precio-caja').value).toFixed(2) : null,
+                stockCaja: parseInt(document.getElementById('p-stock-caja').value) || 0,
+                imagen: document.getElementById('imagen-base64').value || 'https://via.placeholder.com/80'
+            };
+
+            const fechaActual = new Date().toLocaleString('es-PE');
+            if (editId) {
+                const index = productos.findIndex(p => p.id === parseInt(editId));
+                if (index !== -1) {
+                    productos[index] = productoData;
+                    kardex.unshift({
+                        fecha: fechaActual,
+                        producto: productoData.nombre,
+                        tipo: 'Modificación de Producto',
+                        cantidad: 'Edición Inventario',
+                        usuario: rol
+                    });
+                }
+            } else {
+                productos.push(productoData);
+                kardex.unshift({
+                    fecha: fechaActual,
+                    producto: productoData.nombre,
+                    tipo: 'Nuevo Producto',
+                    cantidad: `Stock: ${productoData.stockUnid}`,
+                    usuario: rol
+                });
+            }
+
+            localStorage.setItem('lista_productos', JSON.stringify(productos));
+            localStorage.setItem('lista_kardex', JSON.stringify(kardex));
+            renderizarProductos();
+            cancelarEdicion();
+            cambiarTab('ventas');
+        }
+
+        function cancelarEdicion() {
+            document.getElementById('form-producto').reset();
+            document.getElementById('p-id-edit').value = '';
+            document.getElementById('imagen-base64').value = '';
+            document.getElementById('vista-previa').style.display = 'none';
+            actualizarNombresPresentaciones();
+        }
+
+        function renderizarProductos(filtro = '') {
+            const tablaInventario = document.getElementById('tabla-inventario');
+            const catalogoVentas = document.getElementById('catalogo-productos');
+            if (!tablaInventario) return;
+
+            tablaInventario.innerHTML = '';
+            catalogoVentas.innerHTML = '';
+
+            const prodsFiltrados = productos.filter(p => p.nombre.toLowerCase().includes(filtro.toLowerCase()));
+            document.getElementById('titulo-catalogo').textContent = `Catálogo (${prodsFiltrados.length})`;
+
+            prodsFiltrados.forEach((prod) => {
+                const catUp = (prod.categoria || '').toUpperCase();
+                const esArrozAzucar = (catUp === 'ARROZ' || catUp === 'AZUCAR');
+
+                // Precios apilados verticalmente
+                let preciosHTML = `<span class="price-badge" style="color:#38bdf8;">${esArrozAzucar ? 'KG' : 'Unid'}: S/ ${prod.precioUnid}</span>`;
+                if(prod.precioPaq) preciosHTML += `<span class="price-badge" style="color:#fbbf24;">${esArrozAzucar ? '10 KG' : 'Doc'}: S/ ${prod.precioPaq}</span>`;
+                if(prod.precioDoc) preciosHTML += `<span class="price-badge" style="color:#c084fc;">${esArrozAzucar ? '1/2 Saco' : 'Pqte'}: S/ ${prod.precioDoc}</span>`;
+                if(prod.precioCaja) preciosHTML += `<span class="price-badge" style="color:#f87171;">${esArrozAzucar ? 'Saco' : 'Caja'}: S/ ${prod.precioCaja}</span>`;
+
+                // Stock detallado apilado verticalmente
+                let stockHTML = `<span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? 'KG' : 'Unid'}: ${prod.stockUnid}</span>`;
+                if(prod.stockPaq > 0) stockHTML += `<span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? '10 KG' : 'Doc'}: ${prod.stockPaq}</span>`;
+                if(prod.stockDoc > 0) stockHTML += `<span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? '1/2 Saco' : 'Pqte'}: ${prod.stockDoc}</span>`;
+                if(prod.stockCaja > 0) stockHTML += `<span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? 'Saco' : 'Caja'}: ${prod.stockCaja}</span>`;
+
+                let accionesTd = '';
+                if (rol === 'administrador' || rol === 'admin') {
+                    accionesTd = `
+                        <td>
+                            <button onclick="editarProducto(${prod.id})" style="background: #2563eb; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-weight: bold;">✏️ Editar</button>
+                            <button onclick="eliminarProducto(${prod.id})" style="background: #991b1b; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-weight: bold;">🗑️</button>
+                        </td>
+                    `;
+                }
+
+                tablaInventario.innerHTML += `
+                    <tr>
+                        <td><strong>${prod.nombre}</strong></td>
+                        <td>${prod.categoria}</td>
+                        <td>${preciosHTML}</td>
+                        <td>${stockHTML}</td>
+                        ${accionesTd}
+                    </tr>
+                `;
+
+                let optsHTML = `<option value="unid|${prod.precioUnid}">${esArrozAzucar ? 'KG' : 'Unid'} (S/ ${prod.precioUnid})</option>`;
+                if(prod.precioPaq) optsHTML += `<option value="paq|${prod.precioPaq}">${esArrozAzucar ? '10 KG' : 'Docena'} (S/ ${prod.precioPaq})</option>`;
+                if(prod.precioDoc) optsHTML += `<option value="doc|${prod.precioDoc}">${esArrozAzucar ? '1/2 Saco' : 'Pqte'} (S/ ${prod.precioDoc})</option>`;
+                if(prod.precioCaja) optsHTML += `<option value="caja|${prod.precioCaja}">${esArrozAzucar ? 'Saco' : 'Caja'} (S/ ${prod.precioCaja})</option>`;
+
+                catalogoVentas.innerHTML += `
+                    <div class="prod-card">
+                        <img src="${prod.imagen}">
+                        <div class="prod-title">${prod.nombre}</div>
+                        <select id="pres-${prod.id}" class="select-pres">
+                            ${optsHTML}
+                        </select>
+                        <button class="btn-add-cart" onclick="agregarAlCarrito(${prod.id})">➕ Añadir</button>
+                    </div>
+                `;
+            });
+        }
+
+        function renderizarCompras(filtro = '') {
+            const catalogoCompras = document.getElementById('catalogo-compras');
+            if(!catalogoCompras) return;
+            catalogoCompras.innerHTML = '';
+            productos.filter(p => p.nombre.toLowerCase().includes(filtro.toLowerCase())).forEach(prod => {
+                const catUp = (prod.categoria || '').toUpperCase();
+                let optsCompra = `<option value="Unidad|${prod.precioUnid}">${catUp === 'ARROZ' || catUp === 'AZUCAR' ? 'KG' : 'Unidad'} (S/ ${prod.precioUnid})</option>`;
+                if(prod.precioPaq) optsCompra += `<option value="Docena/10KG|${prod.precioPaq}">${catUp === 'ARROZ' || catUp === 'AZUCAR' ? '10 KG' : 'Docena'} (S/ ${prod.precioPaq})</option>`;
+                if(prod.precioDoc) optsCompra += `<option value="Paquete/Saco|${prod.precioDoc}">${catUp === 'ARROZ' || catUp === 'AZUCAR' ? 'Saco' : 'Paquete/Caja'} (S/ ${prod.precioDoc})</option>`;
+
+                catalogoCompras.innerHTML += `
+                    <div class="prod-card">
+                        <img src="${prod.imagen}">
+                        <div class="prod-title">${prod.nombre}</div>
+                        <select id="pres-compra-${prod.id}" class="select-pres">
+                            ${optsCompra}
+                        </select>
+                        <button class="btn-add-cart" style="background:#16a34a;" onclick="agregarAlCarritoCompra(${prod.id})">📦 Pedir</button>
+                    </div>
+                `;
+            });
+            actualizarCarritoComprasUI();
+            renderizarRegistroComandasVendedor();
+        }
+
+        function agregarAlCarritoCompra(id) {
+            const prod = productos.find(p => p.id === id);
+            if (!prod) return;
+            
+            const rawVal = document.getElementById(`pres-compra-${id}`).value.split('|');
+            const tipoPres = rawVal[0];
+            const precioEstimado = parseFloat(rawVal[1]) || 0;
+
+            const itemKey = `${id}-${tipoPres}`;
+            const item = carritoCompras.find(i => i.key === itemKey);
+
+            if (item) {
+                item.cantidad += 1;
+            } else {
+                carritoCompras.push({
+                    key: itemKey,
+                    id: prod.id,
+                    nombre: prod.nombre,
+                    tipoPres: tipoPres,
+                    precioEstimado: precioEstimado,
+                    cantidad: 1
+                });
+            }
+            actualizarCarritoComprasUI();
+        }
+
+        function cambiarCantidadCompra(key, delta) {
+            const item = carritoCompras.find(i => i.key === key);
+            if (item) {
+                item.cantidad = Math.round((item.cantidad + delta) * 100) / 100;
+                if (item.cantidad <= 0) carritoCompras = carritoCompras.filter(i => i.key !== key);
+            }
+            actualizarCarritoComprasUI();
+        }
+
+        function modificarCantidadCompraDirecta(key, valor) {
+            const item = carritoCompras.find(i => i.key === key);
+            const num = parseFloat(valor);
+            if (item) {
+                if (!isNaN(num) && num > 0) item.cantidad = num;
+                else if (valor === '' || num <= 0) item.cantidad = 0;
+            }
+            actualizarCarritoComprasUI();
+        }
+
+        function eliminarDelCarritoCompra(key) {
+            carritoCompras = carritoCompras.filter(i => i.key !== key);
+            actualizarCarritoComprasUI();
+        }
+
+        function actualizarCarritoComprasUI() {
+            const contenedor = document.getElementById('contenedor-carrito-compras');
+            const btnEnviar = document.getElementById('btn-enviar-compra');
+            if(!contenedor) return;
+
+            if (carritoCompras.length === 0) {
+                contenedor.className = 'cart-empty';
+                contenedor.innerHTML = 'No hay productos en la solicitud';
+                btnEnviar.disabled = true;
+                return;
+            }
+
+            contenedor.className = 'cart-list';
+            contenedor.innerHTML = '';
+
+            carritoCompras.forEach(item => {
+                contenedor.innerHTML += `
+                    <div class="cart-item">
+                        <div class="cart-item-info">
+                            <div class="cart-item-title">${item.nombre}</div>
+                            <div class="cart-item-sub" style="color:#38bdf8;">Pres: ${item.tipoPres}</div>
+                        </div>
+                        <div class="cart-controls">
+                            <button class="btn-qty" onclick="cambiarCantidadCompra('${item.key}', -1)">-</button>
+                            <input type="number" step="1" min="1" class="input-qty" value="${item.cantidad}" onchange="modificarCantidadCompraDirecta('${item.key}', this.value)">
+                            <button class="btn-qty" onclick="cambiarCantidadCompra('${item.key}', 1)">+</button>
+                            <button class="btn-del" onclick="eliminarDelCarritoCompra('${item.key}')">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            btnEnviar.disabled = false;
+        }
+
+        function enviarSolicitudCompra() {
+            if (carritoCompras.length === 0) return;
+            const fechaActual = new Date().toLocaleString('es-PE');
+            
+            let montoTotalComanda = 0;
+            carritoCompras.forEach(i => {
+                montoTotalComanda += (i.precioEstimado || 0) * i.cantidad;
+            });
+
+            const nuevaComanda = {
+                comandaId: 'CMD-' + Math.floor(1000 + Math.random() * 9000),
+                fecha: fechaActual,
+                usuario: rol,
+                estado: 'POR PAGAR',
+                totalEstimado: montoTotalComanda.toFixed(2),
+                items: JSON.parse(JSON.stringify(carritoCompras))
+            };
+            comandas.unshift(nuevaComanda);
+            historialComandasRealizadas.unshift(nuevaComanda);
+
+            kardex.unshift({
+                ticketId: nuevaComanda.comandaId,
+                fecha: fechaActual,
+                producto: `Comanda ${nuevaComanda.comandaId}`,
+                tipo: 'Comanda Solicitada',
+                cantidad: `POR PAGAR (S/ ${montoTotalComanda.toFixed(2)})`,
+                usuario: rol
+            });
+
+            localStorage.setItem('lista_comandas', JSON.stringify(comandas));
+            localStorage.setItem('historial_comandas_realizadas', JSON.stringify(historialComandasRealizadas));
+            localStorage.setItem('lista_kardex', JSON.stringify(kardex));
+            carritoCompras = [];
+            actualizarCarritoComprasUI();
+            alert("Pedido enviado al administrador correctamente.");
+            cambiarTab('ventas');
+        }
+
+        function abrirModalComandasLista() {
+            const cont = document.getElementById('contenedor-comandas-pendientes');
+            cont.innerHTML = '';
+            if (comandas.length === 0) {
+                cont.innerHTML = `<div style="text-align: center; color: #64748b; padding: 20px;">No hay comandas pendientes.</div>`;
+            } else {
+                comandas.forEach(cmd => {
+                    cont.innerHTML += `
+                        <div class="costo-item-row">
+                            <div>
+                                <strong style="color: #38bdf8;">${cmd.comandaId}</strong><br>
+                                <span style="font-size: 11px; color: #94a3b8;">${cmd.fecha} (${cmd.usuario})</span>
+                            </div>
+                            <button onclick="abrirModalCostosComanda('${cmd.comandaId}')" style="background:#2563eb; color:white; border:none; padding:6px 12px; border-radius:6px; font-weight:bold; cursor:pointer;">Ingresar Costos</button>
+                        </div>
+                    `;
+                });
+            }
+            document.getElementById('badge-comandas-count').textContent = comandas.length;
+            document.getElementById('modal-comandas-lista').style.display = 'flex';
+        }
+        function cerrarModalComandasLista() { document.getElementById('modal-comandas-lista').style.display = 'none'; }
+
+        function abrirModalCostosComanda(comandaId) {
+            comandaActualAprobar = comandas.find(c => c.comandaId === comandaId);
+            if (!comandaActualAprobar) return;
+            document.getElementById('subtitulo-comanda-id').textContent = `Comanda N° ${comandaActualAprobar.comandaId}`;
+            document.getElementById('select-estado-comanda').value = comandaActualAprobar.estado || 'CANCELADO';
+            
+            const lista = document.getElementById('lista-items-costos');
+            lista.innerHTML = '';
+            comandaActualAprobar.items.forEach((it, idx) => {
+                const valPrecio = it.precioEstimado ? it.precioEstimado.toFixed(2) : '';
+                lista.innerHTML += `
+                    <div class="costo-item-row">
+                        <span>${it.nombre} (${it.tipoPres} x${it.cantidad})</span>
+                        <input type="number" step="0.01" class="costo-item-input" id="costo-item-${idx}" value="${valPrecio}" placeholder="S/ Costo">
+                    </div>
+                `;
+            });
+            document.getElementById('modal-comandas-lista').style.display = 'none';
+            document.getElementById('modal-costos-comanda').style.display = 'flex';
+        }
+        function cerrarModalCostos() { document.getElementById('modal-costos-comanda').style.display = 'none'; }
+
+        function confirmarCostosComanda() {
+            if (!comandaActualAprobar) return;
+            const estadoPago = document.getElementById('select-estado-comanda').value;
+            comandaActualAprobar.estado = estadoPago;
+
+            const fechaActual = new Date().toLocaleString('es-PE');
+            let totalComanda = 0;
+
+            comandaActualAprobar.items.forEach((it, idx) => {
+                const costoInput = parseFloat(document.getElementById(`costo-item-${idx}`).value) || 0;
+                totalComanda += costoInput * it.cantidad;
+
+                const prod = productos.find(p => p.nombre.toLowerCase() === it.nombre.toLowerCase());
+                if (prod) {
+                    prod.stockUnid = (parseFloat(prod.stockUnid) || 0) + it.cantidad;
+                }
+
+                kardex.unshift({
+                    fecha: fechaActual,
+                    producto: `${it.nombre} (${it.tipoPres})`,
+                    tipo: 'Compra Proveedor',
+                    cantidad: `+${it.cantidad}`,
+                    usuario: `${comandaActualAprobar.comandaId} (${estadoPago} - S/ ${costoInput.toFixed(2)})`
+                });
+            });
+
+            kardex.unshift({
+                ticketId: comandaActualAprobar.comandaId,
+                fecha: fechaActual,
+                producto: `Pago Comanda ${comandaActualAprobar.comandaId}`,
+                tipo: `Comanda [${estadoPago}]`,
+                cantidad: `- S/ ${totalComanda.toFixed(2)}`,
+                usuario: `${comandaActualAprobar.usuario} (Admin Pagó)`,
+                metodo: `Comanda [${estadoPago}]`,
+                total: totalComanda.toFixed(2),
+                items: comandaActualAprobar.items.map(i => ({ desc: `${i.nombre} (${i.tipoPres})`, cant: i.cantidad, total: '0.00' }))
+            });
+
+            comandas = comandas.filter(c => c.comandaId !== comandaActualAprobar.comandaId);
+
+            localStorage.setItem('lista_comandas', JSON.stringify(comandas));
+            localStorage.setItem('historial_comandas_realizadas', JSON.stringify(historialComandasRealizadas));
+            localStorage.setItem('lista_productos', JSON.stringify(productos));
+            localStorage.setItem('lista_kardex', JSON.stringify(kardex));
+
+            alert("Comanda procesada e inventario actualizado correctamente.");
+            cerrarModalCostos();
+            renderizarProductos();
+            renderizarReportes();
+            renderizarKardex();
+        }
+
+        function renderizarRegistroComandasVendedor() {
+            const tabla = document.getElementById('tabla-registro-comandas-vendedor');
+            if(!tabla) return;
+            tabla.innerHTML = historialComandasRealizadas.filter(c => c.usuario === rol).map(cmd => `
+                <tr>
+                    <td><strong style="color:#38bdf8;">${cmd.comandaId}</strong></td>
+                    <td>${cmd.fecha}</td>
+                    <td>${cmd.estado}</td>
+                    <td><button onclick="imprimirTicketComandaVendedor('${cmd.comandaId}')" style="background:#2563eb; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px;">🧾 Ver / Imprimir Ticket</button></td>
+                </tr>
+            `).join('') || `<tr><td colspan="4" style="text-align:center; color:#64748b;">No se han realizado comandas.</td></tr>`;
+        }
+
+        function imprimirTicketComandaVendedor(comandaId) {
+            const cmd = historialComandasRealizadas.find(c => c.comandaId === comandaId) || comandas.find(c => c.comandaId === comandaId);
+            if(!cmd) return;
+            document.getElementById('t-titulo-comprobante').textContent = 'TICKET DE COMANDA';
+            document.getElementById('t-id').textContent = cmd.comandaId;
+            document.getElementById('t-fecha').textContent = cmd.fecha;
+            document.getElementById('t-vendedor').textContent = cmd.usuario;
+            document.getElementById('t-metodo').textContent = cmd.estado || 'PENDIENTE';
+
+            const tbody = document.getElementById('t-items');
+            tbody.innerHTML = '';
+            cmd.items.forEach(it => {
+                tbody.innerHTML += `<tr><td style="color:#000 !important;">${it.nombre} (${it.tipoPres})</td><td style="color:#000 !important;">x${it.cantidad}</td><td style="text-align:right; color:#000 !important;">${cmd.estado || 'PENDIENTE'}</td></tr>`;
+            });
+            document.getElementById('modal-ticket').style.display = 'flex';
+        }
+
+        /* ----------------------------------------------------
+           RESUMEN DE VENTA Y CARRITO COMPLETO
+        ----------------------------------------------------- */
+        function agregarAlCarrito(id) {
+            const prod = productos.find(p => p.id === id);
+            if (!prod) return;
+
+            const selectPres = document.getElementById(`pres-${id}`).value.split('|');
+            const tipoPres = selectPres[0];
+            const precioPres = parseFloat(selectPres[1]);
+
+            const itemKey = `${id}-${tipoPres}`;
+            const item = carrito.find(i => i.key === itemKey);
+            const cantidadEnCarrito = item ? item.cantidad : 0;
+
+            if (cantidadEnCarrito + 1 > prod.stockUnid) {
+                alert(`❌ Stock insuficiente. Solo quedan ${prod.stockUnid} disponible(s).`);
+                return;
+            }
+
+            if (item) {
+                item.cantidad += 1;
+            } else {
+                carrito.push({
+                    key: itemKey,
+                    id: prod.id,
+                    tipoPres: tipoPres,
+                    nombre: prod.nombre,
+                    precio: precioPres,
+                    cantidad: 1,
+                    stockMax: prod.stockUnid
+                });
+            }
+            actualizarCarritoUI();
+        }
+
+        function cambiarCantidad(key, delta) {
+            const item = carrito.find(i => i.key === key);
+            if (item) {
+                const nuevaCant = Math.round((item.cantidad + delta) * 100) / 100;
+                if (nuevaCant > item.stockMax) {
+                    alert(`❌ Stock insuficiente. El límite es ${item.stockMax}.`);
+                    return;
+                }
+                item.cantidad = nuevaCant;
+                if (item.cantidad <= 0) carrito = carrito.filter(i => i.key !== key);
+            }
+            actualizarCarritoUI();
+        }
+
+        function modificarCantidadDirecta(key, valor) {
+            const item = carrito.find(i => i.key === key);
+            const num = parseFloat(valor);
+            if (item) {
+                if (!isNaN(num) && num > 0) {
+                    if (num > item.stockMax) {
+                        alert(`❌ Stock insuficiente. El máximo es ${item.stockMax}.`);
+                        item.cantidad = item.stockMax;
+                    } else {
+                        item.cantidad = num;
+                    }
+                } else if (valor === '' || num <= 0) {
+                    item.cantidad = 0;
+                }
+            }
+            actualizarCarritoUI();
+        }
+
+        function eliminarDelCarrito(key) {
+            carrito = carrito.filter(i => i.key !== key);
+            actualizarCarritoUI();
+        }
+
+        function actualizarCarritoUI() {
+            const contenedor = document.getElementById('contenedor-carrito');
+            const montoTotal = document.getElementById('monto-total');
+            const btnPago = document.getElementById('btn-pago');
+
+            if (carrito.length === 0) {
+                contenedor.className = 'cart-empty';
+                contenedor.innerHTML = 'El carrito está vacío';
+                montoTotal.textContent = 'S/ 0.00';
+                btnPago.disabled = true;
+                btnPago.classList.remove('active');
+                return;
+            }
+
+            contenedor.className = 'cart-list';
+            contenedor.innerHTML = '';
+
+            let total = 0;
+            carrito.forEach(item => {
+                const subtotal = item.precio * item.cantidad;
+                total += subtotal;
+
+                contenedor.innerHTML += `
+                    <div class="cart-item">
+                        <div class="cart-item-info">
+                            <div class="cart-item-title">${item.nombre}</div>
+                            <div class="cart-item-sub">S/ ${item.precio.toFixed(2)} x ${item.cantidad} = <strong>S/ ${subtotal.toFixed(2)}</strong></div>
+                        </div>
+                        <div class="cart-controls">
+                            <button class="btn-qty" onclick="cambiarCantidad('${item.key}', -1)">-</button>
+                            <input type="number" step="0.1" min="0.1" max="${item.stockMax}" class="input-qty" value="${item.cantidad}" onchange="modificarCantidadDirecta('${item.key}', this.value)">
+                            <button class="btn-qty" onclick="cambiarCantidad('${item.key}', 1)">+</button>
+                            <button class="btn-del" onclick="eliminarDelCarrito('${item.key}')">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            totalPagarActual = total;
+            montoTotal.textContent = 'S/ ' + total.toFixed(2);
+            btnPago.disabled = false;
+            btnPago.classList.add('active');
+        }
+
+        function abrirModalPago() {
+            document.getElementById('modal-monto').textContent = 'S/ ' + totalPagarActual.toFixed(2);
+            document.getElementById('monto-recibido').value = '';
+            document.getElementById('monto-vuelto').textContent = '0.00';
+            seleccionarMetodo('Efectivo');
+            document.getElementById('modal-pago').style.display = 'flex';
+        }
+        function cerrarModalPago() { document.getElementById('modal-pago').style.display = 'none'; }
+
+        function seleccionarMetodo(metodo) {
+            metodoPagoSeleccionado = metodo;
+            document.getElementById('btn-efectivo').className = 'btn-pago-opt ' + (metodo === 'Efectivo' ? 'selected' : '');
+            document.getElementById('btn-yape').className = 'btn-pago-opt ' + (metodo === 'Yape' ? 'selected' : '');
+            document.getElementById('panel-efectivo').style.display = metodo === 'Efectivo' ? 'block' : 'none';
+            document.getElementById('panel-yape').style.display = metodo === 'Yape' ? 'block' : 'none';
+        }
+
+        function calcularVuelto() {
+            const recibido = parseFloat(document.getElementById('monto-recibido').value) || 0;
+            const vuelto = recibido - totalPagarActual;
+            document.getElementById('monto-vuelto').textContent = vuelto > 0 ? vuelto.toFixed(2) : '0.00';
+        }
+
+        function confirmarCobro() {
+            if(metodoPagoSeleccionado === 'Efectivo') {
+                const recibido = parseFloat(document.getElementById('monto-recibido').value) || 0;
+                if(recibido < totalPagarActual) {
+                    alert("El monto recibido en efectivo es menor al total a pagar.");
+                    return;
+                }
+            }
+
+            let detalles = [];
+            let itemsTicket = [];
+            const fechaActual = new Date().toLocaleString('es-PE');
+            const ticketId = 'TK-' + Math.floor(1000 + Math.random() * 9000);
+
+            kardex.unshift({
+                ticketId: ticketId,
+                fecha: fechaActual,
+                producto: carrito.map(i => `${i.nombre} x${i.cantidad}`).join(', '),
+                tipo: metodoPagoSeleccionado,
+                cantidad: totalPagarActual.toFixed(2),
+                usuario: rol,
+                metodo: metodoPagoSeleccionado,
+                total: totalPagarActual.toFixed(2),
+                items: carrito.map(i => ({ desc: i.nombre, cant: i.cantidad, total: (i.precio * i.cantidad).toFixed(2) }))
+            });
+
+            carrito.forEach(item => {
+                const subtotal = item.precio * item.cantidad;
+                detalles.push(`${item.nombre} x${item.cantidad}`);
+                itemsTicket.push({
+                    desc: item.nombre,
+                    cant: item.cantidad,
+                    total: subtotal.toFixed(2)
+                });
+
+                const prod = productos.find(p => p.id === item.id);
+                if (prod) {
+                    prod.stockUnid = Math.max(0, prod.stockUnid - item.cantidad);
+                    kardex.unshift({
+                        fecha: fechaActual,
+                        producto: item.nombre,
+                        tipo: 'Venta',
+                        cantidad: `-${item.cantidad}`,
+                        usuario: `${rol} (${metodoPagoSeleccionado})`
+                    });
+                }
+            });
+
+            localStorage.setItem('lista_productos', JSON.stringify(productos));
+            localStorage.setItem('lista_kardex', JSON.stringify(kardex));
+
+            alert(`¡Venta registrada exitosamente! Ticket: ${ticketId}`);
+            cerrarModalPago();
+            carrito = [];
+            actualizarCarritoUI();
+            renderizarProductos();
+            if(typeof renderizarReportes === 'function') renderizarReportes();
+            renderizarKardex();
+        }
+
+        /* ----------------------------------------------------
+           CAJA Y CUADRE DIARIO DE TURNO
+        ----------------------------------------------------- */
+        function renderizarVistaCaja() {
+            const fechaHoyStr = new Date().toLocaleDateString('es-PE');
+            let totalYapeHoy = 0;
+            let totalEfectivoHoy = 0;
+
+            kardex.forEach(k => {
+                if (k.ticketId && k.fecha && k.fecha.includes(fechaHoyStr)) {
+                    if (k.metodo === 'Yape' || k.tipo === 'Yape') totalYapeHoy += parseFloat(k.total || k.cantidad) || 0;
+                    if (k.metodo === 'Efectivo' || k.tipo === 'Efectivo') totalEfectivoHoy += parseFloat(k.total || k.cantidad) || 0;
+                }
+            });
+
+            let totalGastosHoy = 0;
+            gastosDelDia.forEach(g => {
+                if (g.fecha && g.fecha.includes(fechaHoyStr)) totalGastosHoy += parseFloat(g.monto) || 0;
+            });
+
+            document.getElementById('caja-card-inicio').textContent = 'S/ ' + montoInicialCaja.toFixed(2);
+            document.getElementById('caja-card-yape').textContent = 'S/ ' + totalYapeHoy.toFixed(2);
+            document.getElementById('caja-card-efectivo').textContent = 'S/ ' + totalEfectivoHoy.toFixed(2);
+            document.getElementById('caja-card-gastos').textContent = 'S/ ' + totalGastosHoy.toFixed(2);
+
+            const efectivoEnCajon = (montoInicialCaja + totalEfectivoHoy) - totalGastosHoy;
+            document.getElementById('cuadre-efectivo-cobrado').textContent = 'S/ ' + totalEfectivoHoy.toFixed(2);
+            document.getElementById('cuadre-gastos-salida').textContent = '- S/ ' + totalGastosHoy.toFixed(2);
+            
+            const lblEfectivoFinal = document.getElementById('cuadre-efectivo-cajon');
+            lblEfectivoFinal.textContent = 'S/ ' + efectivoEnCajon.toFixed(2);
+            
+            if (efectivoEnCajon < 0 || totalGastosHoy > 0) {
+                lblEfectivoFinal.style.color = '#f87171';
+            } else {
+                lblEfectivoFinal.style.color = '#38bdf8';
+            }
+
+            const tablaGastos = document.getElementById('tabla-gastos-dia');
+            tablaGastos.innerHTML = gastosDelDia.filter(g => g.fecha && g.fecha.includes(fechaHoyStr)).map(g => `
+                <tr>
+                    <td>${g.hora}</td>
+                    <td><strong style="color:#f87171;">${g.tipo}</strong></td>
+                    <td>${g.detalle}</td>
+                    <td><strong style="color:#ef4444;">- S/ ${parseFloat(g.monto).toFixed(2)}</strong></td>
+                    <td>${g.usuario}</td>
+                </tr>
+            `).join('') || `<tr><td colspan="5" style="text-align: center; color: #64748b;">No hay gastos o salidas de dinero registradas hoy.</td></tr>`;
+
+            renderizarHistorialCierres();
+            renderizarHistorialDiarioConsolidado();
+        }
+
+        function evaluarTipoGasto(val) {
+            const boxComanda = document.getElementById('box-gasto-comanda');
+            if (val === 'Pago de comanda') {
+                boxComanda.style.display = 'block';
+                const select = document.getElementById('gasto-comanda-select');
+                select.innerHTML = '<option value="">-- Seleccionar Comanda --</option>' + 
+                    kardex.filter(k => k.ticketId && k.ticketId.startsWith('CMD-') && k.tipo && k.tipo.includes('POR PAGAR')).map(c => `<option value="${c.ticketId}">${c.ticketId} - S/ ${c.total}</option>`).join('');
+            } else {
+                boxComanda.style.display = 'none';
+            }
+        }
+
+        function seleccionarComandaCobrar(comandaId) {
+            if (!comandaId) return;
+            const comandaRecord = kardex.find(k => k.ticketId === comandaId);
+            if (comandaRecord) {
+                document.getElementById('gasto-monto').value = comandaRecord.total || comandaRecord.cantidad;
+                document.getElementById('gasto-detalle').value = `Pago de Comanda ${comandaId}`;
+            }
+        }
+
+        function registrarGastoDia(e) {
+            e.preventDefault();
+            const ahora = new Date();
+            const comandaIdSel = document.getElementById('gasto-comanda-select').value;
+            const tipoGasto = document.getElementById('gasto-tipo').value;
+
+            gastosDelDia.unshift({
+                id: Date.now(),
+                fecha: ahora.toLocaleDateString('es-PE'),
+                hora: ahora.toLocaleTimeString('es-PE'),
+                tipo: tipoGasto,
+                detalle: document.getElementById('gasto-detalle').value,
+                monto: parseFloat(document.getElementById('gasto-monto').value).toFixed(2),
+                usuario: rol
+            });
+
+            if (tipoGasto === 'Pago de comanda' && comandaIdSel) {
+                const cmdKardex = kardex.find(k => k.ticketId === comandaIdSel);
+                if (cmdKardex) {
+                    cmdKardex.tipo = 'COMPRA PROVEEDOR [CANCELADO]';
+                    cmdKardex.metodo = 'COMPRA PROVEEDOR [CANCELADO]';
+                    cmdKardex.producto = 'COMPRA PROVEEDOR [CANCELADO]';
+                }
+                const histCmd = historialComandasRealizadas.find(c => c.comandaId === comandaIdSel);
+                if (histCmd) histCmd.estado = 'CANCELADO';
+            }
+
+            localStorage.setItem('lista_gastos_dia', JSON.stringify(gastosDelDia));
+            localStorage.setItem('lista_kardex', JSON.stringify(kardex));
+            localStorage.setItem('historial_comandas_realizadas', JSON.stringify(historialComandasRealizadas));
+            
+            alert("Salida de dinero registrada con éxito.");
+            document.getElementById('form-registro-gasto').reset();
+            document.getElementById('box-gasto-comanda').style.display = 'none';
+            renderizarVistaCaja();
+            renderizarReportes();
+        }
+
+        /* IMPRIMIR ARQUEO DE CAJA Y ALMACENAR EN HISTORIAL */
+        function imprimirArqueoTurno() {
+            const fechaHoyStr = new Date().toLocaleDateString('es-PE');
+            let totalYapeHoy = 0, totalEfectivoHoy = 0, totalGastosHoy = 0;
+
+            const ventasDelDia = kardex.filter(k => k.ticketId && k.fecha && k.fecha.includes(fechaHoyStr) && !k.ticketId.startsWith('CMD-'));
+
+            ventasDelDia.forEach(k => {
+                if (k.metodo === 'Yape' || k.tipo === 'Yape') totalYapeHoy += parseFloat(k.total || k.cantidad) || 0;
+                if (k.metodo === 'Efectivo' || k.tipo === 'Efectivo') totalEfectivoHoy += parseFloat(k.total || k.cantidad) || 0;
+            });
+
+            const gastosDelDiaHoy = gastosDelDia.filter(g => g.fecha && g.fecha.includes(fechaHoyStr));
+            gastosDelDiaHoy.forEach(g => {
+                totalGastosHoy += parseFloat(g.monto) || 0;
+            });
+
+            const efectivoFinalCajon = (montoInicialCaja + totalEfectivoHoy) - totalGastosHoy;
+            const cierreId = 'CIERRE-' + Math.floor(100 + Math.random() * 900);
+            const fechaHoraActual = new Date().toLocaleString('es-PE');
+
+            const nuevoCierre = {
+                id: cierreId,
+                fecha: fechaHoraActual,
+                usuario: rol,
+                montoInicial: montoInicialCaja,
+                efectivo: totalEfectivoHoy,
+                yape: totalYapeHoy,
+                gastos: totalGastosHoy,
+                efectivoFinal: efectivoFinalCajon,
+                ventas: ventasDelDia,
+                salidas: gastosDelDiaHoy
+            };
+            historialCierresCaja.unshift(nuevoCierre);
+            localStorage.setItem('historial_cierres_caja', JSON.stringify(historialCierresCaja));
+
+            mostrarTicketCierre(nuevoCierre);
+            renderizarHistorialCierres();
+        }
+
+        function mostrarTicketCierre(cierre) {
+            document.getElementById('t-titulo-comprobante').textContent = 'ARQUEO / CIERRE DE CAJA';
+            document.getElementById('t-id').textContent = cierre.id;
+            document.getElementById('t-fecha').textContent = cierre.fecha;
+            document.getElementById('t-vendedor').textContent = cierre.usuario;
+            document.getElementById('t-metodo').textContent = 'RESUMEN Y DESGLOSE DIARIO';
+
+            const tbody = document.getElementById('t-items');
+            tbody.innerHTML = `
+                <tr style="border-bottom: 1px solid #000;"><td colspan="3" style="font-weight:bold; color:#000 !important; text-align:center; padding-top:4px;">--- RESUMEN NUMÉRICO ---</td></tr>
+                <tr><td style="color:#000 !important;">Monto Inicial Caja</td><td style="color:#000 !important;">-</td><td style="text-align:right; color:#000 !important;">S/ ${cierre.montoInicial.toFixed(2)}</td></tr>
+                <tr><td style="color:#000 !important;">Ventas Efectivo</td><td style="color:#000 !important;">-</td><td style="text-align:right; color:#000 !important;">S/ ${cierre.efectivo.toFixed(2)}</td></tr>
+                <tr><td style="color:#000 !important;">Ventas Yape</td><td style="color:#000 !important;">-</td><td style="text-align:right; color:#000 !important;">S/ ${cierre.yape.toFixed(2)}</td></tr>
+                <tr><td style="color:#000 !important;">Total Salidas/Gastos</td><td style="color:#000 !important;">-</td><td style="text-align:right; color:#000 !important;">- S/ ${cierre.gastos.toFixed(2)}</td></tr>
+                
+                <tr style="border-bottom: 1px solid #000;"><td colspan="3" style="font-weight:bold; color:#000 !important; text-align:center; padding-top:10px;">--- DESGLOSE DE VENTAS (${cierre.ventas.length}) ---</td></tr>
+            `;
+
+            if (cierre.ventas.length === 0) {
+                tbody.innerHTML += `<tr><td colspan="3" style="color:#000 !important; text-align:center;">No hay ventas hoy.</td></tr>`;
+            } else {
+                cierre.ventas.forEach(v => {
+                    let desc = v.producto || 'Venta de productos';
+                    let metodoStr = v.metodo || v.tipo || '';
+                    let montoStr = parseFloat(v.total || v.cantidad || 0).toFixed(2);
+                    tbody.innerHTML += `
+                        <tr>
+                            <td style="color:#000 !important; font-size:10px;">${v.ticketId} - ${desc} (${metodoStr})</td>
+                            <td style="color:#000 !important;">1</td>
+                            <td style="text-align:right; color:#000 !important;">S/ ${montoStr}</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            tbody.innerHTML += `<tr style="border-bottom: 1px solid #000;"><td colspan="3" style="font-weight:bold; color:#000 !important; text-align:center; padding-top:10px;">--- DESGLOSE DE SALIDAS/GASTOS (${cierre.salidas.length}) ---</td></tr>`;
+
+            if (cierre.salidas.length === 0) {
+                tbody.innerHTML += `<tr><td colspan="3" style="color:#000 !important; text-align:center;">No hay salidas/gastos hoy.</td></tr>`;
+            } else {
+                cierre.salidas.forEach(g => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td style="color:#000 !important; font-size:10px;">[${g.hora}] ${g.tipo}: ${g.detalle}</td>
+                            <td style="color:#000 !important;">-</td>
+                            <td style="text-align:right; color:#000 !important;">- S/ ${parseFloat(g.monto).toFixed(2)}</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            document.getElementById('t-total').textContent = cierre.efectivoFinal.toFixed(2);
+            document.getElementById('modal-ticket').style.display = 'flex';
+        }
+
+        function renderizarHistorialCierres() {
+            const tabla = document.getElementById('tabla-historial-cierres');
+            if (!tabla) return;
+            tabla.innerHTML = historialCierresCaja.map(c => `
+                <tr>
+                    <td><strong style="color:#38bdf8;">${c.id}</strong></td>
+                    <td>${c.fecha}</td>
+                    <td>${c.usuario}</td>
+                    <td><strong style="color:${c.efectivoFinal < 0 ? '#f87171' : '#4ade80'};">S/ ${c.efectivoFinal.toFixed(2)}</strong></td>
+                    <td><button onclick="verCierreGuardado('${c.id}')" style="background:#2563eb; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">🧾 Ver Ticket</button></td>
+                </tr>
+            `).join('') || `<tr><td colspan="5" style="text-align:center; color:#64748b;">No hay cierres de caja guardados.</td></tr>`;
+        }
+
+        function verCierreGuardado(cierreId) {
+            const cierre = historialCierresCaja.find(c => c.id === cierreId);
+            if (cierre) mostrarTicketCierre(cierre);
+        }
+
+        function renderizarHistorialDiarioConsolidado() {
+            const tabla = document.getElementById('tabla-historial-diario');
+            if (!tabla) return;
+            let diasMap = {};
+            kardex.forEach(k => {
+                if(k.ticketId && k.fecha) {
+                    let f = k.fecha.split(',')[0];
+                    if(!diasMap[f]) diasMap[f] = { fecha: f, inicio: montoInicialCaja, yape: 0, efectivo: 0, gastos: 0 };
+                    if(k.metodo === 'Yape' || k.tipo === 'Yape') diasMap[f].yape += parseFloat(k.total || k.cantidad) || 0;
+                    if(k.metodo === 'Efectivo' || k.tipo === 'Efectivo') diasMap[f].efectivo += parseFloat(k.total || k.cantidad) || 0;
+                }
+            });
+            gastosDelDia.forEach(g => {
+                if(g.fecha) {
+                    if(!diasMap[g.fecha]) diasMap[g.fecha] = { fecha: g.fecha, inicio: montoInicialCaja, yape: 0, efectivo: 0, gastos: 0 };
+                    diasMap[g.fecha].gastos += parseFloat(g.monto) || 0;
+                }
+            });
+            tabla.innerHTML = Object.values(diasMap).map(d => {
+                const netCaja = ((d.inicio + d.efectivo) - d.gastos);
+                return `
+                    <tr>
+                        <td><strong>${d.fecha}</strong></td>
+                        <td>S/ ${d.inicio.toFixed(2)}</td>
+                        <td style="color:#c084fc;">S/ ${d.yape.toFixed(2)}</td>
+                        <td style="color:#4ade80;">S/ ${d.efectivo.toFixed(2)}</td>
+                        <td style="color:#f87171;">- S/ ${d.gastos.toFixed(2)}</td>
+                        <td><strong style="color:${netCaja < 0 ? '#f87171' : '#38bdf8'};">S/ ${netCaja.toFixed(2)}</strong></td>
+                    </tr>
+                `;
+            }).join('') || `<tr><td colspan="6" style="text-align:center; color:#64748b;">Sin historial.</td></tr>`;
+        }
+
+        function renderizarKardex() {
+            const tablaKardex = document.getElementById('tabla-kardex');
+            if(!tablaKardex) return;
+            tablaKardex.innerHTML = '';
+
+            if (kardex.length === 0) {
+                tablaKardex.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#64748b;">No hay movimientos registrados en el Kárdex.</td></tr>`;
+                return;
+            }
+
+            kardex.forEach(k => {
+                let prodNombre = k.producto || k.detalle || '-';
+                let tipoMov = k.tipo || k.metodo || '-';
+                let cantidadCambio = k.cantidad || k.total || '-';
+                let usuarioDetalle = k.usuario || k.usuarioDetalle || '-';
+
+                tablaKardex.innerHTML += `
+                    <tr>
+                        <td>${k.fecha || '-'}</td>
+                        <td><strong>${prodNombre}</strong></td>
+                        <td>${tipoMov}</td>
+                        <td style="color:${tipoMov.includes('Cancelado') || tipoMov.includes('Salida') || tipoMov.includes('Comanda Solicitada') ? '#f87171' : 'inherit'};">${cantidadCambio}</td>
+                        <td>${usuarioDetalle}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        /* ----------------------------------------------------
+           REPORTES MENSUALES (EXCLUSIVO ADMINISTRADOR)
+        ----------------------------------------------------- */
+        function renderizarReportes() {
+            let totalStock = 0, valorInv = 0, totEf = 0, totYape = 0;
+            productos.forEach(p => { totalStock += parseFloat(p.stockUnid) || 0; valorInv += ((parseFloat(p.stockUnid) || 0) * (parseFloat(p.precioUnid) || 0)); });
+            
+            const tablaRep = document.getElementById('tabla-reportes-ventas');
+            if(!tablaRep) return;
+
+            const ticketsFiltro = kardex.filter(item => item.ticketId);
+
+            ticketsFiltro.forEach(k => {
+                if(k.metodo === 'Efectivo' || k.tipo === 'Efectivo') totEf += parseFloat(k.total || k.cantidad) || 0;
+                if(k.metodo === 'Yape' || k.tipo === 'Yape') totYape += parseFloat(k.total || k.cantidad) || 0;
+            });
+
+            let totalGastosDiarios = 0;
+            let totalGastosPersonal = 0;
+
+            gastosDelDia.forEach(g => {
+                if (g.tipo && g.tipo.includes('personal')) {
+                    totalGastosPersonal += parseFloat(g.monto) || 0;
+                } else {
+                    totalGastosDiarios += parseFloat(g.monto) || 0;
+                }
+            });
+
+            const totalIngresosMes = totEf + totYape;
+            const utilidadNetaMes = totalIngresosMes - (totalGastosDiarios + totalGastosPersonal);
+
+            document.getElementById('rep-stock-total').textContent = totalStock;
+            document.getElementById('rep-valor-inventario').textContent = 'S/ ' + valorInv.toFixed(2);
+            document.getElementById('rep-ventas-efectivo').textContent = 'S/ ' + totEf.toFixed(2);
+            document.getElementById('rep-ventas-yape').textContent = 'S/ ' + totYape.toFixed(2);
+
+            document.getElementById('mes-total-ingresos').textContent = 'S/ ' + totalIngresosMes.toFixed(2);
+            document.getElementById('mes-gastos-diarios').textContent = '- S/ ' + totalGastosDiarios.toFixed(2);
+            document.getElementById('mes-gastos-personal').textContent = '- S/ ' + totalGastosPersonal.toFixed(2);
+            document.getElementById('mes-utilidad-neta').textContent = 'S/ ' + utilidadNetaMes.toFixed(2);
+
+            tablaRep.innerHTML = ticketsFiltro.map(item => `
+                <tr>
+                    <td><strong>${item.ticketId}</strong></td>
+                    <td>${item.fecha}</td>
+                    <td><span style="color:#38bdf8;">${item.usuario}</span></td>
+                    <td><strong>${item.metodo || item.tipo}</strong></td>
+                    <td><strong style="color:#4ade80;">S/ ${item.total || item.cantidad}</strong></td>
+                    <td><button onclick="verTicketComprobante('${item.ticketId}')" style="background:#2563eb; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">🧾 Ver Ticket</button></td>
+                </tr>
+            `).join('') || `<tr><td colspan="6" style="text-align:center; color:#64748b;">No hay registros de ventas.</td></tr>`;
+        }
+
+        function verTicketComprobante(ticketId) {
+            const k = kardex.find(item => item.ticketId === ticketId);
+            if (!k) return;
+            document.getElementById('t-id').textContent = k.ticketId;
+            document.getElementById('t-fecha').textContent = k.fecha;
+            document.getElementById('t-vendedor').textContent = k.usuario;
+            document.getElementById('t-metodo').textContent = k.metodo || k.tipo;
+            document.getElementById('t-total').textContent = k.total || k.cantidad;
+
+            const tbody = document.getElementById('t-items');
+            tbody.innerHTML = '';
+            if (k.items && k.items.length > 0) {
+                k.items.forEach(it => {
+                    tbody.innerHTML += `<tr><td style="color:#000 !important;">${it.desc}</td><td style="color:#000 !important;">x${it.cant}</td><td style="text-align:right; color:#000 !important;">S/ ${it.total}</td></tr>`;
+                });
+            } else {
+                tbody.innerHTML = `<tr><td colspan="3" style="color:#000 !important;">${k.producto || k.detalle}</td></tr>`;
+            }
+            document.getElementById('modal-ticket').style.display = 'flex';
+        }
+
+        function editarProducto(id) {
+            const prod = productos.find(p => p.id === id);
+            if(!prod) return;
+            document.getElementById('p-id-edit').value = prod.id;
+            document.getElementById('p-nombre').value = prod.nombre;
+            document.getElementById('p-categoria').value = prod.categoria;
+            actualizarNombresPresentaciones();
+            document.getElementById('p-precio-unid').value = prod.precioUnid;
+            document.getElementById('p-stock-unid').value = prod.stockUnid;
+            document.getElementById('btn-cancelar-edit').style.display = 'block';
+        }
+
+        function eliminarProducto(id) {
+            if(confirm("¿Eliminar este producto del inventario?")) {
+                const prod = productos.find(p => p.id === id);
+                if (prod) {
+                    kardex.unshift({
+                        fecha: new Date().toLocaleString('es-PE'),
+                        producto: prod.nombre,
+                        tipo: 'Eliminación Producto',
+                        cantidad: 'Removido',
+                        usuario: rol
+                    });
+                    localStorage.setItem('lista_kardex', JSON.stringify(kardex));
+                }
+                productos = productos.filter(p => p.id !== id);
+                localStorage.setItem('lista_productos', JSON.stringify(productos));
+                renderizarProductos();
+                renderizarKardex();
+            }
+        }
+
+        function cerrarTicket() { document.getElementById('modal-ticket').style.display = 'none'; }
+        function filtrarProductos(t) { renderizarProductos(t); }
+
+        
+            actualizarNombresPresentaciones();
+            renderizarProductos();
+            verificarAlertaStockUnidades();
+            renderizarRegistroComandasVendedor();
+            renderizarKardex();
+            renderizarReportes();
+            renderizarHistorialCierres();
+    
+
+        function cerrarSesion() { localStorage.removeItem('sesion_activa'); window.location.href = "login.html"; }
+        function cerrarCaja() { if(confirm("¿Cerrar caja y finalizar turno?")) { imprimirArqueoTurno(); } }
+        window.cambiarTab = cambiarTab;
+window.cerrarSesion = cerrarSesion;
+window.cerrarCaja = cerrarCaja;
+    </script>
+</body>
+</html>

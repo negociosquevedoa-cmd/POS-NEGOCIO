@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión - QUEVEDO ABARROTES</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #0f172a;
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .login-card {
+            background-color: #1e293b;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            width: 350px;
+            text-align: center;
+            border: 1px solid #334155;
+        }
+        h2 { margin-bottom: 5px; font-size: 24px; color: #38bdf8; }
+        p { color: #94a3b8; font-size: 14px; margin-bottom: 25px; }
+        .form-group { text-align: left; margin-bottom: 20px; }
+        label { display: block; font-size: 14px; margin-bottom: 6px; color: #cbd5e1; }
+        select, input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            background-color: #0f172a;
+            color: white;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            width: 100%;
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover { background-color: #1d4ed8; }
+        .error-msg {
+            color: #f87171;
+            font-size: 13px;
+            margin-top: 10px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="login-card">
+        <h2>QUEVEDO ABARROTES</h2>
+        <p>Iniciar Sesión en el Sistema</p>
+
+        <div class="form-group">
+            <label>Seleccionar Rol</label>
+            <select id="rol">
+                <option value="vendedor">Vendedor</option>
+                <option value="administrador">Administrador</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Contraseña</label>
+            <input type="password" id="password" placeholder="Ingresa tu contraseña">
+        </div>
+
+        <button onclick="iniciarSesion()">Entrar al Sistema</button>
+        <div id="error" class="error-msg">Contraseña incorrecta. Inténtalo de nuevo.</div>
+    </div>
+
+    <script>
+        function iniciarSesion() {
+            const rol = document.getElementById('rol').value;
+            const pass = document.getElementById('password').value;
+            const errorDiv = document.getElementById('error');
+
+            errorDiv.style.display = 'none';
+
+            // Definición de contraseñas por rol
+            const credenciales = {
+                'administrador': 'empresa3',
+                'vendedor': 'vendedor123'
+            };
+
+            // Comprobación de la contraseña
+            if (pass === credenciales[rol]) {
+                localStorage.setItem('usuario_rol', rol);
+                localStorage.setItem('sesion_activa', 'true');
+                window.location.href = "caja.html";
+            } else {
+                errorDiv.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>
