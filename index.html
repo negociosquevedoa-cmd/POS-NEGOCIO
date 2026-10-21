@@ -116,8 +116,8 @@ body.rol-vendedor .campo-costo-admin {
 
         /* Catálogo Visual */
         .catalogo-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            display: flex;
+            flex-wrap: wrap;
             gap: 12px;
             width: 100%;
         }
@@ -130,6 +130,8 @@ body.rol-vendedor .campo-costo-admin {
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            flex: 0 0 calc(20% - 10px);
+            min-width: 140px;
         }
         .prod-card img {
             width: 100%;
@@ -453,9 +455,12 @@ body.rol-vendedor .campo-costo-admin {
     <!-- VISTA VENTAS -->
     <div id="tab-ventas" class="tab-content ventas-grid active">
         <div class="card">
-            <div class="card-header">
-                <span id="titulo-catalogo">Catálogo (0)</span>
-                <input type="text" class="search-input" placeholder="🔍 Buscar producto..." oninput="filtrarProductos(this.value)">
+            <div class="card-header" style="flex-direction: column; align-items: stretch; gap: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span id="titulo-catalogo">Catálogo (0)</span>
+                    <input type="text" id="scanner-input" class="form-control" placeholder="📷 Código..." oninput="buscarPorCodigo(this.value)" onkeydown="manejarEscaneo(event)" onkeyup="detectarEscaneoInput(event)" style="width: 200px; font-size: 14px; padding: 8px 12px; border: 2px solid #38bdf8; border-radius: 6px; background: #1e293b; color: #38bdf8; font-weight: bold;" autocomplete="off">
+                </div>
+                <input type="text" class="search-input" placeholder="🔍 Buscar producto por nombre, código o categoría..." oninput="filtrarProductos(this.value)" style="width: 100%;">
             </div>
             <div id="catalogo-productos" class="catalogo-grid">
                 <!-- Se insertan productos -->
@@ -956,12 +961,13 @@ body.rol-vendedor .campo-costo-admin {
     </div>
 
     <div class="modal-overlay" id="modal-pago">
-        <div class="modal-card" style="width: 380px;">
+        <div class="modal-card" style="width: 420px;">
             <h3>Selecciona Método de Pago</h3>
             <p id="modal-monto" style="font-size: 24px; font-weight: bold; color: #4ade80; margin-bottom: 10px;">S/ 0.00</p>
-            <div class="pago-options">
+            <div class="pago-options" style="grid-template-columns: repeat(3, 1fr);">
                 <button class="btn-pago-opt selected" id="btn-efectivo" onclick="seleccionarMetodo('Efectivo')">💵 Efectivo</button>
                 <button class="btn-pago-opt" id="btn-yape" onclick="seleccionarMetodo('Yape')">📱 Yape</button>
+                <button class="btn-pago-opt" id="btn-mixto" onclick="seleccionarMetodo('Mixto')">💳 Mixto</button>
             </div>
             <div class="caja-efectivo" id="panel-efectivo">
                 <label>Paga con (S/):</label>
@@ -971,6 +977,22 @@ body.rol-vendedor .campo-costo-admin {
             <div class="qr-yape-box" id="panel-yape">
                 <img src="https://i.ibb.co/3sS7L4F/yape-qr.jpg" alt="QR Yape" id="img-qr-yape">
                 <p>Jackeline Lizbeth Quevedo Agurto</p>
+            </div>
+            <div class="qr-yape-box" id="panel-mixto" style="display: none;">
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 12px; color: #cbd5e1; font-weight: bold; display: block; margin-bottom: 4px;">Monto en Efectivo (S/):</label>
+                    <input type="number" step="0.10" id="monto-efectivo-mixto" placeholder="0.00" oninput="calcularVueltoMixto()" style="width: 100%; padding: 10px; background: #1e293b; border: 1px solid #334155; color: #4ade80; font-weight: bold; border-radius: 6px;">
+                </div>
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 12px; color: #cbd5e1; font-weight: bold; display: block; margin-bottom: 4px;">Monto en Yape (S/):</label>
+                    <input type="number" step="0.10" id="monto-yape-mixto" placeholder="0.00" oninput="calcularVueltoMixto()" style="width: 100%; padding: 10px; background: #1e293b; border: 1px solid #334155; color: #c084fc; font-weight: bold; border-radius: 6px;">
+                </div>
+                <div style="background: #0f172a; padding: 10px; border-radius: 6px; margin-bottom: 10px;">
+                    <div style="font-size: 12px; color: #94a3b8;">Total Pagado: S/ <span id="total-pagado-mixto" style="color: #4ade80; font-weight: bold;">0.00</span></div>
+                    <div style="font-size: 12px; color: #94a3b8;">Vuelto en Efectivo: S/ <span id="vuelto-mixto" style="color: #38bdf8; font-weight: bold;">0.00</span></div>
+                </div>
+                <img src="https://i.ibb.co/3sS7L4F/yape-qr.jpg" alt="QR Yape" style="width: 120px; margin-bottom: 6px;">
+                <p style="font-size: 11px;">Jackeline Lizbeth Quevedo Agurto</p>
             </div>
             <button class="btn-primary" style="background: #16a34a;" onclick="confirmarCobro()">Confirmar y Cobrar</button>
             <button class="btn-primary" style="background: #475569; margin-top: 6px;" onclick="cerrarModalPago()">Cancelar</button>
@@ -1192,35 +1214,122 @@ body.rol-vendedor .campo-costo-admin {
             }
         }
 
+        function aNumeroProd(valor, fallback) {
+            const n = parseFloat(valor);
+            return Number.isFinite(n) ? n : (fallback === undefined ? 0 : fallback);
+        }
+        function primerValorDefinido(obj, keys) {
+            if (!obj) return undefined;
+            for (var i = 0; i < keys.length; i++) {
+                var k = keys[i];
+                if (obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k];
+            }
+            return undefined;
+        }
+        function esPresentacionArrozAzucar(prod) {
+            const catVal = String((prod && prod.categoria) || '').trim().toUpperCase();
+            const nomVal = String((prod && prod.nombre) || '').trim().toUpperCase();
+            return catVal.indexOf('ARROZ') !== -1 || catVal.indexOf('AZUCAR') !== -1 || catVal.indexOf('AZÚCAR') !== -1 ||
+                nomVal.indexOf('ARROZ') !== -1 || nomVal.indexOf('AZUCAR') !== -1 || nomVal.indexOf('AZÚCAR') !== -1;
+        }
+        function etiquetasPresentaciones(prod) {
+            return esPresentacionArrozAzucar(prod)
+                ? { unid: 'KG', doc: '10 KG', paq: '1/2 Saco', caja: 'Saco' }
+                : { unid: 'Unid', doc: 'Docena', paq: 'Pqte', caja: 'Caja' };
+        }
+        function extraerPresentacionesProducto(prod) {
+            return {
+                costoUnid: aNumeroProd(primerValorDefinido(prod, ['costoUnid', 'costoKg', 'costo1'])),
+                precioUnid: aNumeroProd(primerValorDefinido(prod, ['precioUnid', 'precioKg', 'precio1'])),
+                stockUnid: aNumeroProd(primerValorDefinido(prod, ['stockUnid', 'stockKg', 'stock1'])),
+                costoDoc: aNumeroProd(primerValorDefinido(prod, ['costoDoc', 'costo10kg', 'costo10Kg', 'costo2'])),
+                precioDoc: aNumeroProd(primerValorDefinido(prod, ['precioDoc', 'precio10kg', 'precio10Kg', 'precio2'])),
+                stockDoc: aNumeroProd(primerValorDefinido(prod, ['stockDoc', 'stock10kg', 'stock10Kg', 'stock2'])),
+                costoPaq: aNumeroProd(primerValorDefinido(prod, ['costoPaq', 'costoMedioSaco', 'costo12saco', 'costo3'])),
+                precioPaq: aNumeroProd(primerValorDefinido(prod, ['precioPaq', 'precioMedioSaco', 'precio12saco', 'precio3'])),
+                stockPaq: aNumeroProd(primerValorDefinido(prod, ['stockPaq', 'stockMedioSaco', 'stock12saco', 'stock3'])),
+                costoCaja: aNumeroProd(primerValorDefinido(prod, ['costoCaja', 'costoCaia', 'costoSaco', 'costo4'])),
+                precioCaja: aNumeroProd(primerValorDefinido(prod, ['precioCaja', 'precioSaco', 'precio4'])),
+                stockCaja: aNumeroProd(primerValorDefinido(prod, ['stockCaja', 'stockSaco', 'stock4']))
+            };
+        }
+        function fmtPrecioKardex(valor) {
+            const n = aNumeroProd(valor);
+            return Number.isInteger(n) ? String(n) : n.toFixed(2);
+        }
+        function detalleCambiosInventario(anterior, siguiente) {
+            const labels = etiquetasPresentaciones(siguiente);
+            const oldP = extraerPresentacionesProducto(anterior);
+            const cambios = [];
+            [
+                { key: 'Unid', label: labels.unid },
+                { key: 'Doc', label: labels.doc },
+                { key: 'Paq', label: labels.paq },
+                { key: 'Caja', label: labels.caja }
+            ].forEach(function (u) {
+                const pOld = oldP['precio' + u.key];
+                const pNew = siguiente['precio' + u.key];
+                if (aNumeroProd(pOld) !== aNumeroProd(pNew)) {
+                    cambios.push('P.' + u.label + ': S/ ' + fmtPrecioKardex(pOld) + ' ➔ S/ ' + fmtPrecioKardex(pNew));
+                }
+                const sOld = oldP['stock' + u.key];
+                const sNew = siguiente['stock' + u.key];
+                if (aNumeroProd(sOld) !== aNumeroProd(sNew)) {
+                    cambios.push('Stock ' + u.label + ': ' + aNumeroProd(sOld) + ' ➔ ' + aNumeroProd(sNew));
+                }
+                const cOld = oldP['costo' + u.key];
+                const cNew = siguiente['costo' + u.key];
+                if (aNumeroProd(cOld) !== aNumeroProd(cNew)) {
+                    cambios.push('Costo ' + u.label + ': S/ ' + fmtPrecioKardex(cOld) + ' ➔ S/ ' + fmtPrecioKardex(cNew));
+                }
+            });
+            return cambios;
+        }
+        function leerCampoNumero(id) {
+            const el = document.getElementById(id);
+            return aNumeroProd(el ? el.value : 0, 0);
+        }
+
         function guardarProductoLocal(e) {
             e.preventDefault();
             const editId = document.getElementById('p-id-edit').value;
-            const productoData = {
-                id: editId ? parseInt(editId) : Date.now(),
+            const prodAnterior = editId
+                ? productos.find(function (p) { return String(p.id) === String(editId); })
+                : null;
+            const presentacionesForm = {
+                costoUnid: leerCampoNumero('p-costo-unid'),
+                precioUnid: leerCampoNumero('p-precio-unid'),
+                stockUnid: leerCampoNumero('p-stock-unid'),
+                costoDoc: leerCampoNumero('p-costo-doc'),
+                precioDoc: leerCampoNumero('p-precio-doc'),
+                stockDoc: leerCampoNumero('p-stock-doc'),
+                costoPaq: leerCampoNumero('p-costo-paq'),
+                precioPaq: leerCampoNumero('p-precio-paq'),
+                stockPaq: leerCampoNumero('p-stock-paq'),
+                costoCaja: leerCampoNumero('p-costo-caja'),
+                precioCaja: leerCampoNumero('p-precio-caja'),
+                stockCaja: leerCampoNumero('p-stock-caja')
+            };
+            const imagenNueva = document.getElementById('imagen-base64').value;
+            const productoData = Object.assign({}, prodAnterior || {}, {
+                id: editId ? parseInt(editId, 10) : Date.now(),
                 nombre: document.getElementById('p-nombre').value,
                 categoria: document.getElementById('p-categoria').value,
                 codigo: document.getElementById('p-codigo').value || 'Sin código',
-                precioUnid: parseFloat(document.getElementById('p-precio-unid').value).toFixed(2),
-                stockUnid: parseFloat(document.getElementById('p-stock-unid').value) || 0,
-                precioPaq: document.getElementById('p-precio-paq').value ? parseFloat(document.getElementById('p-precio-paq').value).toFixed(2) : null,
-                stockPaq: parseInt(document.getElementById('p-stock-paq').value) || 0,
-                precioDoc: document.getElementById('p-precio-doc').value ? parseFloat(document.getElementById('p-precio-doc').value).toFixed(2) : null,
-                stockDoc: parseInt(document.getElementById('p-stock-doc').value) || 0,
-                precioCaja: document.getElementById('p-precio-caja').value ? parseFloat(document.getElementById('p-precio-caja').value).toFixed(2) : null,
-                stockCaja: parseInt(document.getElementById('p-stock-caja').value) || 0,
-                imagen: document.getElementById('imagen-base64').value || 'https://via.placeholder.com/80'
-            };
+                imagen: imagenNueva || (prodAnterior && prodAnterior.imagen) || 'https://via.placeholder.com/80'
+            }, presentacionesForm);
 
             const fechaActual = new Date().toLocaleString('es-PE');
             if (editId) {
-                const index = productos.findIndex(p => p.id === parseInt(editId));
+                const index = productos.findIndex(function (p) { return String(p.id) === String(editId); });
                 if (index !== -1) {
+                    const textoCantidad = detalleCambiosInventario(productos[index], productoData);
                     productos[index] = productoData;
                     kardex.unshift({
                         fecha: fechaActual,
                         producto: productoData.nombre,
                         tipo: 'Modificación de Producto',
-                        cantidad: 'Edición Inventario',
+                        cantidad: textoCantidad.length > 0 ? textoCantidad.join(' | ') : 'Actualización de parámetros',
                         usuario: rol
                     });
                 }
@@ -1267,15 +1376,16 @@ body.rol-vendedor .campo-costo-admin {
 
                 // Precios apilados verticalmente
                 let preciosHTML = `<span class="price-badge" style="color:#38bdf8;">${esArrozAzucar ? 'KG' : 'Unid'}: S/ ${prod.precioUnid}</span>`;
-                if(prod.precioPaq) preciosHTML += `<span class="price-badge" style="color:#fbbf24;">${esArrozAzucar ? '10 KG' : 'Doc'}: S/ ${prod.precioPaq}</span>`;
-                if(prod.precioDoc) preciosHTML += `<span class="price-badge" style="color:#c084fc;">${esArrozAzucar ? '1/2 Saco' : 'Pqte'}: S/ ${prod.precioDoc}</span>`;
-                if(prod.precioCaja) preciosHTML += `<span class="price-badge" style="color:#f87171;">${esArrozAzucar ? 'Saco' : 'Caja'}: S/ ${prod.precioCaja}</span>`;
+                const pres = extraerPresentacionesProducto(prod);
+                if(pres.precioDoc) preciosHTML += `<span class="price-badge" style="color:#fbbf24;">${esArrozAzucar ? '10 KG' : 'Doc'}: S/ ${pres.precioDoc}</span>`;
+                if(pres.precioPaq) preciosHTML += `<span class="price-badge" style="color:#c084fc;">${esArrozAzucar ? '1/2 Saco' : 'Pqte'}: S/ ${pres.precioPaq}</span>`;
+                if(pres.precioCaja) preciosHTML += `<span class="price-badge" style="color:#f87171;">${esArrozAzucar ? 'Saco' : 'Caja'}: S/ ${pres.precioCaja}</span>`;
 
                 // Stock detallado apilado verticalmente
                 let stockHTML = `<span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? 'KG' : 'Unid'}: ${prod.stockUnid}</span>`;
-                if(prod.stockPaq > 0) stockHTML += `<span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? '10 KG' : 'Doc'}: ${prod.stockPaq}</span>`;
-                if(prod.stockDoc > 0) stockHTML += `<span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? '1/2 Saco' : 'Pqte'}: ${prod.stockDoc}</span>`;
-                if(prod.stockCaja > 0) stockHTML += `<span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? 'Saco' : 'Caja'}: ${prod.stockCaja}</span>`;
+                if(pres.stockDoc > 0) stockHTML += `<span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? '10 KG' : 'Doc'}: ${pres.stockDoc}</span>`;
+                if(pres.stockPaq > 0) stockHTML += `<span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? '1/2 Saco' : 'Pqte'}: ${pres.stockPaq}</span>`;
+                if(pres.stockCaja > 0) stockHTML += `<span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? 'Saco' : 'Caja'}: ${pres.stockCaja}</span>`;
 
                 let accionesTd = '';
                 if (rol === 'administrador' || rol === 'admin') {
@@ -1298,9 +1408,9 @@ body.rol-vendedor .campo-costo-admin {
                 `;
 
                 let optsHTML = `<option value="unid|${prod.precioUnid}">${esArrozAzucar ? 'KG' : 'Unid'} (S/ ${prod.precioUnid})</option>`;
-                if(prod.precioPaq) optsHTML += `<option value="paq|${prod.precioPaq}">${esArrozAzucar ? '10 KG' : 'Docena'} (S/ ${prod.precioPaq})</option>`;
-                if(prod.precioDoc) optsHTML += `<option value="doc|${prod.precioDoc}">${esArrozAzucar ? '1/2 Saco' : 'Pqte'} (S/ ${prod.precioDoc})</option>`;
-                if(prod.precioCaja) optsHTML += `<option value="caja|${prod.precioCaja}">${esArrozAzucar ? 'Saco' : 'Caja'} (S/ ${prod.precioCaja})</option>`;
+                if(pres.precioDoc) optsHTML += `<option value="doc|${pres.precioDoc}">${esArrozAzucar ? '10 KG' : 'Docena'} (S/ ${pres.precioDoc})</option>`;
+                if(pres.precioPaq) optsHTML += `<option value="paq|${pres.precioPaq}">${esArrozAzucar ? '1/2 Saco' : 'Pqte'} (S/ ${pres.precioPaq})</option>`;
+                if(pres.precioCaja) optsHTML += `<option value="caja|${pres.precioCaja}">${esArrozAzucar ? 'Saco' : 'Caja'} (S/ ${pres.precioCaja})</option>`;
 
                 catalogoVentas.innerHTML += `
                     <div class="prod-card">
@@ -1322,8 +1432,10 @@ body.rol-vendedor .campo-costo-admin {
             productos.filter(p => p.nombre.toLowerCase().includes(filtro.toLowerCase())).forEach(prod => {
                 const catUp = (prod.categoria || '').toUpperCase();
                 let optsCompra = `<option value="Unidad|${prod.precioUnid}">${catUp === 'ARROZ' || catUp === 'AZUCAR' ? 'KG' : 'Unidad'} (S/ ${prod.precioUnid})</option>`;
-                if(prod.precioPaq) optsCompra += `<option value="Docena/10KG|${prod.precioPaq}">${catUp === 'ARROZ' || catUp === 'AZUCAR' ? '10 KG' : 'Docena'} (S/ ${prod.precioPaq})</option>`;
-                if(prod.precioDoc) optsCompra += `<option value="Paquete/Saco|${prod.precioDoc}">${catUp === 'ARROZ' || catUp === 'AZUCAR' ? 'Saco' : 'Paquete/Caja'} (S/ ${prod.precioDoc})</option>`;
+                const presCompra = extraerPresentacionesProducto(prod);
+                if(presCompra.precioDoc) optsCompra += `<option value="Docena/10KG|${presCompra.precioDoc}">${catUp === 'ARROZ' || catUp === 'AZUCAR' ? '10 KG' : 'Docena'} (S/ ${presCompra.precioDoc})</option>`;
+                if(presCompra.precioPaq) optsCompra += `<option value="Paquete/Saco|${presCompra.precioPaq}">${catUp === 'ARROZ' || catUp === 'AZUCAR' ? '1/2 Saco' : 'Paquete'} (S/ ${presCompra.precioPaq})</option>`;
+                if(presCompra.precioCaja) optsCompra += `<option value="Caja/Saco|${presCompra.precioCaja}">${catUp === 'ARROZ' || catUp === 'AZUCAR' ? 'Saco' : 'Caja'} (S/ ${presCompra.precioCaja})</option>`;
 
                 catalogoCompras.innerHTML += `
                     <div class="prod-card">
@@ -2152,15 +2264,45 @@ body.rol-vendedor .campo-costo-admin {
         }
 
         function editarProducto(id) {
-            const prod = productos.find(p => p.id === id);
+            const prod = productos.find(function (p) { return String(p.id) === String(id); });
             if(!prod) return;
+            const pres = extraerPresentacionesProducto(prod);
             document.getElementById('p-id-edit').value = prod.id;
-            document.getElementById('p-nombre').value = prod.nombre;
-            document.getElementById('p-categoria').value = prod.categoria;
+            document.getElementById('p-nombre').value = prod.nombre || '';
+            document.getElementById('p-categoria').value = prod.categoria || '';
             actualizarNombresPresentaciones();
-            document.getElementById('p-precio-unid').value = prod.precioUnid;
-            document.getElementById('p-stock-unid').value = prod.stockUnid;
+            document.getElementById('p-codigo').value = prod.codigo || '';
+
+            document.getElementById('p-costo-unid').value = pres.costoUnid;
+            document.getElementById('p-precio-unid').value = pres.precioUnid;
+            document.getElementById('p-stock-unid').value = pres.stockUnid;
+
+            document.getElementById('p-costo-doc').value = pres.costoDoc;
+            document.getElementById('p-precio-doc').value = pres.precioDoc;
+            document.getElementById('p-stock-doc').value = pres.stockDoc;
+
+            document.getElementById('p-costo-paq').value = pres.costoPaq;
+            document.getElementById('p-precio-paq').value = pres.precioPaq;
+            document.getElementById('p-stock-paq').value = pres.stockPaq;
+
+            document.getElementById('p-costo-caja').value = pres.costoCaja;
+            document.getElementById('p-precio-caja').value = pres.precioCaja;
+            document.getElementById('p-stock-caja').value = pres.stockCaja;
+
+            document.querySelectorAll('#form-producto details').forEach(function (bloque) {
+                bloque.open = true;
+            });
+
+            if (prod.imagen) {
+                document.getElementById('imagen-base64').value = prod.imagen;
+                if (prod.imagen.indexOf('via.placeholder') === -1) {
+                    document.getElementById('img-preview').src = prod.imagen;
+                    document.getElementById('vista-previa').style.display = 'block';
+                }
+            }
+
             document.getElementById('btn-cancelar-edit').style.display = 'block';
+            if (typeof cambiarTab === 'function') cambiarTab('inventario');
         }
 
         function eliminarProducto(id) {
@@ -2199,8 +2341,12 @@ body.rol-vendedor .campo-costo-admin {
         function cerrarSesion() { localStorage.removeItem('sesion_activa'); window.location.href = "login.html"; }
         function cerrarCaja() { if(confirm("¿Cerrar caja y finalizar turno?")) { imprimirArqueoTurno(); } }
         window.cambiarTab = cambiarTab;
-window.cerrarSesion = cerrarSesion;
-window.cerrarCaja = cerrarCaja;
+        window.cerrarSesion = cerrarSesion;
+        window.cerrarCaja = cerrarCaja;
+        window.editarProducto = editarProducto;
+        window.guardarProductoLocal = guardarProductoLocal;
+        window.cancelarEdicion = cancelarEdicion;
+        window.actualizarNombresPresentaciones = actualizarNombresPresentaciones;
     </script>
 </body>
 </html>

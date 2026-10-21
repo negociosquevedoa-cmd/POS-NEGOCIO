@@ -288,52 +288,159 @@ function eliminarComandaVendedor(comandaId) {
     }
 }
 
+function recargarListaProductos() {
+    try {
+        const raw = localStorage.getItem('lista_productos');
+        if (raw) productos = JSON.parse(raw) || productos || [];
+    } catch (e) {
+        /* conservar lista en memoria */
+    }
+}
+
+function recargarListaKardex() {
+    try {
+        const raw = localStorage.getItem('lista_kardex');
+        if (raw) kardex = JSON.parse(raw) || kardex || [];
+    } catch (e) {
+        /* conservar kárdex en memoria */
+    }
+}
+
+function aNumeroProd(valor, fallback = 0) {
+    const n = parseFloat(valor);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function primerValorDefinido(obj, keys) {
+    if (!obj) return undefined;
+    for (const k of keys) {
+        if (obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k];
+    }
+    return undefined;
+}
+
+function esPresentacionArrozAzucar(prod) {
+    const catVal = String((prod && prod.categoria) || '').trim().toUpperCase();
+    const nomVal = String((prod && prod.nombre) || '').trim().toUpperCase();
+    return catVal.includes('ARROZ') || catVal.includes('AZUCAR') || catVal.includes('AZÚCAR') ||
+        nomVal.includes('ARROZ') || nomVal.includes('AZUCAR') || nomVal.includes('AZÚCAR');
+}
+
+function etiquetasPresentaciones(prod) {
+    return esPresentacionArrozAzucar(prod)
+        ? { unid: 'KG', doc: '10 KG', paq: '1/2 Saco', caja: 'Saco' }
+        : { unid: 'Unid', doc: 'Docena', paq: 'Pqte', caja: 'Caja' };
+}
+
+function extraerPresentacionesProducto(prod) {
+    return {
+        costoUnid: aNumeroProd(primerValorDefinido(prod, ['costoUnid', 'costoKg', 'costo1'])),
+        precioUnid: aNumeroProd(primerValorDefinido(prod, ['precioUnid', 'precioKg', 'precio1'])),
+        stockUnid: aNumeroProd(primerValorDefinido(prod, ['stockUnid', 'stockKg', 'stock1'])),
+        costoDoc: aNumeroProd(primerValorDefinido(prod, ['costoDoc', 'costo10kg', 'costo10Kg', 'costo2'])),
+        precioDoc: aNumeroProd(primerValorDefinido(prod, ['precioDoc', 'precio10kg', 'precio10Kg', 'precio2'])),
+        stockDoc: aNumeroProd(primerValorDefinido(prod, ['stockDoc', 'stock10kg', 'stock10Kg', 'stock2'])),
+        costoPaq: aNumeroProd(primerValorDefinido(prod, ['costoPaq', 'costoMedioSaco', 'costo12saco', 'costo3'])),
+        precioPaq: aNumeroProd(primerValorDefinido(prod, ['precioPaq', 'precioMedioSaco', 'precio12saco', 'precio3'])),
+        stockPaq: aNumeroProd(primerValorDefinido(prod, ['stockPaq', 'stockMedioSaco', 'stock12saco', 'stock3'])),
+        costoCaja: aNumeroProd(primerValorDefinido(prod, ['costoCaja', 'costoCaia', 'costoSaco', 'costo4'])),
+        precioCaja: aNumeroProd(primerValorDefinido(prod, ['precioCaja', 'precioSaco', 'precio4'])),
+        stockCaja: aNumeroProd(primerValorDefinido(prod, ['stockCaja', 'stockSaco', 'stock4']))
+    };
+}
+
+function fmtPrecioKardex(valor) {
+    const n = aNumeroProd(valor);
+    return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
+function detalleCambiosInventario(anterior, siguiente) {
+    const labels = etiquetasPresentaciones(siguiente);
+    const oldP = extraerPresentacionesProducto(anterior);
+    const cambios = [];
+    [
+        { key: 'Unid', label: labels.unid },
+        { key: 'Doc', label: labels.doc },
+        { key: 'Paq', label: labels.paq },
+        { key: 'Caja', label: labels.caja }
+    ].forEach((u) => {
+        const pOld = oldP['precio' + u.key];
+        const pNew = siguiente['precio' + u.key];
+        if (aNumeroProd(pOld) !== aNumeroProd(pNew)) {
+            cambios.push(`P.${u.label}: S/ ${fmtPrecioKardex(pOld)} ➔ S/ ${fmtPrecioKardex(pNew)}`);
+        }
+        const sOld = oldP['stock' + u.key];
+        const sNew = siguiente['stock' + u.key];
+        if (aNumeroProd(sOld) !== aNumeroProd(sNew)) {
+            cambios.push(`Stock ${u.label}: ${aNumeroProd(sOld)} ➔ ${aNumeroProd(sNew)}`);
+        }
+        const cOld = oldP['costo' + u.key];
+        const cNew = siguiente['costo' + u.key];
+        if (aNumeroProd(cOld) !== aNumeroProd(cNew)) {
+            cambios.push(`Costo ${u.label}: S/ ${fmtPrecioKardex(cOld)} ➔ S/ ${fmtPrecioKardex(cNew)}`);
+        }
+    });
+    return cambios;
+}
+
+function setCampoForm(id, valor, siVacio) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (valor === undefined || valor === null || valor === '') {
+        el.value = siVacio;
+        return;
+    }
+    el.value = valor;
+}
+
+function leerCampoNumero(id) {
+    const el = document.getElementById(id);
+    return aNumeroProd(el ? el.value : 0, 0);
+}
+
 function guardarProductoLocal(e) {
     if (e) e.preventDefault();
+    recargarListaProductos();
+    recargarListaKardex();
 
     const editId = document.getElementById('p-id-edit').value;
-    
-const productoData = {
-        id: editId ? parseInt(editId) : Date.now(),
+    const prodAnterior = editId
+        ? productos.find(p => String(p.id) === String(editId))
+        : null;
+    const presentacionesForm = {
+        costoUnid: leerCampoNumero('p-costo-unid'),
+        precioUnid: leerCampoNumero('p-precio-unid'),
+        stockUnid: leerCampoNumero('p-stock-unid'),
+        costoDoc: leerCampoNumero('p-costo-doc'),
+        precioDoc: leerCampoNumero('p-precio-doc'),
+        stockDoc: leerCampoNumero('p-stock-doc'),
+        costoPaq: leerCampoNumero('p-costo-paq'),
+        precioPaq: leerCampoNumero('p-precio-paq'),
+        stockPaq: leerCampoNumero('p-stock-paq'),
+        costoCaja: leerCampoNumero('p-costo-caja'),
+        precioCaja: leerCampoNumero('p-precio-caja'),
+        stockCaja: leerCampoNumero('p-stock-caja')
+    };
+
+    const imagenNueva = (document.getElementById('imagen-base64') || {}).value;
+    const productoData = {
+        ...(prodAnterior || {}),
+        id: editId ? parseInt(editId, 10) : Date.now(),
         nombre: document.getElementById('p-nombre').value,
         categoria: document.getElementById('p-categoria').value,
         codigo: document.getElementById('p-codigo').value || 'Sin código',
-
-        // 1. Unidad / KG
-        costoUnid: parseFloat(document.getElementById('p-costo-unid').value) || 0,
-        precioUnid: parseFloat(document.getElementById('p-precio-unid').value) || 0,
-        stockUnid: parseFloat(document.getElementById('p-stock-unid').value) || 0,
-
-        // 2. Docena / 10 KG (Asegúrate de usar los ID correctos de tu HTML)
-        costoDoc: parseFloat(document.getElementById('p-costo-doc').value) || 0,
-        precioDoc: parseFloat(document.getElementById('p-precio-doc').value) || 0,
-        stockDoc: parseFloat(document.getElementById('p-stock-doc').value) || 0,
-
-        // 3. Paquete / 1/2 Saco
-        costoPaq: parseFloat(document.getElementById('p-costo-paq').value) || 0,
-        precioPaq: parseFloat(document.getElementById('p-precio-paq').value) || 0,
-        stockPaq: parseFloat(document.getElementById('p-stock-paq').value) || 0,
-
-        // 4. Caja / Saco
-        costoCaja: parseFloat(document.getElementById('p-costo-caja').value) || 0,
-        precioCaja: parseFloat(document.getElementById('p-precio-caja').value) || 0,
-        stockCaja: parseFloat(document.getElementById('p-stock-caja').value) || 0
+        ...presentacionesForm,
+        imagen: imagenNueva || (prodAnterior && prodAnterior.imagen) || 'https://via.placeholder.com/80'
     };
 
     const fechaActual = new Date().toLocaleString('es-PE');
     if (editId) {
-        if (editId) {
-        const index = productos.findIndex(p => p.id === parseInt(editId));
+        const index = productos.findIndex(p => String(p.id) === String(editId));
         if (index !== -1) {
-            const prodAnterior = productos[index];
-            
-            let cambiosDetalle = [];
-            if (prodAnterior.stockUnid !== productoData.stockUnid) cambiosDetalle.push(`Stock Unid: ${prodAnterior.stockUnid} → ${productoData.stockUnid}`);
-            if (prodAnterior.precioUnid !== productoData.precioUnid) cambiosDetalle.push(`P.Unid: S/ ${prodAnterior.precioUnid} → S/ ${productoData.precioUnid}`);
-            if (prodAnterior.stockPaq !== productoData.stockPaq) cambiosDetalle.push(`Stock Paq/10KG: ${prodAnterior.stockPaq} → ${productoData.stockPaq}`);
-            if (prodAnterior.precioPaq !== productoData.precioPaq) cambiosDetalle.push(`P.Paq/10KG: S/ ${prodAnterior.precioPaq || 0} → S/ ${productoData.precioPaq || 0}`);
-
-            let textoCantidad = cambiosDetalle.length > 0 ? cambiosDetalle.join(' | ') : 'Actualización de parámetros';
+            const cambiosDetalle = detalleCambiosInventario(productos[index], productoData);
+            const textoCantidad = cambiosDetalle.length > 0
+                ? cambiosDetalle.join(' | ')
+                : 'Actualización de parámetros';
 
             productos[index] = productoData;
             kardex.unshift({
@@ -344,7 +451,6 @@ const productoData = {
                 usuario: `${rol} (Edición de parámetros)`
             });
         }
-    }
     } else {
         productos.push(productoData);
         kardex.unshift({
@@ -373,10 +479,6 @@ function cancelarEdicion() {
 }
 
 function renderizarProductos(filtro = '') {
-    const tablaInventario = document.getElementById('tabla-inventario');
-    const catalogoVentas = document.getElementById('catalogo-productos');
-    const catalogoCompras = document.getElementById('catalogo-compras');
-
     if ((!productos || productos.length === 0) && localStorage.getItem('lista_productos')) {
         try {
             productos = JSON.parse(localStorage.getItem('lista_productos')) || [];
@@ -385,84 +487,15 @@ function renderizarProductos(filtro = '') {
         }
     }
 
-    if (tablaInventario) tablaInventario.innerHTML = '';
-    if (catalogoVentas) catalogoVentas.innerHTML = '';
-    if (catalogoCompras) catalogoCompras.innerHTML = '';
-
-    const prodsFiltrados = productos.filter(p => (p.nombre || '').toLowerCase().includes(filtro.toLowerCase()));
-    
-    const tituloCat = document.getElementById('titulo-catalogo');
-    if (tituloCat) tituloCat.textContent = `Catálogo (${prodsFiltrados.length})`;
-
-    const rolActual = typeof rol !== 'undefined' ? rol : 'admin';
-
-    prodsFiltrados.forEach(prod => {
-        const catUp = (prod.categoria || '').toUpperCase();
-        const esArrozAzucar = (catUp === 'ARROZ' || catUp === 'AZUCAR' || catUp === 'AZÚCAR');
-
-        const precioVal = prod.precioUnid ? parseFloat(prod.precioUnid).toFixed(2) : '0.00';
-        const costoVal = prod.costoUnid ? parseFloat(prod.costoUnid).toFixed(2) : '0.00';
-
-       let preciosHTML = `<span class="price-badge" style="color:#38bdf8;">${esArrozAzucar ? 'KG' : 'Unid'}: S/ ${precioVal}</span>`;
-
-        let costosHTML = '';
-        if (rolActual !== 'vendedor') {
-            costosHTML = `<span class="price-badge" style="color:#4ade80;">Costo: S/ ${costoVal}</span>`;
-        } else {
-            costosHTML = `<span style="color: #64748b; font-style: italic;">Oculto</span>`;
-        }
-        if (prod.precioPaq) {
-            preciosHTML += `<br><span class="price-badge" style="color:#fbbf24;">${esArrozAzucar ? '10 KG' : 'Doc'} - Venta: S/ ${parseFloat(prod.precioPaq).toFixed(2)}</span>`;
-        }
-        if (prod.precioDoc) {
-            preciosHTML += `<br><span class="price-badge" style="color:#c084fc;">${esArrozAzucar ? '1/2 Saco' : 'Pqte'} - Venta: S/ ${parseFloat(prod.precioDoc).toFixed(2)}</span>`;
-        }
-        if (prod.precioCaja) {
-            preciosHTML += `<br><span class="price-badge" style="color:#f87171;">${esArrozAzucar ? 'Saco' : 'Caja'} - Venta: S/ ${parseFloat(prod.precioCaja).toFixed(2)}</span>`;
-        }
-
-        let stockHTML = `<span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? 'KG' : 'Unid'}: ${prod.stockUnid || 0}</span>`;
-        if (prod.stockPaq > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? '10 KG' : 'Doc'}: ${prod.stockPaq}</span>`;
-        if (prod.stockDoc > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? '1/2 Saco' : 'Pqte'}: ${prod.stockDoc}</span>`;
-        if (prod.stockCaja > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? 'Saco' : 'Caja'}: ${prod.stockCaja}</span>`;
-
-        let accionesTd = '';
-        if (rolActual !== 'vendedor') {
-            accionesTd = `
-                <td>
-                    <button onclick="editarProducto(${prod.id})" style="background: #2563eb; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">Editar</button>
-                    <button onclick="eliminarProducto(${prod.id})" style="background: #991b1b; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">Borrar</button>
-                </td>`;
-        }
-tablaInventario.innerHTML += `
-            <tr>
-                <td><strong>${prod.nombre}</strong></td>
-                <td>${prod.categoria}</td>
-                <td class="col-costo-admin">${costosHTML}</td>
-                <td>${preciosHTML}</td>
-                <td>${stockHTML}</td>
-                ${accionesTd}
-            </tr>
-        `;
-
-        let optsHTML = `<option value="unid">${esArrozAzucar ? 'KG' : 'Unid'} (S/ ${precioVal})</option>`;
-        if (prod.precioPaq) optsHTML += `<option value="paq">${esArrozAzucar ? '10 KG' : 'Docena'} (S/ ${prod.precioPaq})</option>`;
-        if (prod.precioDoc) optsHTML += `<option value="doc">${esArrozAzucar ? '1/2 Saco' : 'Pqte'} (S/ ${prod.precioDoc})</option>`;
-        if (prod.precioCaja) optsHTML += `<option value="caja">${esArrozAzucar ? 'Saco' : 'Caja'} (S/ ${prod.precioCaja})</option>`;
-
-        if (catalogoVentas) {
-            catalogoVentas.innerHTML += `
-                <div class="prod-card">
-                    <img src="${prod.imagen || 'https://via.placeholder.com/80'}">
-                    <div class="prod-title">${prod.nombre}</div>
-                    <select id="pres-${prod.id}" class="select-pres">
-                        ${optsHTML}
-                    </select>
-                    <button class="btn-add-cart" onclick="agregarAlCarrito(${prod.id})">+ Añadir</button>
-                </div>`;
-        }
+    const filtroLower = filtro.toLowerCase().trim();
+    const prodsFiltrados = productos.filter(p => {
+        const nombre = (p.nombre || '').toLowerCase();
+        const codigo = (p.codigo || '').toLowerCase();
+        const categoria = (p.categoria || '').toLowerCase();
+        return nombre.includes(filtroLower) || codigo.includes(filtroLower) || categoria.includes(filtroLower);
     });
 
+    renderizarProductosPorLista(prodsFiltrados);
 }
 
 function renderizarCompras(filtro = '') {
@@ -475,9 +508,11 @@ function renderizarCompras(filtro = '') {
         .forEach(prod => {
             const catUp = (prod.categoria || '').toUpperCase();
             const esArrozAzucar = (catUp === 'ARROZ' || catUp === 'AZUCAR' || catUp === 'AZÚCAR');
-            let optsCompra = `<option value="Unidad|${prod.precioUnid}">${esArrozAzucar ? 'KG' : 'Unidad'} (S/ ${prod.precioUnid})</option>`;
-            if (prod.precioPaq) optsCompra += `<option value="Docena/10KG|${prod.precioPaq}">${esArrozAzucar ? '10 KG' : 'Docena'} (S/ ${prod.precioPaq})</option>`;
-            if (prod.precioDoc) optsCompra += `<option value="Paquete/Saco|${prod.precioDoc}">${esArrozAzucar ? 'Saco' : 'Paquete/Caja'} (S/ ${prod.precioDoc})</option>`;
+            const pres = extraerPresentacionesProducto(prod);
+            let optsCompra = `<option value="Unidad|${pres.precioUnid}">${esArrozAzucar ? 'KG' : 'Unidad'} (S/ ${pres.precioUnid})</option>`;
+            if (pres.precioDoc) optsCompra += `<option value="Docena/10KG|${pres.precioDoc}">${esArrozAzucar ? '10 KG' : 'Docena'} (S/ ${pres.precioDoc})</option>`;
+            if (pres.precioPaq) optsCompra += `<option value="Paquete/Saco|${pres.precioPaq}">${esArrozAzucar ? '1/2 Saco' : 'Paquete'} (S/ ${pres.precioPaq})</option>`;
+            if (pres.precioCaja) optsCompra += `<option value="Caja/Saco|${pres.precioCaja}">${esArrozAzucar ? 'Saco' : 'Caja'} (S/ ${pres.precioCaja})</option>`;
 
             catalogoCompras.innerHTML += `
                 <div class="prod-card">
@@ -744,6 +779,121 @@ function imprimirTicketComandaVendedor(comandaId) {
     document.getElementById('modal-ticket').style.display = 'flex';
 }
 
+function manejarEscaneo(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        const codigoEscaneado = event.target.value.trim();
+        if (!codigoEscaneado) return;
+
+        procesarCodigoEscaneo(codigoEscaneado);
+        event.target.value = '';
+        buscarPorCodigo('');
+    }
+}
+
+function detectarEscaneoInput(event) {
+    if (event.key === 'Enter') {
+        if (esEscaneoActivo && bufferInputEscaneo.length > 3) {
+            event.preventDefault();
+            event.stopPropagation();
+            procesarCodigoEscaneado(bufferInputEscaneo);
+            bufferInputEscaneo = '';
+            esEscaneoActivo = false;
+            tiempoUltimoCaracterInput = 0;
+            if (timeoutInputEscaneo) clearTimeout(timeoutInputEscaneo);
+            event.target.value = '';
+            buscarPorCodigo('');
+        }
+        return;
+    }
+
+    if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        const ahora = Date.now();
+        const tiempoEntreCaracteres = ahora - tiempoUltimoCaracterInput;
+        tiempoUltimoCaracterInput = ahora;
+
+        bufferInputEscaneo += event.key;
+        esEscaneoActivo = true;
+
+        if (timeoutInputEscaneo) clearTimeout(timeoutInputEscaneo);
+        timeoutInputEscaneo = setTimeout(() => {
+            bufferInputEscaneo = '';
+            esEscaneoActivo = false;
+            tiempoUltimoCaracterInput = 0;
+        }, 300);
+    }
+}
+
+function agregarProductoPorCodigo(prod, codigo) {
+    const pres = extraerPresentacionesProducto(prod);
+    const catUp = (prod.categoria || '').toUpperCase();
+    const esArrozAzucar = (catUp === 'ARROZ' || catUp === 'AZUCAR' || catUp === 'AZÚCAR');
+
+    let tipoPres = 'unid';
+    let precioPres = pres.precioUnid || 0;
+    let stockDisponible = pres.stockUnid || 0;
+
+    const tieneUnidad = (pres.precioUnid > 0 && pres.stockUnid > 0) || (pres.stockUnid > 0);
+
+    if (tieneUnidad) {
+        tipoPres = 'unid';
+        precioPres = pres.precioUnid || 0;
+        stockDisponible = pres.stockUnid || 0;
+    } else if (pres.precioDoc > 0 && pres.stockDoc > 0) {
+        tipoPres = 'doc';
+        precioPres = pres.precioDoc;
+        stockDisponible = pres.stockDoc;
+    } else if (pres.precioPaq > 0 && pres.stockPaq > 0) {
+        tipoPres = 'paq';
+        precioPres = pres.precioPaq;
+        stockDisponible = pres.stockPaq;
+    } else if (pres.precioCaja > 0 && pres.stockCaja > 0) {
+        tipoPres = 'caja';
+        precioPres = pres.precioCaja;
+        stockDisponible = pres.stockCaja;
+    } else if (pres.precioUnid > 0) {
+        tipoPres = 'unid';
+        precioPres = pres.precioUnid;
+        stockDisponible = pres.stockUnid || 0;
+    } else if (pres.precioDoc > 0) {
+        tipoPres = 'doc';
+        precioPres = pres.precioDoc;
+        stockDisponible = pres.stockDoc || 0;
+    } else if (pres.precioPaq > 0) {
+        tipoPres = 'paq';
+        precioPres = pres.precioPaq;
+        stockDisponible = pres.stockPaq || 0;
+    } else if (pres.precioCaja > 0) {
+        tipoPres = 'caja';
+        precioPres = pres.precioCaja;
+        stockDisponible = pres.stockCaja || 0;
+    }
+
+    const itemKey = `${prod.id}-${tipoPres}`;
+    const item = carrito.find(i => i.key === itemKey);
+    const cantidadEnCarrito = item ? item.cantidad : 0;
+
+    if (cantidadEnCarrito + 1 > stockDisponible) {
+        alert(`❌ Stock insuficiente. Solo quedan ${stockDisponible} disponible(s) de ${esArrozAzucar ? 'KG' : 'Unidad'}.`);
+        return;
+    }
+
+    if (item) {
+        item.cantidad += 1;
+    } else {
+        carrito.push({
+            key: itemKey,
+            id: prod.id,
+            tipoPres: tipoPres,
+            nombre: prod.nombre,
+            precio: precioPres,
+            cantidad: 1,
+            stockMax: stockDisponible
+        });
+    }
+    actualizarCarritoUI();
+}
+
 function agregarAlCarrito(id) {
     const prod = productos.find(p => p.id === id);
     if (!prod) return;
@@ -862,6 +1012,10 @@ function abrirModalPago() {
     document.getElementById('modal-monto').textContent = 'S/ ' + totalPagarActual.toFixed(2);
     document.getElementById('monto-recibido').value = '';
     document.getElementById('monto-vuelto').textContent = '0.00';
+    document.getElementById('monto-efectivo-mixto').value = '';
+    document.getElementById('monto-yape-mixto').value = '';
+    document.getElementById('total-pagado-mixto').textContent = '0.00';
+    document.getElementById('vuelto-mixto').textContent = '0.00';
     seleccionarMetodo('Efectivo');
     document.getElementById('modal-pago').style.display = 'flex';
 }
@@ -871,8 +1025,10 @@ function seleccionarMetodo(metodo) {
     metodoPagoSeleccionado = metodo;
     document.getElementById('btn-efectivo').className = 'btn-pago-opt ' + (metodo === 'Efectivo' ? 'selected' : '');
     document.getElementById('btn-yape').className = 'btn-pago-opt ' + (metodo === 'Yape' ? 'selected' : '');
+    document.getElementById('btn-mixto').className = 'btn-pago-opt ' + (metodo === 'Mixto' ? 'selected' : '');
     document.getElementById('panel-efectivo').style.display = metodo === 'Efectivo' ? 'block' : 'none';
     document.getElementById('panel-yape').style.display = metodo === 'Yape' ? 'block' : 'none';
+    document.getElementById('panel-mixto').style.display = metodo === 'Mixto' ? 'block' : 'none';
 }
 
 function calcularVuelto() {
@@ -881,11 +1037,34 @@ function calcularVuelto() {
     document.getElementById('monto-vuelto').textContent = vuelto > 0 ? vuelto.toFixed(2) : '0.00';
 }
 
+function calcularVueltoMixto() {
+    const efectivo = parseFloat(document.getElementById('monto-efectivo-mixto').value) || 0;
+    const yape = parseFloat(document.getElementById('monto-yape-mixto').value) || 0;
+    const totalPagado = efectivo + yape;
+    const vuelto = efectivo - (totalPagarActual - yape);
+
+    document.getElementById('total-pagado-mixto').textContent = totalPagado.toFixed(2);
+    document.getElementById('vuelto-mixto').textContent = vuelto > 0 ? vuelto.toFixed(2) : '0.00';
+}
+
 function confirmarCobro() {
+    let montoEfectivo = 0;
+    let montoYape = 0;
+
     if(metodoPagoSeleccionado === 'Efectivo') {
         const recibido = parseFloat(document.getElementById('monto-recibido').value) || 0;
         if(recibido < totalPagarActual) {
             alert("El monto recibido en efectivo es menor al total a pagar.");
+            return;
+        }
+        montoEfectivo = recibido;
+    } else if(metodoPagoSeleccionado === 'Mixto') {
+        montoEfectivo = parseFloat(document.getElementById('monto-efectivo-mixto').value) || 0;
+        montoYape = parseFloat(document.getElementById('monto-yape-mixto').value) || 0;
+        const totalPagado = montoEfectivo + montoYape;
+
+        if(totalPagado < totalPagarActual) {
+            alert(`El total pagado (S/ ${totalPagado.toFixed(2)}) es menor al total a pagar (S/ ${totalPagarActual.toFixed(2)}).`);
             return;
         }
     }
@@ -895,6 +1074,11 @@ function confirmarCobro() {
     const fechaActual = new Date().toLocaleString('es-PE');
     const ticketId = 'TK-' + Math.floor(1000 + Math.random() * 9000);
 
+    let metodoPagoTexto = metodoPagoSeleccionado;
+    if(metodoPagoSeleccionado === 'Mixto') {
+        metodoPagoTexto = `Mixto (Efectivo: S/ ${montoEfectivo.toFixed(2)}, Yape: S/ ${montoYape.toFixed(2)})`;
+    }
+
     kardex.unshift({
         ticketId: ticketId,
         fecha: fechaActual,
@@ -902,8 +1086,10 @@ function confirmarCobro() {
         tipo: metodoPagoSeleccionado,
         cantidad: totalPagarActual.toFixed(2),
         usuario: rol,
-        metodo: metodoPagoSeleccionado,
+        metodo: metodoPagoTexto,
         total: totalPagarActual.toFixed(2),
+        montoEfectivo: montoEfectivo.toFixed(2),
+        montoYape: montoYape.toFixed(2),
         items: carrito.map(i => ({ desc: i.nombre, cant: i.cantidad, total: (i.precio * i.cantidad).toFixed(2) }))
     });
 
@@ -948,8 +1134,14 @@ function renderizarVistaCaja() {
 
     kardex.forEach(k => {
         if (k.ticketId && k.fecha && k.fecha.includes(fechaHoyStr)) {
-            if (k.metodo === 'Yape' || k.tipo === 'Yape') totalYapeHoy += parseFloat(k.total || k.cantidad) || 0;
-            if (k.metodo === 'Efectivo' || k.tipo === 'Efectivo') totalEfectivoHoy += parseFloat(k.total || k.cantidad) || 0;
+            if (k.metodo === 'Yape' || k.tipo === 'Yape') {
+                totalYapeHoy += parseFloat(k.total || k.cantidad) || 0;
+            } else if (k.metodo === 'Efectivo' || k.tipo === 'Efectivo') {
+                totalEfectivoHoy += parseFloat(k.total || k.cantidad) || 0;
+            } else if (k.metodo && k.metodo.includes('Mixto')) {
+                totalEfectivoHoy += parseFloat(k.montoEfectivo || 0) || 0;
+                totalYapeHoy += parseFloat(k.montoYape || 0) || 0;
+            }
         }
     });
 
@@ -1353,10 +1545,12 @@ function aplicarRestriccionesPorRol() {
 }
 
 function editarProducto(id) {
-    const prod = productos.find(p => p.id === id);
+    recargarListaProductos();
+    const prod = productos.find(p => String(p.id) === String(id));
     if (!prod) return;
 
-    // Datos generales
+    const pres = extraerPresentacionesProducto(prod);
+
     const idEdit = document.getElementById('p-id-edit');
     if (idEdit) idEdit.value = prod.id;
 
@@ -1366,36 +1560,52 @@ function editarProducto(id) {
     const inputCategoria = document.getElementById('p-categoria');
     if (inputCategoria) {
         inputCategoria.value = prod.categoria || '';
-        actualizarNombresPresentaciones(); // Actualiza los textos a KG, 1/2 Saco, Saco, etc.
+        actualizarNombresPresentaciones();
     }
 
     const inputCodigo = document.getElementById('p-codigo');
     if (inputCodigo) inputCodigo.value = prod.codigo || '';
 
-    // 1. PRESENTACIÓN 1 (Unidad / KG)
-    if (document.getElementById('p-costo-unid')) document.getElementById('p-costo-unid').value = prod.costoUnid ?? '';
-    if (document.getElementById('p-precio-unid')) document.getElementById('p-precio-unid').value = prod.precioUnid ?? '';
-    if (document.getElementById('p-stock-unid')) document.getElementById('p-stock-unid').value = prod.stockUnid ?? 0;
+    setCampoForm('p-costo-unid', pres.costoUnid, 0);
+    setCampoForm('p-precio-unid', pres.precioUnid, 0);
+    setCampoForm('p-stock-unid', pres.stockUnid, 0);
 
-    // 2. PRESENTACIÓN 2 (Docena / 10 KG)
-    if (document.getElementById('p-costo-doc')) document.getElementById('p-costo-doc').value = prod.costoDoc ?? '';
-    if (document.getElementById('p-precio-doc')) document.getElementById('p-precio-doc').value = prod.precioDoc ?? '';
-    if (document.getElementById('p-stock-doc')) document.getElementById('p-stock-doc').value = prod.stockDoc ?? 0;
+    setCampoForm('p-costo-doc', pres.costoDoc, 0);
+    setCampoForm('p-precio-doc', pres.precioDoc, 0);
+    setCampoForm('p-stock-doc', pres.stockDoc, 0);
 
-    // 3. PRESENTACIÓN 3 (Paquete / 1/2 Saco)
-    if (document.getElementById('p-costo-paq')) document.getElementById('p-costo-paq').value = prod.costoPaq ?? '';
-    if (document.getElementById('p-precio-paq')) document.getElementById('p-precio-paq').value = prod.precioPaq ?? '';
-    if (document.getElementById('p-stock-paq')) document.getElementById('p-stock-paq').value = prod.stockPaq ?? 0;
+    setCampoForm('p-costo-paq', pres.costoPaq, 0);
+    setCampoForm('p-precio-paq', pres.precioPaq, 0);
+    setCampoForm('p-stock-paq', pres.stockPaq, 0);
 
-    // 4. PRESENTACIÓN 4 (Caja / Saco Entero)
-    const costoSacoVal = prod.costoCaja ?? prod.costoCaia ?? '';
-    if (document.getElementById('p-costo-caja')) document.getElementById('p-costo-caja').value = costoSacoVal;
-    if (document.getElementById('p-precio-caja')) document.getElementById('p-precio-caja').value = prod.precioCaja ?? '';
-    if (document.getElementById('p-stock-caja')) document.getElementById('p-stock-caja').value = prod.stockCaja ?? 0;
+    setCampoForm('p-costo-caja', pres.costoCaja, 0);
+    setCampoForm('p-precio-caja', pres.precioCaja, 0);
+    setCampoForm('p-stock-caja', pres.stockCaja, 0);
 
-    // Aplicar restricciones de rol si aplica
+    document.querySelectorAll('#form-producto details').forEach((bloque) => {
+        bloque.open = true;
+    });
+
+    const imagenVal = prod.imagen || document.getElementById('imagen-base64')?.value || '';
+    const hiddenImg = document.getElementById('imagen-base64');
+    if (hiddenImg) hiddenImg.value = imagenVal;
+    if (imagenVal && imagenVal.indexOf('via.placeholder') === -1) {
+        const preview = document.getElementById('img-preview');
+        const cajaPreview = document.getElementById('vista-previa');
+        if (preview) preview.src = imagenVal;
+        if (cajaPreview) cajaPreview.style.display = 'block';
+    }
+
+    const btnCancelar = document.getElementById('btn-cancelar-edit');
+    if (btnCancelar) btnCancelar.style.display = 'block';
+
     if (typeof aplicarRestriccionesPorRol === 'function') {
         aplicarRestriccionesPorRol();
+    }
+
+    const tabInventario = document.getElementById('tab-inventario');
+    if (tabInventario && !tabInventario.classList.contains('active') && typeof cambiarTab === 'function') {
+        cambiarTab('inventario');
     }
 }
 
@@ -1420,7 +1630,136 @@ function eliminarProducto(id) {
 }
 
 function cerrarTicket() { document.getElementById('modal-ticket').style.display = 'none'; }
-function filtrarProductos(t) { renderizarProductos(t); }
+function filtrarProductos(t) {
+    const filtro = t.toLowerCase().trim();
+    const prodsFiltrados = productos.filter(p => {
+        const nombre = (p.nombre || '').toLowerCase();
+        const codigo = (p.codigo || '').toLowerCase();
+        const categoria = (p.categoria || '').toLowerCase();
+        return nombre.includes(filtro) || codigo.includes(filtro) || categoria.includes(filtro);
+    });
+    renderizarProductosPorLista(prodsFiltrados);
+
+    if (prodsFiltrados.length === 1 && filtro.length > 5) {
+        const prodEncontrado = prodsFiltrados[0];
+        if (prodEncontrado.codigo && prodEncontrado.codigo.toLowerCase() === filtro) {
+            setTimeout(() => resaltarProductoEnCatalogo(prodEncontrado.id), 100);
+        }
+    }
+}
+
+function buscarPorCodigo(codigo) {
+    const filtro = codigo.toLowerCase().trim();
+    if (!filtro) {
+        renderizarProductos();
+        return;
+    }
+
+    const prodsFiltrados = productos.filter(p => {
+        const codigoProd = (p.codigo || '').toLowerCase();
+        return codigoProd.includes(filtro);
+    });
+
+    renderizarProductosPorLista(prodsFiltrados);
+
+    if (prodsFiltrados.length === 1) {
+        const prodEncontrado = prodsFiltrados[0];
+        if (prodEncontrado.codigo && prodEncontrado.codigo.toLowerCase() === filtro) {
+            setTimeout(() => resaltarProductoEnCatalogo(prodEncontrado.id), 100);
+        }
+    }
+}
+
+function renderizarProductosPorLista(listaProductos) {
+    const tablaInventario = document.getElementById('tabla-inventario');
+    const catalogoVentas = document.getElementById('catalogo-productos');
+    const catalogoCompras = document.getElementById('catalogo-compras');
+
+    if (tablaInventario) tablaInventario.innerHTML = '';
+    if (catalogoVentas) catalogoVentas.innerHTML = '';
+    if (catalogoCompras) catalogoCompras.innerHTML = '';
+
+    const tituloCat = document.getElementById('titulo-catalogo');
+    if (tituloCat) tituloCat.textContent = `Catálogo (${listaProductos.length})`;
+
+    const rolActual = typeof rol !== 'undefined' ? rol : 'admin';
+
+    listaProductos.forEach(prod => {
+        const catUp = (prod.categoria || '').toUpperCase();
+        const esArrozAzucar = (catUp === 'ARROZ' || catUp === 'AZUCAR' || catUp === 'AZÚCAR');
+
+        const precioVal = prod.precioUnid ? parseFloat(prod.precioUnid).toFixed(2) : '0.00';
+        const costoVal = prod.costoUnid ? parseFloat(prod.costoUnid).toFixed(2) : '0.00';
+
+       let preciosHTML = `<span class="price-badge" style="color:#38bdf8;">${esArrozAzucar ? 'KG' : 'Unid'}: S/ ${precioVal}</span>`;
+
+        let costosHTML = '';
+        if (rolActual !== 'vendedor') {
+            costosHTML = `<span class="price-badge" style="color:#4ade80;">Costo: S/ ${costoVal}</span>`;
+        } else {
+            costosHTML = `<span style="color: #64748b; font-style: italic;">Oculto</span>`;
+        }
+        const pres = extraerPresentacionesProducto(prod);
+        if (pres.precioDoc) {
+            preciosHTML += `<br><span class="price-badge" style="color:#fbbf24;">${esArrozAzucar ? '10 KG' : 'Doc'} - Venta: S/ ${pres.precioDoc.toFixed(2)}</span>`;
+        }
+        if (pres.precioPaq) {
+            preciosHTML += `<br><span class="price-badge" style="color:#c084fc;">${esArrozAzucar ? '1/2 Saco' : 'Pqte'} - Venta: S/ ${pres.precioPaq.toFixed(2)}</span>`;
+        }
+        if (pres.precioCaja) {
+            preciosHTML += `<br><span class="price-badge" style="color:#f87171;">${esArrozAzucar ? 'Saco' : 'Caja'} - Venta: S/ ${pres.precioCaja.toFixed(2)}</span>`;
+        }
+
+        let stockHTML = `<span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? 'KG' : 'Unid'}: ${pres.stockUnid || 0}</span>`;
+        if (pres.stockDoc > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? '10 KG' : 'Doc'}: ${pres.stockDoc}</span>`;
+        if (pres.stockPaq > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? '1/2 Saco' : 'Pqte'}: ${pres.stockPaq}</span>`;
+        if (pres.stockCaja > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? 'Saco' : 'Caja'}: ${pres.stockCaja}</span>`;
+
+        let accionesTd = '';
+        if (rolActual !== 'vendedor') {
+            accionesTd = `
+                <td>
+                    <button onclick="editarProducto(${prod.id})" style="background: #2563eb; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">Editar</button>
+                    <button onclick="eliminarProducto(${prod.id})" style="background: #991b1b; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">Borrar</button>
+                </td>`;
+        }
+tablaInventario.innerHTML += `
+            <tr>
+                <td><strong>${prod.nombre}</strong></td>
+                <td>${prod.categoria}</td>
+                <td class="col-costo-admin">${costosHTML}</td>
+                <td>${preciosHTML}</td>
+                <td>${stockHTML}</td>
+                ${accionesTd}
+            </tr>
+        `;
+
+        let optsHTML = `<option value="unid|${precioVal}">${esArrozAzucar ? 'KG' : 'Unid'} (S/ ${precioVal})</option>`;
+        if (pres.precioDoc) optsHTML += `<option value="doc|${pres.precioDoc}">${esArrozAzucar ? '10 KG' : 'Docena'} (S/ ${pres.precioDoc})</option>`;
+        if (pres.precioPaq) optsHTML += `<option value="paq|${pres.precioPaq}">${esArrozAzucar ? '1/2 Saco' : 'Pqte'} (S/ ${pres.precioPaq})</option>`;
+        if (pres.precioCaja) optsHTML += `<option value="caja|${pres.precioCaja}">${esArrozAzucar ? 'Saco' : 'Caja'} (S/ ${pres.precioCaja})</option>`;
+
+        if (catalogoVentas) {
+            catalogoVentas.innerHTML += `
+                <div class="prod-card">
+                    <img src="${prod.imagen || 'https://via.placeholder.com/80'}">
+                    <div class="prod-title">${prod.nombre}</div>
+                    <select id="pres-${prod.id}" class="select-pres">
+                        ${optsHTML}
+                    </select>
+                    <button class="btn-add-cart" onclick="agregarAlCarrito(${prod.id})">+ Añadir</button>
+                </div>`;
+        }
+    });
+}
+
+let bufferEscaneo = '';
+let timeoutEscaneo = null;
+let esEscaneoActivo = false;
+let tiempoUltimoCaracter = 0;
+let bufferInputEscaneo = '';
+let timeoutInputEscaneo = null;
+let tiempoUltimoCaracterInput = 0;
 
 window.onload = function() {
     aplicarMenuPorRol();
@@ -1432,7 +1771,131 @@ window.onload = function() {
     if (typeof renderizarKardex === 'function') renderizarKardex();
     if (typeof renderizarReportes === 'function') renderizarReportes();
     if (typeof renderizarHistorialCierres === 'function') renderizarHistorialCierres();
+
+    document.addEventListener('keydown', manejarAtajosTeclado);
+
+    const scannerInput = document.getElementById('scanner-input');
+    if (scannerInput) {
+        scannerInput.focus();
+    }
 };
+
+function mantenerFocoScanner() {
+    const scannerInput = document.getElementById('scanner-input');
+    if (scannerInput && document.activeElement !== scannerInput && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        scannerInput.focus();
+    }
+}
+
+function detectarEscaneoGlobal(event) {
+    const activeElement = document.activeElement;
+    const esInputActivo = activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA');
+
+    if (esInputActivo) return;
+
+    if (event.key === 'Enter') {
+        if (esEscaneoActivo && bufferEscaneo.length > 3) {
+            event.preventDefault();
+            event.stopPropagation();
+            procesarCodigoEscaneado(bufferEscaneo);
+            bufferEscaneo = '';
+            esEscaneoActivo = false;
+            tiempoUltimoCaracter = 0;
+            if (timeoutEscaneo) clearTimeout(timeoutEscaneo);
+        }
+        return;
+    }
+
+    if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        const ahora = Date.now();
+        const tiempoEntreCaracteres = ahora - tiempoUltimoCaracter;
+        tiempoUltimoCaracter = ahora;
+
+        bufferEscaneo += event.key;
+        esEscaneoActivo = true;
+
+        if (timeoutEscaneo) clearTimeout(timeoutEscaneo);
+        timeoutEscaneo = setTimeout(() => {
+            bufferEscaneo = '';
+            esEscaneoActivo = false;
+            tiempoUltimoCaracter = 0;
+        }, 250);
+    }
+}
+
+function procesarCodigoEscaneado(codigo) {
+    const prod = productos.find(p => p.codigo && p.codigo.toLowerCase() === codigo.toLowerCase());
+    if (prod) {
+        renderizarProductos();
+        setTimeout(() => {
+            resaltarProductoEnCatalogo(prod.id);
+            agregarProductoPorCodigo(prod, codigo);
+        }, 50);
+    } else {
+        alert(`❌ Producto no encontrado con código: ${codigo}`);
+    }
+}
+
+function resaltarProductoEnCatalogo(productId) {
+    const catalogo = document.getElementById('catalogo-productos');
+    const cards = catalogo.querySelectorAll('.prod-card');
+
+    cards.forEach(card => {
+        card.style.transform = 'scale(1)';
+        card.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)';
+        card.style.zIndex = '1';
+        card.style.border = '1px solid #334155';
+        card.style.order = '0';
+    });
+
+    const targetCard = Array.from(cards).find(card => {
+        const btn = card.querySelector('button[onclick*="agregarAlCarrito"]');
+        return btn && btn.getAttribute('onclick').includes(`(${productId})`);
+    });
+
+    if (targetCard) {
+        targetCard.style.transform = 'scale(1.2)';
+        targetCard.style.boxShadow = '0 0 40px rgba(56, 189, 248, 0.9)';
+        targetCard.style.zIndex = '100';
+        targetCard.style.border = '4px solid #38bdf8';
+        targetCard.style.transition = 'all 0.3s ease';
+        targetCard.style.order = '-1';
+
+        const parent = targetCard.parentNode;
+        parent.insertBefore(targetCard, parent.firstChild);
+
+        setTimeout(() => {
+            targetCard.style.transform = 'scale(1)';
+            targetCard.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)';
+            targetCard.style.zIndex = '1';
+            targetCard.style.border = '1px solid #334155';
+            targetCard.style.order = '0';
+        }, 2500);
+    }
+}
+
+function manejarAtajosTeclado(event) {
+    if (event.key === 'F2') {
+        event.preventDefault();
+        if (carrito.length > 0 && !document.getElementById('btn-pago').disabled) {
+            abrirModalPago();
+        }
+    } else if (event.key === 'F4') {
+        event.preventDefault();
+        if (carrito.length > 0) {
+            if (confirm('¿Limpiar el carrito?')) {
+                carrito = [];
+                actualizarCarritoUI();
+            }
+        } else {
+            const searchInput = document.querySelector('.search-input');
+            if (searchInput) {
+                searchInput.focus();
+                searchInput.select();
+            }
+        }
+    }
+}
 
 function cerrarSesion() { 
     localStorage.removeItem('sesion_activa'); 
@@ -1449,6 +1912,9 @@ function cerrarCaja() {
 if (typeof aplicarMenuPorRol !== 'undefined') window.aplicarMenuPorRol = aplicarMenuPorRol;
 if (typeof cambiarTab !== 'undefined') window.cambiarTab = cambiarTab;
 if (typeof editarProducto !== 'undefined') window.editarProducto = editarProducto;
+if (typeof guardarProductoLocal !== 'undefined') window.guardarProductoLocal = guardarProductoLocal;
+if (typeof cancelarEdicion !== 'undefined') window.cancelarEdicion = cancelarEdicion;
+if (typeof actualizarNombresPresentaciones !== 'undefined') window.actualizarNombresPresentaciones = actualizarNombresPresentaciones;
 if (typeof eliminarProducto !== 'undefined') window.eliminarProducto = eliminarProducto;
 if (typeof agregarAlCarrito !== 'undefined') window.agregarAlCarrito = agregarAlCarrito;
 if (typeof cambiarCantidad !== 'undefined') window.cambiarCantidad = cambiarCantidad;
@@ -1458,14 +1924,19 @@ if (typeof abrirModalPago !== 'undefined') window.abrirModalPago = abrirModalPag
 if (typeof cerrarModalPago !== 'undefined') window.cerrarModalPago = cerrarModalPago;
 if (typeof seleccionarMetodo !== 'undefined') window.seleccionarMetodo = seleccionarMetodo;
 if (typeof calcularVuelto !== 'undefined') window.calcularVuelto = calcularVuelto;
+if (typeof calcularVueltoMixto !== 'undefined') window.calcularVueltoMixto = calcularVueltoMixto;
 if (typeof confirmarCobro !== 'undefined') window.confirmarCobro = confirmarCobro;
 if (typeof cerrarTicket !== 'undefined') window.cerrarTicket = cerrarTicket;
 if (typeof filtrarProductos !== 'undefined') window.filtrarProductos = filtrarProductos;
+if (typeof buscarPorCodigo !== 'undefined') window.buscarPorCodigo = buscarPorCodigo;
 if (typeof renderizarCompras !== 'undefined') window.renderizarCompras = renderizarCompras;
 if (typeof agregarAlCarritoCompra !== 'undefined') window.agregarAlCarritoCompra = agregarAlCarritoCompra;
 if (typeof cambiarCantidadCompra !== 'undefined') window.cambiarCantidadCompra = cambiarCantidadCompra;
 if (typeof modificarCantidadCompraDirecta !== 'undefined') window.modificarCantidadCompraDirecta = modificarCantidadCompraDirecta;
 if (typeof eliminarDelCarritoCompra !== 'undefined') window.eliminarDelCarritoCompra = eliminarDelCarritoCompra;
 if (typeof enviarSolicitudCompra !== 'undefined') window.enviarSolicitudCompra = enviarSolicitudCompra;
+if (typeof manejarEscaneo !== 'undefined') window.manejarEscaneo = manejarEscaneo;
+if (typeof detectarEscaneoInput !== 'undefined') window.detectarEscaneoInput = detectarEscaneoInput;
+if (typeof agregarProductoPorCodigo !== 'undefined') window.agregarProductoPorCodigo = agregarProductoPorCodigo;
 window.cerrarSesion = cerrarSesion;
 window.cerrarCaja = cerrarCaja;
