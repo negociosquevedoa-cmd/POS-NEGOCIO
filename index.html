@@ -17,6 +17,18 @@ body.rol-vendedor .campo-costo-admin {
         display: none !important;
     }
 
+    /* Agregar campos para unidades/kg por paquete y por caja */
+    #p-unidades-paq, #p-unidades-caja, #p-kg-paq, #p-kg-caja { display: block; }
+
+    /* Agregar modal de registro de compras por boleta/factura */
+    #modal-registro-compras, #modal-registro-compras .modal-card { background: #f8fafc; }
+    #modal-registro-compras .modal-card { color: #1e293b; }
+    #modal-registro-compras .modal-card button { background: #1e293b; color: #f8fafc; }
+    #modal-registro-compras .modal-card button:hover { background: #475569; }
+    #modal-registro-compras .modal-card label { color: #1e293b; }
+    #modal-registro-compras .modal-card input, #modal-registro-compras .modal-card select { background: #ffffff; border: 1px solid #e2e8f0; color: #1e293b; }
+    #modal-registro-compras .modal-card input:focus, #modal-registro-compras .modal-card select:focus { border: 1px solid #1e293b; }
+
     body:not(.rol-vendedor) .campo-costo-admin {
         display: block !important;
     }
@@ -328,9 +340,8 @@ body.rol-vendedor .campo-costo-admin {
             border-top: 1px solid #e2e8f0;
         }
 
-        .pago-options { display: flex; gap: 10px; margin: 15px 0; }
+        .pago-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 15px 0; }
         .btn-pago-opt {
-            flex: 1;
             padding: 12px;
             border-radius: 8px;
             border: 2px solid #334155;
@@ -447,6 +458,7 @@ body.rol-vendedor .campo-costo-admin {
             <button class="nav-btn" id="btn-tab-caja" onclick="cambiarTab('caja')">💵 Caja (Cuadre Diario)</button>
             <button class="nav-btn" id="btn-tab-kardex" onclick="cambiarTab('kardex')">📋 Kárdex</button>
             <button class="nav-btn" id="btn-tab-reportes" onclick="cambiarTab('reportes')">📊 Reportes Mensuales</button>
+            <button class="nav-btn" id="btn-registro-ventas" onclick="cambiarTab('registro-ventas')" style="background: #d97706; color: white;">📊 REGISTRO VENTAS</button>
             <button class="nav-btn cierre" onclick="cerrarCaja()">🔒 Cierre / Arqueo de Caja</button>
             <button class="nav-btn salir" onclick="cerrarSesion()">📁 Salir</button>
         </div>
@@ -840,6 +852,29 @@ body.rol-vendedor .campo-costo-admin {
         </div>
     </div>
 
+    <!-- VISTA REGISTRO VENTAS (PARA VENDEDOR) -->
+    <div id="tab-registro-ventas" class="tab-content" style="grid-template-columns: 1fr;">
+        <div class="card" style="min-height: 400px;">
+            <div class="card-header">Historial de Ventas Registradas</div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID Ticket</th>
+                            <th>Fecha</th>
+                            <th>Vendedor</th>
+                            <th>Método / Estado</th>
+                            <th>Total</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-ventas-registradas">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- VISTA REPORTES (EXCLUSIVO ADMINISTRADOR - CONSOLIDADO MENSUAL) -->
     <div id="tab-reportes" class="tab-content" style="grid-template-columns: 1fr;">
         <div>
@@ -964,7 +999,7 @@ body.rol-vendedor .campo-costo-admin {
         <div class="modal-card" style="width: 420px;">
             <h3>Selecciona Método de Pago</h3>
             <p id="modal-monto" style="font-size: 24px; font-weight: bold; color: #4ade80; margin-bottom: 10px;">S/ 0.00</p>
-            <div class="pago-options" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="pago-options">
                 <button class="btn-pago-opt selected" id="btn-efectivo" onclick="seleccionarMetodo('Efectivo')">💵 Efectivo</button>
                 <button class="btn-pago-opt" id="btn-yape" onclick="seleccionarMetodo('Yape')">📱 Yape</button>
                 <button class="btn-pago-opt" id="btn-mixto" onclick="seleccionarMetodo('Mixto')">💳 Mixto</button>
@@ -975,7 +1010,7 @@ body.rol-vendedor .campo-costo-admin {
                 <div class="vuelto-box">Vuelto: S/ <span id="monto-vuelto">0.00</span></div>
             </div>
             <div class="qr-yape-box" id="panel-yape">
-                <img src="https://i.ibb.co/3sS7L4F/yape-qr.jpg" alt="QR Yape" id="img-qr-yape">
+                <img src="assets/yape-qr.jpg" alt="QR Yape" id="img-qr-yape">
                 <p>Jackeline Lizbeth Quevedo Agurto</p>
             </div>
             <div class="qr-yape-box" id="panel-mixto" style="display: none;">
@@ -991,10 +1026,11 @@ body.rol-vendedor .campo-costo-admin {
                     <div style="font-size: 12px; color: #94a3b8;">Total Pagado: S/ <span id="total-pagado-mixto" style="color: #4ade80; font-weight: bold;">0.00</span></div>
                     <div style="font-size: 12px; color: #94a3b8;">Vuelto en Efectivo: S/ <span id="vuelto-mixto" style="color: #38bdf8; font-weight: bold;">0.00</span></div>
                 </div>
-                <img src="https://i.ibb.co/3sS7L4F/yape-qr.jpg" alt="QR Yape" style="width: 120px; margin-bottom: 6px;">
+                <img src="assets/yape-qr.jpg" alt="QR Yape" style="width: 120px; margin-bottom: 6px;">
                 <p style="font-size: 11px;">Jackeline Lizbeth Quevedo Agurto</p>
             </div>
             <button class="btn-primary" style="background: #16a34a;" onclick="confirmarCobro()">Confirmar y Cobrar</button>
+            <button class="btn-primary" style="background: #2563eb; margin-top: 6px;" onclick="imprimirTicketActual()">🖨️ Imprimir Ticket</button>
             <button class="btn-primary" style="background: #475569; margin-top: 6px;" onclick="cerrarModalPago()">Cancelar</button>
         </div>
     </div>
@@ -1030,7 +1066,7 @@ body.rol-vendedor .campo-costo-admin {
         </div>
     </div>
 
-    <script type="module" src="app.js"></script>
+    <script src="app.js"></script>
     <script>
         function obtenerRol() {
             const raw = (localStorage.getItem('usuario_rol') || localStorage.getItem('rol_usuario') || localStorage.getItem('rol') || 'admin').trim().toLowerCase();

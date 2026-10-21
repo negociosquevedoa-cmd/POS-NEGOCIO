@@ -7,7 +7,7 @@ function obtenerRol() {
     ).trim().toLowerCase();
 
     if (raw === 'administrador' || raw === 'admin') return 'admin';
-    if (raw === 'vendedor') return 'vendedor';
+    if (raw === 'vendedor' || raw === 'vendedor2') return 'vendedor';
     return raw;
 }
 
@@ -33,13 +33,14 @@ function aplicarMenuPorRol() {
     if (elMontoInicial) elMontoInicial.textContent = montoInicialCaja.toFixed(2);
 
     // Administrador: ventas, inventario, caja, kárdex, reportes, cierre/arqueo
-    // Vendedor: ventas, compras directas, inventario, caja, kárdex, cierre/arqueo
+    // Vendedor: ventas, compras directas, inventario, caja, kárdex, registro ventas, cierre/arqueo
     mostrarEl('btn-tab-ventas', true, 'inline-block');
     mostrarEl('btn-tab-inventario', true, 'inline-block');
     mostrarEl('btn-tab-caja', true, 'inline-block');
     mostrarEl('btn-tab-kardex', true, 'inline-block');
     mostrarEl('btn-tab-compras', esVendedor, 'inline-block');
     mostrarEl('btn-tab-reportes', !esVendedor, 'inline-block');
+    mostrarEl('btn-registro-ventas', esVendedor, 'inline-block');
     mostrarEl('seccion-historial-diario-admin', !esVendedor, 'block');
     mostrarEl('btn-mis-comandas-vendedor', esVendedor, 'inline-block');
     mostrarEl('col-header-acciones', !esVendedor, 'table-cell');
@@ -135,6 +136,10 @@ function cambiarTab(tab) {
         document.getElementById('tab-reportes').classList.add('active');
         document.getElementById('btn-tab-reportes').classList.add('active');
         renderizarReportes();
+    } else if (tab === 'registro-ventas') {
+        document.getElementById('tab-registro-ventas').classList.add('active');
+        document.getElementById('btn-registro-ventas').classList.add('active');
+        renderizarRegistroVentas();
     }
 }
 
@@ -1118,6 +1123,7 @@ function confirmarCobro() {
     localStorage.setItem('lista_productos', JSON.stringify(productos));
     localStorage.setItem('lista_kardex', JSON.stringify(kardex));
 
+    ultimoTicketId = ticketId;
     alert(`¡Venta registrada exitosamente! Ticket: ${ticketId}`);
     cerrarModalPago();
     carrito = [];
@@ -1125,6 +1131,17 @@ function confirmarCobro() {
     renderizarProductos();
     if(typeof renderizarReportes === 'function') renderizarReportes();
     renderizarKardex();
+}
+
+function imprimirTicketActual() {
+    if (!ultimoTicketId) {
+        alert("No hay ticket reciente para imprimir.");
+        return;
+    }
+    verTicketComprobante(ultimoTicketId);
+    setTimeout(() => {
+        window.print();
+    }, 500);
 }
 
 function renderizarVistaCaja() {
@@ -1411,11 +1428,44 @@ function renderizarKardex() {
                 <td>${k.fecha || '-'}</td>
                 <td><strong>${prodNombre}</strong></td>
                 <td>${tipoMov}</td>
-                <td style="color:${tipoMov.includes('Cancelado') || tipoMov.includes('Salida') || tipoMov.includes('Comanda Solicitada') ? '#f87171' : 'inherit'};">${cantidadCambio}</td>
+                <td style:color:${tipoMov.includes('Cancelado') || tipoMov.includes('Salida') || tipoMov.includes('Comanda Solicitada') ? '#f87171' : 'inherit'};">${cantidadCambio}</td>
                 <td>${usuarioDetalle}</td>
             </tr>
         `;
     });
+}
+
+function renderizarRegistroVentas() {
+    const tablaVentas = document.getElementById('tabla-ventas-registradas');
+    if (!tablaVentas) return;
+    tablaVentas.innerHTML = '';
+
+    const ventasFiltradas = kardex.filter(k => k.ticketId && k.usuario && k.usuario.includes(rol));
+
+    if (ventasFiltradas.length === 0) {
+        tablaVentas.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #64748b;">No hay ventas registradas</td></tr>';
+        return;
+    }
+
+    ventasFiltradas.forEach(k => {
+        const metodoTexto = k.metodo || k.tipo || 'No especificado';
+        tablaVentas.innerHTML += `
+            <tr>
+                <td><strong>${k.ticketId}</strong></td>
+                <td>${k.fecha}</td>
+                <td>${k.usuario}</td>
+                <td>${metodoTexto}</td>
+                <td style="color: #4ade80; font-weight: bold;">S/ ${k.total || k.cantidad}</td>
+                <td>
+                    <button onclick="verTicketComprobante('${k.ticketId}')" style="background: #2563eb; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">Ver Ticket</button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function verTicket(ticketId) {
+    verTicketComprobante(ticketId);
 }
 
 function renderizarReportes() {
@@ -1760,6 +1810,7 @@ let tiempoUltimoCaracter = 0;
 let bufferInputEscaneo = '';
 let timeoutInputEscaneo = null;
 let tiempoUltimoCaracterInput = 0;
+let ultimoTicketId = null;
 
 window.onload = function() {
     aplicarMenuPorRol();
@@ -1938,5 +1989,9 @@ if (typeof enviarSolicitudCompra !== 'undefined') window.enviarSolicitudCompra =
 if (typeof manejarEscaneo !== 'undefined') window.manejarEscaneo = manejarEscaneo;
 if (typeof detectarEscaneoInput !== 'undefined') window.detectarEscaneoInput = detectarEscaneoInput;
 if (typeof agregarProductoPorCodigo !== 'undefined') window.agregarProductoPorCodigo = agregarProductoPorCodigo;
+if (typeof renderizarRegistroVentas !== 'undefined') window.renderizarRegistroVentas = renderizarRegistroVentas;
+if (typeof verTicket !== 'undefined') window.verTicket = verTicket;
+if (typeof verTicketComprobante !== 'undefined') window.verTicketComprobante = verTicketComprobante;
+if (typeof imprimirTicketActual !== 'undefined') window.imprimirTicketActual = imprimirTicketActual;
 window.cerrarSesion = cerrarSesion;
 window.cerrarCaja = cerrarCaja;

@@ -68,7 +68,8 @@
         <div class="form-group">
             <label>Seleccionar Rol</label>
             <select id="rol">
-                <option value="vendedor">Vendedor</option>
+                <option value="vendedor">Vendedor 1</option>
+                <option value="vendedor2">Vendedor 2</option>
                 <option value="administrador">Administrador</option>
             </select>
         </div>
@@ -93,14 +94,22 @@
             // Definición de contraseñas por rol
             const credenciales = {
                 'administrador': 'empresa3',
-                'vendedor': 'vendedor123'
+                'vendedor': 'vendedor123',
+                'vendedor2': 'vendedor456'
             };
 
             // Comprobación de la contraseña
             if (pass === credenciales[rol]) {
                 localStorage.setItem('usuario_rol', rol);
                 localStorage.setItem('sesion_activa', 'true');
-                window.location.href = "caja.html";
+
+                // El administrador no necesita apertura de caja, va directo al sistema
+                if (rol === 'administrador') {
+                    window.location.href = "index.html";
+                } else {
+                    // Vendedores pasan por apertura de caja
+                    window.location.href = "caja.html";
+                }
             } else {
                 errorDiv.style.display = 'block';
             }

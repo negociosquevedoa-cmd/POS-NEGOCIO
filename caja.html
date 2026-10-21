@@ -36,7 +36,7 @@
             display: inline-block;
             margin-bottom: 20px;
         }
-        .form-group { text-align: left; margin-bottom: 20px; }
+        .form-group { text-align: left; margin-bottom: 15px; }
         label { display: block; font-size: 14px; margin-bottom: 6px; color: #cbd5e1; }
         input {
             width: 100%;
@@ -45,10 +45,42 @@
             border: 1px solid #334155;
             background-color: #0f172a;
             color: #4ade80;
-            font-size: 20px;
+            font-size: 16px;
             font-weight: bold;
             text-align: center;
             box-sizing: border-box;
+        }
+        .monedas-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .moneda-item {
+            background-color: #0f172a;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #334155;
+        }
+        .moneda-item label {
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        .moneda-item input {
+            font-size: 14px;
+            padding: 8px;
+        }
+        .total-calculado {
+            background-color: #1e3a8a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 2px solid #38bdf8;
+        }
+        .total-calculated {
+            font-size: 24px;
+            color: #4ade80;
+            font-weight: bold;
         }
         button {
             width: 100%;
@@ -77,24 +109,95 @@
 
         <div class="form-group">
             <label>Monto Inicial en Caja (S/):</label>
-            <input type="number" id="monto-inicial" value="100.00" step="0.01">
+            <input type="number" id="monto-inicial" value="100.00" step="0.01" oninput="calcularTotalMonedas()">
+        </div>
+
+        <div class="form-group">
+            <label style="margin-bottom: 10px;">Detalle de Monedas y Billetes:</label>
+            <div class="monedas-grid">
+                <div class="moneda-item">
+                    <label>0.10 céntimos:</label>
+                    <input type="number" id="mon-010" value="0" min="0" oninput="calcularTotalMonedas()">
+                </div>
+                <div class="moneda-item">
+                    <label>0.20 céntimos:</label>
+                    <input type="number" id="mon-020" value="0" min="0" oninput="calcularTotalMonedas()">
+                </div>
+                <div class="moneda-item">
+                    <label>0.50 céntimos:</label>
+                    <input type="number" id="mon-050" value="0" min="0" oninput="calcularTotalMonedas()">
+                </div>
+                <div class="moneda-item">
+                    <label>1 sol:</label>
+                    <input type="number" id="mon-1" value="0" min="0" oninput="calcularTotalMonedas()">
+                </div>
+                <div class="moneda-item">
+                    <label>10 soles:</label>
+                    <input type="number" id="mon-10" value="0" min="0" oninput="calcularTotalMonedas()">
+                </div>
+                <div class="moneda-item">
+                    <label>20 soles:</label>
+                    <input type="number" id="mon-20" value="0" min="0" oninput="calcularTotalMonedas()">
+                </div>
+                <div class="moneda-item">
+                    <label>50 soles:</label>
+                    <input type="number" id="mon-50" value="0" min="0" oninput="calcularTotalMonedas()">
+                </div>
+                <div class="moneda-item">
+                    <label>100 soles:</label>
+                    <input type="number" id="mon-100" value="0" min="0" oninput="calcularTotalMonedas()">
+                </div>
+            </div>
+        </div>
+
+        <div class="total-calculado">
+            <label>Total Calculado:</label>
+            <div class="total-calculated" id="total-calculado">S/ 100.00</div>
         </div>
 
         <button onclick="guardarAperturaYContinuar()">Guardar Apertura e Iniciar Ventas</button>
     </div>
 
     <script>
+        function calcularTotalMonedas() {
+            const mon010 = (parseFloat(document.getElementById('mon-010').value) || 0) * 0.10;
+            const mon020 = (parseFloat(document.getElementById('mon-020').value) || 0) * 0.20;
+            const mon050 = (parseFloat(document.getElementById('mon-050').value) || 0) * 0.50;
+            const mon1 = (parseFloat(document.getElementById('mon-1').value) || 0) * 1;
+            const mon10 = (parseFloat(document.getElementById('mon-10').value) || 0) * 10;
+            const mon20 = (parseFloat(document.getElementById('mon-20').value) || 0) * 20;
+            const mon50 = (parseFloat(document.getElementById('mon-50').value) || 0) * 50;
+            const mon100 = (parseFloat(document.getElementById('mon-100').value) || 0) * 100;
+
+            const totalCalculado = mon010 + mon020 + mon050 + mon1 + mon10 + mon20 + mon50 + mon100;
+            document.getElementById('total-calculado').textContent = 'S/ ' + totalCalculado.toFixed(2);
+            document.getElementById('monto-inicial').value = totalCalculado.toFixed(2);
+        }
+
         function guardarAperturaYContinuar() {
             const monto = document.getElementById('monto-inicial').value;
-            
+
             if (!monto || monto < 0) {
                 alert("Por favor ingrese un monto inicial válido.");
                 return;
             }
 
+            // Guardamos el detalle de monedas
+            const detalleMonedas = {
+                '010': document.getElementById('mon-010').value || 0,
+                '020': document.getElementById('mon-020').value || 0,
+                '050': document.getElementById('mon-050').value || 0,
+                '1': document.getElementById('mon-1').value || 0,
+                '10': document.getElementById('mon-10').value || 0,
+                '20': document.getElementById('mon-20').value || 0,
+                '50': document.getElementById('mon-50').value || 0,
+                '100': document.getElementById('mon-100').value || 0
+            };
+
             // Guardamos el monto de la caja localmente para usarlo durante la jornada
             localStorage.setItem('caja_inicial', monto);
-            
+            localStorage.setItem('detalle_monedas', JSON.stringify(detalleMonedas));
+
             // Mensaje de confirmación e ingreso al panel de ventas
             alert("Apertura registrada con S/ " + monto + ". ¡Listo para vender!");
             window.location.href = "index.html";
