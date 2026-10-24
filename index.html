@@ -438,6 +438,64 @@ body.rol-vendedor .campo-costo-admin {
             border-radius: 6px;
             text-align: right;
         }
+
+        /* Tema claro */
+        body { background-color: #f1f5f9; color: #1e293b; }
+        header, .card, .report-card, details, .modal-card {
+            background-color: #ffffff;
+            border-color: #cbd5e1;
+            color: #1e293b;
+        }
+        .brand-section h1, .card-header, .prod-title, .cart-item-title { color: #1e293b; }
+        .nav-btn { background-color: #e2e8f0; color: #334155; }
+        .nav-btn:hover { background-color: #cbd5e1; color: #0f172a; }
+        .search-input, .form-control, .input-qty, .select-pres,
+        .caja-efectivo input, .costo-item-input {
+            background-color: #ffffff;
+            border-color: #cbd5e1;
+            color: #1e293b;
+        }
+        .prod-card, .cart-item, .caja-efectivo, .costo-item-row {
+            background-color: #f8fafc;
+            border-color: #cbd5e1;
+        }
+        th { color: #475569; border-color: #cbd5e1; }
+        td { color: #334155; border-color: #cbd5e1; }
+        .price-badge { background-color: #f8fafc; border-color: #cbd5e1; }
+        .form-group label, .cart-item-sub { color: #64748b; }
+        .cart-footer { border-color: #cbd5e1; }
+
+        /* Resumen de venta compacto */
+        .ventas-grid > .card:last-child { padding: 4px; }
+        .ventas-grid > .card:last-child .card-header { font-size: 13px; margin-bottom: 8px; }
+        .ventas-grid > .card:last-child .cart-item { padding: 4px; }
+        .ventas-grid > .card:last-child .cart-item-info,
+        .ventas-grid > .card:last-child .cart-item-sub { font-size: 12px; }
+        .ventas-grid > .card:last-child .total-row { font-size: 13px; margin-bottom: 8px; }
+        .ventas-grid > .card:last-child .total-amount { font-size: 13px; }
+        .ventas-grid > .card:last-child .cart-footer { padding-top: 8px; }
+
+        @media print {
+            body.imprimir-inventario * { visibility: hidden !important; }
+            body.imprimir-inventario { padding: 0 !important; background: #fff !important; }
+            body.imprimir-inventario #tab-inventario {
+                display: block !important; position: absolute; left: 0; top: 0; width: 100%;
+                grid-template-columns: 1fr !important; gap: 0 !important;
+            }
+            body.imprimir-inventario #card-inventario-lista,
+            body.imprimir-inventario #card-inventario-lista * { visibility: visible !important; }
+            body.imprimir-inventario #card-inventario-lista {
+                position: relative; left: 0; top: 0; width: 100%; min-height: 0;
+                padding: 0; background: #fff !important; color: #000 !important; border: 0; box-shadow: none;
+            }
+            body.imprimir-inventario #card-inventario-lista th,
+            body.imprimir-inventario #card-inventario-lista td { color: #000 !important; }
+            body.imprimir-inventario #card-inventario-lista .no-print { display: none !important; }
+            body.imprimir-inventario #card-inventario-lista table { width: 100%; font-size: 11px; }
+            body.imprimir-inventario #card-inventario-lista th,
+            body.imprimir-inventario #card-inventario-lista td { border-color: #999 !important; padding: 6px; }
+            @page { margin: 12mm; }
+        }
     </style>
 </head>
 <body>
@@ -652,6 +710,28 @@ body.rol-vendedor .campo-costo-admin {
     </div>
 </details>
 
+                <div class="form-group">
+                    <label>Conversiones de presentación (opcional)</label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="p-unidades-paq">Unidades por paquete</label>
+                            <input type="number" step="0.01" min="0" id="p-unidades-paq" class="form-control" placeholder="Ej. 12">
+                        </div>
+                        <div class="form-group">
+                            <label for="p-unidades-caja">Unidades por caja</label>
+                            <input type="number" step="0.01" min="0" id="p-unidades-caja" class="form-control" placeholder="Ej. 24">
+                        </div>
+                        <div class="form-group">
+                            <label for="p-kg-paq">Kg por medio saco</label>
+                            <input type="number" step="0.01" min="0" id="p-kg-paq" class="form-control" placeholder="Ej. 25">
+                        </div>
+                        <div class="form-group">
+                            <label for="p-kg-caja">Kg por saco</label>
+                            <input type="number" step="0.01" min="0" id="p-kg-caja" class="form-control" placeholder="Ej. 50">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="form-group" style="margin-top: 10px;">
                     <label>Imagen del Producto</label>
                     <input type="file" id="input-imagen" class="form-control" accept="image/*" style="padding: 6px;">
@@ -666,9 +746,16 @@ body.rol-vendedor .campo-costo-admin {
             </form>
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <span>Inventario Actual</span>
+        <div class="card" id="card-inventario-lista">
+            <div class="card-header" style="flex-direction: column; align-items: stretch; gap: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Inventario Actual</span>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" id="btn-descargar-word" class="nav-btn no-print" onclick="descargarInventarioWord()">📄 Descargar Word</button>
+                        <button type="button" id="btn-imprimir-inv" class="nav-btn no-print" onclick="imprimirInventario()">🖨️ Imprimir inventario</button>
+                    </div>
+                </div>
+                <input type="text" class="search-input" placeholder="🔍 Buscar producto en inventario..." oninput="filtrarInventario(this.value)" style="width: 100%;">
             </div>
             <div class="table-wrapper">
                 <table>
@@ -1081,6 +1168,14 @@ body.rol-vendedor .campo-costo-admin {
         document.getElementById('usuario-rol').textContent = rol === 'vendedor' ? 'vendedor' : 'administrador';
         document.getElementById('monto-inicial').textContent = montoInicialCaja.toFixed(2);
 
+        function imprimirInventario() {
+            document.body.classList.add('imprimir-inventario');
+            window.print();
+            setTimeout(() => {
+                document.body.classList.remove('imprimir-inventario');
+            }, 1000);
+        }
+
         function aplicarMenuPorRol() {
             const esVendedor = obtenerRol() === 'vendedor';
             document.body.classList.toggle('rol-vendedor', esVendedor);
@@ -1289,6 +1384,21 @@ body.rol-vendedor .campo-costo-admin {
                 stockCaja: aNumeroProd(primerValorDefinido(prod, ['stockCaja', 'stockSaco', 'stock4']))
             };
         }
+        function factorConversionPresentacion(prod, tipoPres) {
+            const tipo = String(tipoPres || '').toLowerCase();
+            const esArrozAzucar = esPresentacionArrozAzucar(prod);
+            let factor = 1;
+
+            if (tipo === 'doc' || tipo.indexOf('docena') !== -1 || tipo.indexOf('10kg') !== -1) {
+                factor = esArrozAzucar ? 10 : 12;
+            } else if (tipo === 'paq' || tipo.indexOf('paquete') !== -1 || (tipo.indexOf('saco') !== -1 && tipo.indexOf('medio') !== -1)) {
+                factor = aNumeroProd(esArrozAzucar ? prod.kgPaq : prod.unidadesPaq, esArrozAzucar ? 25 : 1);
+            } else if (tipo === 'caja' || tipo.indexOf('caja') !== -1 || tipo.indexOf('saco') !== -1) {
+                factor = aNumeroProd(esArrozAzucar ? prod.kgCaja : prod.unidadesCaja, esArrozAzucar ? 50 : 1);
+            }
+
+            return factor > 0 ? factor : 1;
+        }
         function fmtPrecioKardex(valor) {
             const n = aNumeroProd(valor);
             return Number.isInteger(n) ? String(n) : n.toFixed(2);
@@ -1344,7 +1454,11 @@ body.rol-vendedor .campo-costo-admin {
                 stockPaq: leerCampoNumero('p-stock-paq'),
                 costoCaja: leerCampoNumero('p-costo-caja'),
                 precioCaja: leerCampoNumero('p-precio-caja'),
-                stockCaja: leerCampoNumero('p-stock-caja')
+                stockCaja: leerCampoNumero('p-stock-caja'),
+                unidadesPaq: leerCampoNumero('p-unidades-paq'),
+                unidadesCaja: leerCampoNumero('p-unidades-caja'),
+                kgPaq: leerCampoNumero('p-kg-paq'),
+                kgCaja: leerCampoNumero('p-kg-caja')
             };
             const imagenNueva = document.getElementById('imagen-base64').value;
             const productoData = Object.assign({}, prodAnterior || {}, {
@@ -1670,7 +1784,7 @@ body.rol-vendedor .campo-costo-admin {
 
                 const prod = productos.find(p => p.nombre.toLowerCase() === it.nombre.toLowerCase());
                 if (prod) {
-                    prod.stockUnid = (parseFloat(prod.stockUnid) || 0) + it.cantidad;
+                    prod.stockUnid = (parseFloat(prod.stockUnid) || 0) + it.cantidad * factorConversionPresentacion(prod, it.tipoPres);
                 }
 
                 kardex.unshift({
@@ -1748,13 +1862,15 @@ body.rol-vendedor .campo-costo-admin {
             const selectPres = document.getElementById(`pres-${id}`).value.split('|');
             const tipoPres = selectPres[0];
             const precioPres = parseFloat(selectPres[1]);
+            const factorConversion = factorConversionPresentacion(prod, tipoPres);
+            const stockMaxPresentacion = (parseFloat(prod.stockUnid) || 0) / factorConversion;
 
             const itemKey = `${id}-${tipoPres}`;
             const item = carrito.find(i => i.key === itemKey);
             const cantidadEnCarrito = item ? item.cantidad : 0;
 
-            if (cantidadEnCarrito + 1 > prod.stockUnid) {
-                alert(`❌ Stock insuficiente. Solo quedan ${prod.stockUnid} disponible(s).`);
+            if (cantidadEnCarrito + 1 > stockMaxPresentacion) {
+                alert(`❌ Stock insuficiente. Solo quedan ${stockMaxPresentacion} disponible(s).`);
                 return;
             }
 
@@ -1768,7 +1884,8 @@ body.rol-vendedor .campo-costo-admin {
                     nombre: prod.nombre,
                     precio: precioPres,
                     cantidad: 1,
-                    stockMax: prod.stockUnid
+                    stockMax: stockMaxPresentacion,
+                    factorConversion: factorConversion
                 });
             }
             actualizarCarritoUI();
@@ -1915,7 +2032,7 @@ body.rol-vendedor .campo-costo-admin {
 
                 const prod = productos.find(p => p.id === item.id);
                 if (prod) {
-                    prod.stockUnid = Math.max(0, prod.stockUnid - item.cantidad);
+                    prod.stockUnid = Math.max(0, (parseFloat(prod.stockUnid) || 0) - item.cantidad * (item.factorConversion || 1));
                     kardex.unshift({
                         fecha: fechaActual,
                         producto: item.nombre,
@@ -2324,6 +2441,10 @@ body.rol-vendedor .campo-costo-admin {
             document.getElementById('p-costo-caja').value = pres.costoCaja;
             document.getElementById('p-precio-caja').value = pres.precioCaja;
             document.getElementById('p-stock-caja').value = pres.stockCaja;
+            document.getElementById('p-unidades-paq').value = prod.unidadesPaq || '';
+            document.getElementById('p-unidades-caja').value = prod.unidadesCaja || '';
+            document.getElementById('p-kg-paq').value = prod.kgPaq || '';
+            document.getElementById('p-kg-caja').value = prod.kgCaja || '';
 
             document.querySelectorAll('#form-producto details').forEach(function (bloque) {
                 bloque.open = true;
@@ -2363,6 +2484,15 @@ body.rol-vendedor .campo-costo-admin {
 
         function cerrarTicket() { document.getElementById('modal-ticket').style.display = 'none'; }
         function filtrarProductos(t) { renderizarProductos(t); }
+
+        function imprimirInventario() {
+            cambiarTab('inventario');
+            document.body.classList.add('imprimir-inventario');
+            window.print();
+        }
+        window.addEventListener('afterprint', function () {
+            document.body.classList.remove('imprimir-inventario');
+        });
 
         
             actualizarNombresPresentaciones();

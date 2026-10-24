@@ -132,6 +132,14 @@
                     <input type="number" id="mon-1" value="0" min="0" oninput="calcularTotalMonedas()">
                 </div>
                 <div class="moneda-item">
+                    <label>2 soles:</label>
+                    <input type="number" id="mon-2" value="0" min="0" oninput="calcularTotalMonedas()">
+                </div>
+                <div class="moneda-item">
+                    <label>5 soles:</label>
+                    <input type="number" id="mon-5" value="0" min="0" oninput="calcularTotalMonedas()">
+                </div>
+                <div class="moneda-item">
                     <label>10 soles:</label>
                     <input type="number" id="mon-10" value="0" min="0" oninput="calcularTotalMonedas()">
                 </div>
@@ -142,10 +150,6 @@
                 <div class="moneda-item">
                     <label>50 soles:</label>
                     <input type="number" id="mon-50" value="0" min="0" oninput="calcularTotalMonedas()">
-                </div>
-                <div class="moneda-item">
-                    <label>100 soles:</label>
-                    <input type="number" id="mon-100" value="0" min="0" oninput="calcularTotalMonedas()">
                 </div>
             </div>
         </div>
@@ -164,12 +168,13 @@
             const mon020 = (parseFloat(document.getElementById('mon-020').value) || 0) * 0.20;
             const mon050 = (parseFloat(document.getElementById('mon-050').value) || 0) * 0.50;
             const mon1 = (parseFloat(document.getElementById('mon-1').value) || 0) * 1;
+            const mon2 = (parseFloat(document.getElementById('mon-2').value) || 0) * 2;
+            const mon5 = (parseFloat(document.getElementById('mon-5').value) || 0) * 5;
             const mon10 = (parseFloat(document.getElementById('mon-10').value) || 0) * 10;
             const mon20 = (parseFloat(document.getElementById('mon-20').value) || 0) * 20;
             const mon50 = (parseFloat(document.getElementById('mon-50').value) || 0) * 50;
-            const mon100 = (parseFloat(document.getElementById('mon-100').value) || 0) * 100;
 
-            const totalCalculado = mon010 + mon020 + mon050 + mon1 + mon10 + mon20 + mon50 + mon100;
+            const totalCalculado = mon010 + mon020 + mon050 + mon1 + mon2 + mon5 + mon10 + mon20 + mon50;
             document.getElementById('total-calculado').textContent = 'S/ ' + totalCalculado.toFixed(2);
             document.getElementById('monto-inicial').value = totalCalculado.toFixed(2);
         }
@@ -188,10 +193,11 @@
                 '020': document.getElementById('mon-020').value || 0,
                 '050': document.getElementById('mon-050').value || 0,
                 '1': document.getElementById('mon-1').value || 0,
+                '2': document.getElementById('mon-2').value || 0,
+                '5': document.getElementById('mon-5').value || 0,
                 '10': document.getElementById('mon-10').value || 0,
                 '20': document.getElementById('mon-20').value || 0,
-                '50': document.getElementById('mon-50').value || 0,
-                '100': document.getElementById('mon-100').value || 0
+                '50': document.getElementById('mon-50').value || 0
             };
 
             // Guardamos el monto de la caja localmente para usarlo durante la jornada

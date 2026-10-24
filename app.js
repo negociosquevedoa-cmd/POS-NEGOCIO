@@ -237,6 +237,11 @@ let comandaActualAprobar = null;
 let metodoPagoSeleccionado = 'Efectivo';
 let totalPagarActual = 0;
 
+// Variables de paginación
+let paginaInventario = 1;
+let paginaCatalogo = 1;
+const itemsPorPagina = 10;
+
 function verificarAlertaStockUnidades() {
     let productosAlertados = [];
     productos.forEach(p => {
@@ -435,7 +440,16 @@ function guardarProductoLocal(e) {
         categoria: document.getElementById('p-categoria').value,
         codigo: document.getElementById('p-codigo').value || 'Sin código',
         ...presentacionesForm,
-        imagen: imagenNueva || (prodAnterior && prodAnterior.imagen) || 'https://via.placeholder.com/80'
+        imagen: imagenNueva || (prodAnterior && prodAnterior.imagen) || 'https://via.placeholder.com/80',
+        unidadesPaq: leerCampoNumero('p-unidades-paq'),
+        unidadesCaja: leerCampoNumero('p-unidades-caja'),
+        kgPaq: leerCampoNumero('p-kg-paq'),
+        kgCaja: leerCampoNumero('p-kg-caja'),
+        // Nombres alternativos para compatibilidad
+        unidades_paq: leerCampoNumero('p-unidades-paq'),
+        unidades_caja: leerCampoNumero('p-unidades-caja'),
+        kg_paq: leerCampoNumero('p-kg-paq'),
+        kg_caja: leerCampoNumero('p-kg-caja')
     };
 
     const fechaActual = new Date().toLocaleString('es-PE');
@@ -500,6 +514,9 @@ function renderizarProductos(filtro = '') {
         return nombre.includes(filtroLower) || codigo.includes(filtroLower) || categoria.includes(filtroLower);
     });
 
+    // Resetear páginas al cargar
+    paginaInventario = 1;
+    paginaCatalogo = 1;
     renderizarProductosPorLista(prodsFiltrados);
 }
 
@@ -508,9 +525,18 @@ function renderizarCompras(filtro = '') {
     if (!catalogoCompras) return;
     catalogoCompras.innerHTML = '';
 
-    productos
-        .filter(p => (p.nombre || '').toLowerCase().includes((filtro || '').toLowerCase()))
-        .forEach(prod => {
+    // Eliminar paginación anterior de compras si existe
+    const paginacionCompras = document.getElementById('paginacion-compras');
+    if (paginacionCompras) paginacionCompras.remove();
+
+    const productosFiltrados = productos.filter(p => (p.nombre || '').toLowerCase().includes((filtro || '').toLowerCase()));
+
+    // Paginación para compras
+    const inicioCompras = (paginaCatalogo - 1) * itemsPorPagina;
+    const finCompras = inicioCompras + itemsPorPagina;
+    const productosPaginaCompras = productosFiltrados.slice(inicioCompras, finCompras);
+
+    productosPaginaCompras.forEach(prod => {
             const catUp = (prod.categoria || '').toUpperCase();
             const esArrozAzucar = (catUp === 'ARROZ' || catUp === 'AZUCAR' || catUp === 'AZÚCAR');
             const pres = extraerPresentacionesProducto(prod);
@@ -530,6 +556,22 @@ function renderizarCompras(filtro = '') {
                 </div>
             `;
         });
+
+    // Agregar controles de paginación para compras
+    const totalPaginasCompras = Math.ceil(productosFiltrados.length / itemsPorPagina);
+    if (catalogoCompras && totalPaginasCompras > 1) {
+        const paginacionCompras = document.createElement('div');
+        paginacionCompras.id = 'paginacion-compras';
+        paginacionCompras.style.cssText = 'width: 100%; display: flex; justify-content: center; gap: 8px; padding: 15px; align-items: center;';
+        paginacionCompras.innerHTML = `
+            <button onclick="cambiarPaginaCatalogo(${paginaCatalogo - 1})" ${paginaCatalogo === 1 ? 'disabled' : ''} style="padding: 6px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; cursor: pointer;">Anterior</button>
+            ${Array.from({length: totalPaginasCompras}, (_, i) => i + 1).map(p => `
+                <button onclick="cambiarPaginaCatalogo(${p})" style="padding: 6px 12px; border-radius: 4px; border: 1px solid ${p === paginaCatalogo ? '#38bdf8' : '#334155'}; background: ${p === paginaCatalogo ? '#1e3a8a' : '#1e293b'}; color: white; cursor: pointer; font-weight: ${p === paginaCatalogo ? 'bold' : 'normal'};">${p}</button>
+            `).join('')}
+            <button onclick="cambiarPaginaCatalogo(${paginaCatalogo + 1})" ${paginaCatalogo === totalPaginasCompras ? 'disabled' : ''} style="padding: 6px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; cursor: pointer;">Siguiente</button>
+        `;
+        catalogoCompras.parentNode.appendChild(paginacionCompras);
+    }
 
     if (typeof actualizarCarritoComprasUI === 'function') actualizarCarritoComprasUI();
     if (typeof renderizarRegistroComandasVendedor === 'function') renderizarRegistroComandasVendedor();
@@ -1109,12 +1151,101 @@ function confirmarCobro() {
 
         const prod = productos.find(p => p.id === item.id);
         if (prod) {
-            prod.stockUnid = Math.max(0, prod.stockUnid - item.cantidad);
+            const catUp = (prod.categoria || '').toUpperCase();
+            const esArrozAzucar = (catUp === 'ARROZ' || catUp === 'AZUCAR' || catUp === 'AZÚCAR');
+            const pres = extraerPresentacionesProducto(prod);
+
+            // Conversión automática de stock
+            let cantidadADescontar = item.cantidad;
+            let stockDisponible = pres.stockUnid || 0;
+
+            // Si el stock de unidades/KG es insuficiente, intentar convertir de presentaciones mayores
+            if (cantidadADescontar > stockDisponible) {
+                const deficit = cantidadADescontar - stockDisponible;
+
+                if (esArrozAzucar) {
+                    // Para arroz/azúcar: intentar convertir de sacos o 1/2 sacos
+                    const kgPorSaco = prod.kgCaja || prod.kg_caja || 50; // Valor por defecto: 50 KG por saco
+                    const kgPorMedioSaco = prod.kgPaq || prod.kg_paq || 25; // Valor por defecto: 25 KG por 1/2 saco
+
+                    // Primero intentar de 1/2 sacos
+                    let medioSacosAConvertir = Math.ceil(deficit / kgPorMedioSaco);
+                    if (pres.stockPaq >= medioSacosAConvertir) {
+                        prod.stockPaq -= medioSacosAConvertir;
+                        prod.stockUnid += (medioSacosAConvertir * kgPorMedioSaco);
+                        kardex.unshift({
+                            fecha: fechaActual,
+                            producto: item.nombre,
+                            tipo: 'Conversión Stock',
+                            cantidad: `-${medioSacosAConvertir} 1/2 Saco → +${(medioSacosAConvertir * kgPorMedioSaco).toFixed(2)} KG`,
+                            usuario: rol
+                        });
+                    } else {
+                        // Si no hay suficientes 1/2 sacos, intentar de sacos completos
+                        let sacosAConvertir = Math.ceil(deficit / kgPorSaco);
+                        if (pres.stockCaja >= sacosAConvertir) {
+                            prod.stockCaja -= sacosAConvertir;
+                            prod.stockUnid += (sacosAConvertir * kgPorSaco);
+                            kardex.unshift({
+                                fecha: fechaActual,
+                                producto: item.nombre,
+                                tipo: 'Conversión Stock',
+                                cantidad: `-${sacosAConvertir} Saco → +${(sacosAConvertir * kgPorSaco).toFixed(2)} KG`,
+                                usuario: rol
+                            });
+                        }
+                    }
+                } else {
+                    // Para otros productos: intentar convertir de cajas o paquetes
+                    const unidadesPorCaja = prod.unidadesCaja || prod.unidades_caja || 24; // Valor por defecto
+                    const unidadesPorPaquete = prod.unidadesPaq || prod.unidades_paq || 12; // Valor por defecto
+
+                    // Primero intentar de paquetes
+                    let paquetesAConvertir = Math.ceil(deficit / unidadesPorPaquete);
+                    if (pres.stockPaq >= paquetesAConvertir) {
+                        prod.stockPaq -= paquetesAConvertir;
+                        prod.stockUnid += (paquetesAConvertir * unidadesPorPaquete);
+                        kardex.unshift({
+                            fecha: fechaActual,
+                            producto: item.nombre,
+                            tipo: 'Conversión Stock',
+                            cantidad: `-${paquetesAConvertir} Pqte → +${paquetesAConvertir * unidadesPorPaquete} Unid`,
+                            usuario: rol
+                        });
+                    } else {
+                        // Si no hay suficientes paquetes, intentar de cajas
+                        let cajasAConvertir = Math.ceil(deficit / unidadesPorCaja);
+                        if (pres.stockCaja >= cajasAConvertir) {
+                            prod.stockCaja -= cajasAConvertir;
+                            prod.stockUnid += (cajasAConvertir * unidadesPorCaja);
+                            kardex.unshift({
+                                fecha: fechaActual,
+                                producto: item.nombre,
+                                tipo: 'Conversión Stock',
+                                cantidad: `-${cajasAConvertir} Caja → +${cajasAConvertir * unidadesPorCaja} Unid`,
+                                usuario: rol
+                            });
+                        }
+                    }
+                }
+
+                // Recalcular stock disponible después de la conversión
+                stockDisponible = prod.stockUnid || 0;
+            }
+
+            // Verificar si aún hay suficiente stock después de la conversión
+            if (cantidadADescontar > stockDisponible) {
+                alert(`❌ Stock insuficiente incluso después de conversión. Solo quedan ${stockDisponible.toFixed(2)} disponible(s).`);
+                return;
+            }
+
+            // Descontar del stock de unidades/KG
+            prod.stockUnid = Math.max(0, prod.stockUnid - cantidadADescontar);
             kardex.unshift({
                 fecha: fechaActual,
                 producto: item.nombre,
                 tipo: 'Venta',
-                cantidad: `-${item.cantidad}`,
+                cantidad: `-${cantidadADescontar.toFixed(2)}`,
                 usuario: `${rol} (${metodoPagoSeleccionado})`
             });
         }
@@ -1124,13 +1255,15 @@ function confirmarCobro() {
     localStorage.setItem('lista_kardex', JSON.stringify(kardex));
 
     ultimoTicketId = ticketId;
-    alert(`¡Venta registrada exitosamente! Ticket: ${ticketId}`);
     cerrarModalPago();
     carrito = [];
     actualizarCarritoUI();
     renderizarProductos();
     if(typeof renderizarReportes === 'function') renderizarReportes();
     renderizarKardex();
+
+    // Mostrar ticket visual automáticamente después de la venta
+    verTicketComprobante(ticketId);
 }
 
 function imprimirTicketActual() {
@@ -1632,6 +1765,17 @@ function editarProducto(id) {
     setCampoForm('p-precio-caja', pres.precioCaja, 0);
     setCampoForm('p-stock-caja', pres.stockCaja, 0);
 
+    setCampoForm('p-unidades-paq', prod.unidadesPaq || 0);
+    setCampoForm('p-unidades-caja', prod.unidadesCaja || 0);
+    setCampoForm('p-kg-paq', prod.kgPaq || 0);
+    setCampoForm('p-kg-caja', prod.kgCaja || 0);
+
+    // Cargar también si existen con nombres alternativos por compatibilidad
+    if (!prod.unidadesPaq && prod.unidades_paq) setCampoForm('p-unidades-paq', prod.unidades_paq);
+    if (!prod.unidadesCaja && prod.unidades_caja) setCampoForm('p-unidades-caja', prod.unidades_caja);
+    if (!prod.kgPaq && prod.kg_paq) setCampoForm('p-kg-paq', prod.kg_paq);
+    if (!prod.kgCaja && prod.kg_caja) setCampoForm('p-kg-caja', prod.kg_caja);
+
     document.querySelectorAll('#form-producto details').forEach((bloque) => {
         bloque.open = true;
     });
@@ -1680,6 +1824,45 @@ function eliminarProducto(id) {
 }
 
 function cerrarTicket() { document.getElementById('modal-ticket').style.display = 'none'; }
+
+function cambiarPaginaInventario(pagina) {
+    recargarListaProductos(); // Recargar desde localStorage
+    const filtroActual = document.querySelector('#card-inventario-lista .search-input')?.value || '';
+    paginaInventario = pagina;
+    filtrarInventarioSinReset(filtroActual);
+}
+
+function cambiarPaginaCatalogo(pagina) {
+    recargarListaProductos(); // Recargar desde localStorage
+    const filtroActual = document.querySelector('#tab-ventas .search-input')?.value || '';
+    paginaCatalogo = pagina;
+    filtrarProductosSinReset(filtroActual);
+}
+
+function filtrarInventario(t) {
+    const filtro = t.toLowerCase().trim();
+    const prodsFiltrados = productos.filter(p => {
+        const nombre = (p.nombre || '').toLowerCase();
+        const codigo = (p.codigo || '').toLowerCase();
+        const categoria = (p.categoria || '').toLowerCase();
+        return nombre.includes(filtro) || codigo.includes(filtro) || categoria.includes(filtro);
+    });
+    paginaInventario = 1; // Resetear a página 1 al filtrar
+    renderizarProductosPorLista(prodsFiltrados);
+}
+
+function filtrarInventarioSinReset(t) {
+    const filtro = t.toLowerCase().trim();
+    const prodsFiltrados = productos.filter(p => {
+        const nombre = (p.nombre || '').toLowerCase();
+        const codigo = (p.codigo || '').toLowerCase();
+        const categoria = (p.categoria || '').toLowerCase();
+        return nombre.includes(filtro) || codigo.includes(filtro) || categoria.includes(filtro);
+    });
+    // NO resetear la página (usar la actual)
+    renderizarProductosPorLista(prodsFiltrados);
+}
+
 function filtrarProductos(t) {
     const filtro = t.toLowerCase().trim();
     const prodsFiltrados = productos.filter(p => {
@@ -1688,6 +1871,7 @@ function filtrarProductos(t) {
         const categoria = (p.categoria || '').toLowerCase();
         return nombre.includes(filtro) || codigo.includes(filtro) || categoria.includes(filtro);
     });
+    paginaCatalogo = 1; // Resetear a página 1 al filtrar
     renderizarProductosPorLista(prodsFiltrados);
 
     if (prodsFiltrados.length === 1 && filtro.length > 5) {
@@ -1696,6 +1880,18 @@ function filtrarProductos(t) {
             setTimeout(() => resaltarProductoEnCatalogo(prodEncontrado.id), 100);
         }
     }
+}
+
+function filtrarProductosSinReset(t) {
+    const filtro = t.toLowerCase().trim();
+    const prodsFiltrados = productos.filter(p => {
+        const nombre = (p.nombre || '').toLowerCase();
+        const codigo = (p.codigo || '').toLowerCase();
+        const categoria = (p.categoria || '').toLowerCase();
+        return nombre.includes(filtro) || codigo.includes(filtro) || categoria.includes(filtro);
+    });
+    // NO resetear la página (usar la actual)
+    renderizarProductosPorLista(prodsFiltrados);
 }
 
 function buscarPorCodigo(codigo) {
@@ -1729,12 +1925,21 @@ function renderizarProductosPorLista(listaProductos) {
     if (catalogoVentas) catalogoVentas.innerHTML = '';
     if (catalogoCompras) catalogoCompras.innerHTML = '';
 
+    // Eliminar paginación anterior del catálogo si existe
+    const paginacionCat = document.getElementById('paginacion-catalogo');
+    if (paginacionCat) paginacionCat.remove();
+
     const tituloCat = document.getElementById('titulo-catalogo');
     if (tituloCat) tituloCat.textContent = `Catálogo (${listaProductos.length})`;
 
     const rolActual = typeof rol !== 'undefined' ? rol : 'admin';
 
-    listaProductos.forEach(prod => {
+    // Paginación para inventario
+    const inicioInv = (paginaInventario - 1) * itemsPorPagina;
+    const finInv = inicioInv + itemsPorPagina;
+    const productosPaginaInventario = listaProductos.slice(inicioInv, finInv);
+
+    productosPaginaInventario.forEach(prod => {
         const catUp = (prod.categoria || '').toUpperCase();
         const esArrozAzucar = (catUp === 'ARROZ' || catUp === 'AZUCAR' || catUp === 'AZÚCAR');
 
@@ -1765,6 +1970,21 @@ function renderizarProductosPorLista(listaProductos) {
         if (pres.stockPaq > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? '1/2 Saco' : 'Pqte'}: ${pres.stockPaq}</span>`;
         if (pres.stockCaja > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? 'Saco' : 'Caja'}: ${pres.stockCaja}</span>`;
 
+        // Mostrar conversiones si existen
+        const convPaq = prod.unidadesPaq || prod.unidades_paq || 0;
+        const convCaja = prod.unidadesCaja || prod.unidades_caja || 0;
+        const convKgPaq = prod.kgPaq || prod.kg_paq || 0;
+        const convKgCaja = prod.kgCaja || prod.kg_caja || 0;
+
+        if (convPaq > 0 || convCaja > 0 || convKgPaq > 0 || convKgCaja > 0) {
+            stockHTML += `<br><span class="price-badge" style="color:#fbbf24; font-size:10px;">Conv: `;
+            if (convPaq > 0) stockHTML += `${convPaq}U/Pq `;
+            if (convCaja > 0) stockHTML += `${convCaja}U/Cja `;
+            if (convKgPaq > 0) stockHTML += `${convKgPaq}KG/Pq `;
+            if (convKgCaja > 0) stockHTML += `${convKgCaja}KG/Cja`;
+            stockHTML += `</span>`;
+        }
+
         let accionesTd = '';
         if (rolActual !== 'vendedor') {
             accionesTd = `
@@ -1783,8 +2003,37 @@ tablaInventario.innerHTML += `
                 ${accionesTd}
             </tr>
         `;
+    });
 
-        let optsHTML = `<option value="unid|${precioVal}">${esArrozAzucar ? 'KG' : 'Unid'} (S/ ${precioVal})</option>`;
+    // Agregar controles de paginación para inventario
+    const totalPaginasInv = Math.ceil(listaProductos.length / itemsPorPagina);
+    if (tablaInventario && totalPaginasInv > 1) {
+        tablaInventario.innerHTML += `
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 15px;">
+                    <div style="display: flex; justify-content: center; gap: 8px; align-items: center;">
+                        <button onclick="cambiarPaginaInventario(${paginaInventario - 1})" ${paginaInventario === 1 ? 'disabled' : ''} style="padding: 6px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; cursor: pointer;">Anterior</button>
+                        ${Array.from({length: totalPaginasInv}, (_, i) => i + 1).map(p => `
+                            <button onclick="cambiarPaginaInventario(${p})" style="padding: 6px 12px; border-radius: 4px; border: 1px solid ${p === paginaInventario ? '#38bdf8' : '#334155'}; background: ${p === paginaInventario ? '#1e3a8a' : '#1e293b'}; color: white; cursor: pointer; font-weight: ${p === paginaInventario ? 'bold' : 'normal'};">${p}</button>
+                        `).join('')}
+                        <button onclick="cambiarPaginaInventario(${paginaInventario + 1})" ${paginaInventario === totalPaginasInv ? 'disabled' : ''} style="padding: 6px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; cursor: pointer;">Siguiente</button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+
+    // Paginación para catálogo de ventas
+    const inicioCat = (paginaCatalogo - 1) * itemsPorPagina;
+    const finCat = inicioCat + itemsPorPagina;
+    const productosPaginaCatalogo = listaProductos.slice(inicioCat, finCat);
+
+    productosPaginaCatalogo.forEach(prod => {
+        const catUp = (prod.categoria || '').toUpperCase();
+        const esArrozAzucar = (catUp === 'ARROZ' || catUp === 'AZUCAR' || catUp === 'AZÚCAR');
+        const pres = extraerPresentacionesProducto(prod);
+
+        let optsHTML = `<option value="unid|${pres.precioUnid}">${esArrozAzucar ? 'KG' : 'Unidad'} (S/ ${pres.precioUnid})</option>`;
         if (pres.precioDoc) optsHTML += `<option value="doc|${pres.precioDoc}">${esArrozAzucar ? '10 KG' : 'Docena'} (S/ ${pres.precioDoc})</option>`;
         if (pres.precioPaq) optsHTML += `<option value="paq|${pres.precioPaq}">${esArrozAzucar ? '1/2 Saco' : 'Pqte'} (S/ ${pres.precioPaq})</option>`;
         if (pres.precioCaja) optsHTML += `<option value="caja|${pres.precioCaja}">${esArrozAzucar ? 'Saco' : 'Caja'} (S/ ${pres.precioCaja})</option>`;
@@ -1801,6 +2050,22 @@ tablaInventario.innerHTML += `
                 </div>`;
         }
     });
+
+    // Agregar controles de paginación para catálogo
+    const totalPaginasCat = Math.ceil(listaProductos.length / itemsPorPagina);
+    if (catalogoVentas && totalPaginasCat > 1) {
+        const paginacionCat = document.createElement('div');
+        paginacionCat.id = 'paginacion-catalogo';
+        paginacionCat.style.cssText = 'width: 100%; display: flex; justify-content: center; gap: 8px; padding: 15px; align-items: center;';
+        paginacionCat.innerHTML = `
+            <button onclick="cambiarPaginaCatalogo(${paginaCatalogo - 1})" ${paginaCatalogo === 1 ? 'disabled' : ''} style="padding: 6px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; cursor: pointer;">Anterior</button>
+            ${Array.from({length: totalPaginasCat}, (_, i) => i + 1).map(p => `
+                <button onclick="cambiarPaginaCatalogo(${p})" style="padding: 6px 12px; border-radius: 4px; border: 1px solid ${p === paginaCatalogo ? '#38bdf8' : '#334155'}; background: ${p === paginaCatalogo ? '#1e3a8a' : '#1e293b'}; color: white; cursor: pointer; font-weight: ${p === paginaCatalogo ? 'bold' : 'normal'};">${p}</button>
+            `).join('')}
+            <button onclick="cambiarPaginaCatalogo(${paginaCatalogo + 1})" ${paginaCatalogo === totalPaginasCat ? 'disabled' : ''} style="padding: 6px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; cursor: pointer;">Siguiente</button>
+        `;
+        catalogoVentas.parentNode.appendChild(paginacionCat);
+    }
 }
 
 let bufferEscaneo = '';
@@ -1953,10 +2218,91 @@ function cerrarSesion() {
     window.location.href = "login.html"; 
 }
 
-function cerrarCaja() { 
-    if (confirm("¿Cerrar caja y finalizar turno?")) { 
-        if (typeof imprimirArqueoTurno === 'function') imprimirArqueoTurno(); 
-    } 
+function cerrarCaja() {
+    if (confirm("¿Cerrar caja y finalizar turno?")) {
+        if (typeof imprimirArqueoTurno === 'function') imprimirArqueoTurno();
+    }
+}
+
+function imprimirInventario() {
+    document.body.classList.add('imprimir-inventario');
+    window.print();
+    setTimeout(() => {
+        document.body.classList.remove('imprimir-inventario');
+    }, 1000);
+}
+
+function descargarInventarioWord() {
+    let htmlContent = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
+        <head>
+            <meta charset="utf-8">
+            <title>Inventario - QUEVEDO ABARROTES</title>
+            <style>
+                body { font-family: Arial, sans-serif; font-size: 12px; }
+                table { border-collapse: collapse; width: 100%; }
+                th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+                th { background-color: #f0f0f0; font-weight: bold; }
+                h1 { text-align: center; }
+                .fecha { text-align: right; margin-bottom: 20px; }
+            </style>
+        </head>
+        <body>
+            <h1>INVENTARIO - QUEVEDO ABARROTES</h1>
+            <div class="fecha">Fecha: ${new Date().toLocaleDateString('es-PE')}</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Categoría</th>
+                        <th>Precios de Venta</th>
+                        <th>Stock Disponible</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    productos.forEach(prod => {
+        const catUp = (prod.categoria || '').toUpperCase();
+        const esArrozAzucar = (catUp === 'ARROZ' || catUp === 'AZUCAR' || catUp === 'AZÚCAR');
+        const pres = extraerPresentacionesProducto(prod);
+
+        let preciosHTML = `${esArrozAzucar ? 'KG' : 'Unid'}: S/ ${pres.precioUnid.toFixed(2)}`;
+        if (pres.precioDoc) preciosHTML += ` | ${esArrozAzucar ? '10 KG' : 'Doc'}: S/ ${pres.precioDoc.toFixed(2)}`;
+        if (pres.precioPaq) preciosHTML += ` | ${esArrozAzucar ? '1/2 Saco' : 'Pqte'}: S/ ${pres.precioPaq.toFixed(2)}`;
+        if (pres.precioCaja) preciosHTML += ` | ${esArrozAzucar ? 'Saco' : 'Caja'}: S/ ${pres.precioCaja.toFixed(2)}`;
+
+        let stockHTML = `${esArrozAzucar ? 'KG' : 'Unid'}: ${pres.stockUnid || 0}`;
+        if (pres.stockDoc > 0) stockHTML += ` | ${esArrozAzucar ? '10 KG' : 'Doc'}: ${pres.stockDoc}`;
+        if (pres.stockPaq > 0) stockHTML += ` | ${esArrozAzucar ? '1/2 Saco' : 'Pqte'}: ${pres.stockPaq}`;
+        if (pres.stockCaja > 0) stockHTML += ` | ${esArrozAzucar ? 'Saco' : 'Caja'}: ${pres.stockCaja}`;
+
+        htmlContent += `
+            <tr>
+                <td>${prod.nombre}</td>
+                <td>${prod.categoria}</td>
+                <td>${preciosHTML}</td>
+                <td>${stockHTML}</td>
+            </tr>
+        `;
+    });
+
+    htmlContent += `
+                </tbody>
+            </table>
+        </body>
+        </html>
+    `;
+
+    const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Inventario_${new Date().toISOString().split('T')[0]}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
 // Exponer funciones al ámbito global de forma segura
@@ -1995,3 +2341,12 @@ if (typeof verTicketComprobante !== 'undefined') window.verTicketComprobante = v
 if (typeof imprimirTicketActual !== 'undefined') window.imprimirTicketActual = imprimirTicketActual;
 window.cerrarSesion = cerrarSesion;
 window.cerrarCaja = cerrarCaja;
+window.imprimirInventario = imprimirInventario;
+window.descargarInventarioWord = descargarInventarioWord;
+window.cambiarPaginaInventario = cambiarPaginaInventario;
+window.cambiarPaginaCatalogo = cambiarPaginaCatalogo;
+window.filtrarInventario = filtrarInventario;
+window.filtrarProductos = filtrarProductos;
+window.filtrarInventarioSinReset = filtrarInventarioSinReset;
+window.filtrarProductosSinReset = filtrarProductosSinReset;
+window.recargarListaProductos = recargarListaProductos;
