@@ -92,7 +92,7 @@ body.rol-vendedor .campo-costo-admin {
         .tab-content.active { display: grid; }
 
         /* Estilos de Tarjetas y Grillas */
-        .ventas-grid { grid-template-columns: 2fr 1fr; gap: 20px; }
+        .ventas-grid { grid-template-columns: 2.5fr 1fr; gap: 20px; }
         .compras-grid { grid-template-columns: 2fr 1fr; gap: 20px; }
         .inventario-grid { grid-template-columns: 360px 1fr; gap: 20px; }
         .kardex-grid { grid-template-columns: 1fr; gap: 20px; }
@@ -124,12 +124,19 @@ body.rol-vendedor .campo-costo-admin {
             display: flex;
             flex-direction: column;
         }
+
+        /* Panel lateral de Resumen de Venta con altura fija */
+        .ventas-grid > .card:last-child {
+            max-height: 600px;
+            display: flex;
+            flex-direction: column;
+        }
         .card-header { font-size: 18px; font-weight: bold; color: #ffffff; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
 
         /* Catálogo Visual */
         .catalogo-grid {
-            display: flex;
-            flex-wrap: wrap;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
             gap: 12px;
             width: 100%;
         }
@@ -142,7 +149,6 @@ body.rol-vendedor .campo-costo-admin {
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            flex: 0 0 calc(20% - 10px);
             min-width: 140px;
         }
         .prod-card img {
@@ -280,6 +286,7 @@ body.rol-vendedor .campo-costo-admin {
 }
         /* Carrito Footer */
         .cart-empty { flex: 1; display: flex; justify-content: center; align-items: center; color: #64748b; font-size: 15px; }
+        .cart-list { flex: 1; overflow-y: auto; margin-bottom: 15px; max-height: 400px; }
         .cart-footer { border-top: 1px solid #334155; padding-top: 15px; margin-top: auto; }
         .total-row { display: flex; justify-content: space-between; align-items: center; font-size: 20px; font-weight: bold; margin-bottom: 15px; }
         .total-amount { color: #4ade80; font-size: 24px; }
@@ -513,6 +520,7 @@ body.rol-vendedor .campo-costo-admin {
             <button class="nav-btn active" id="btn-tab-ventas" onclick="cambiarTab('ventas')">🛒 Ventas</button>
             <button class="nav-btn" id="btn-tab-compras" onclick="cambiarTab('compras')">🛍️ Compras Directas</button>
             <button class="nav-btn" id="btn-tab-inventario" onclick="cambiarTab('inventario')">📦 Inventario</button>
+            <button class="nav-btn" id="btn-tab-almacen" onclick="cambiarTab('almacen')" style="background: #7c3aed; color: white;">🏭 Almacén</button>
             <button class="nav-btn" id="btn-tab-caja" onclick="cambiarTab('caja')">💵 Caja (Cuadre Diario)</button>
             <button class="nav-btn" id="btn-tab-kardex" onclick="cambiarTab('kardex')">📋 Kárdex</button>
             <button class="nav-btn" id="btn-tab-reportes" onclick="cambiarTab('reportes')">📊 Reportes Mensuales</button>
@@ -622,6 +630,15 @@ body.rol-vendedor .campo-costo-admin {
                             <option value="Abarrotes">Abarrotes</option>
                             <option value="ARROZ">ARROZ</option>
                             <option value="AZUCAR">AZUCAR</option>
+                            <option value="FIDEO">FIDEO</option>
+                            <option value="ACEITE">ACEITE</option>
+                            <option value="MAYONESES">MAYONESES</option>
+                            <option value="VINAGRE">VINAGRE</option>
+                            <option value="ATUN">ATUN</option>
+                            <option value="PH">PH</option>
+                            <option value="AJINOMOTO">AJINOMOTO</option>
+                            <option value="SHAMPOO">SHAMPOO</option>
+                            <option value="ENJUAGUE">ENJUAGUE</option>
                             <option value="Bebidas">Bebidas</option>
                             <option value="Detergente">Detergente</option>
                             <option value="Galletas">Galletas</option>
@@ -771,6 +788,128 @@ body.rol-vendedor .campo-costo-admin {
                     </thead>
                     <tbody id="tabla-inventario">
                         <!-- Llenado dinámico -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA ALMACÉN (EXCLUSIVO ADMINISTRADOR) -->
+    <div id="tab-almacen" class="tab-content" style="grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div class="card">
+            <div class="card-header">Registrar Producto en Almacén</div>
+            <form id="form-almacen" onsubmit="guardarProductoAlmacen(event)">
+                <div class="form-group">
+                    <label>Fecha</label>
+                    <input type="date" id="alm-fecha" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Producto</label>
+                    <input type="text" id="alm-producto" class="form-control" placeholder="Nombre del producto" required>
+                </div>
+                <div class="form-group">
+                    <label>Presentación</label>
+                    <select id="alm-presentacion" class="form-control" required>
+                        <option value="Unidades">Unidades</option>
+                        <option value="Paquete">Paquete</option>
+                        <option value="Caja">Caja</option>
+                        <option value="Saco">Saco</option>
+                        <option value="KG">KG</option>
+                        <option value="Litros">Litros</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Costo (S/)</label>
+                        <input type="number" step="0.01" id="alm-costo" class="form-control" placeholder="0.00" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Stock</label>
+                        <input type="number" step="0.01" id="alm-stock" class="form-control" placeholder="0" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary">Guardar en Almacén</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <div class="card-header" style="flex-direction: column; align-items: stretch; gap: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Registrar Salida de Almacén</span>
+                </div>
+            </div>
+            <form id="form-salida-almacen" onsubmit="registrarSalidaAlmacen(event)">
+                <div class="form-group">
+                    <label>Fecha</label>
+                    <input type="date" id="sal-fecha" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Producto</label>
+                    <select id="sal-producto" class="form-control" required>
+                        <option value="">-- Seleccionar Producto --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Presentación</label>
+                    <input type="text" id="sal-presentacion" class="form-control" readonly style="background: #f1f5f9;">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Cantidad a Salir</label>
+                        <input type="number" step="0.01" id="sal-cantidad" class="form-control" placeholder="0" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Descripción del Descuento</label>
+                    <input type="text" id="sal-descripcion" class="form-control" placeholder="Motivo de la salida" required>
+                </div>
+                <button type="submit" class="btn-primary" style="background: #dc2626;">Registrar Salida</button>
+            </form>
+        </div>
+
+        <div class="card" style="grid-column: 1 / -1;">
+            <div class="card-header" style="flex-direction: column; align-items: stretch; gap: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Reporte de Almacén</span>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="nav-btn no-print" onclick="descargarAlmacenWord()">📄 Descargar Word</button>
+                        <button class="nav-btn no-print" onclick="imprimirAlmacen()">🖨️ Imprimir</button>
+                    </div>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Producto</th>
+                            <th>Presentación</th>
+                            <th>Costo (S/)</th>
+                            <th>Actual Costo (S/)</th>
+                            <th>Stock</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-almacen">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card" style="grid-column: 1 / -1;">
+            <div class="card-header">Historial de Salidas de Almacén</div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Producto</th>
+                            <th>Cantidad Salida</th>
+                            <th>Descripción</th>
+                            <th>Registrado Por</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-salidas-almacen">
                     </tbody>
                 </table>
             </div>

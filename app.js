@@ -32,10 +32,11 @@ function aplicarMenuPorRol() {
     const elMontoInicial = document.getElementById('monto-inicial');
     if (elMontoInicial) elMontoInicial.textContent = montoInicialCaja.toFixed(2);
 
-    // Administrador: ventas, inventario, caja, kárdex, reportes, cierre/arqueo
+    // Administrador: ventas, inventario, almacén, caja, kárdex, reportes, cierre/arqueo
     // Vendedor: ventas, compras directas, inventario, caja, kárdex, registro ventas, cierre/arqueo
     mostrarEl('btn-tab-ventas', true, 'inline-block');
     mostrarEl('btn-tab-inventario', true, 'inline-block');
+    mostrarEl('btn-tab-almacen', !esVendedor, 'inline-block');
     mostrarEl('btn-tab-caja', true, 'inline-block');
     mostrarEl('btn-tab-kardex', true, 'inline-block');
     mostrarEl('btn-tab-compras', esVendedor, 'inline-block');
@@ -88,6 +89,7 @@ function puedeVerTab(tab) {
     const esVendedor = obtenerRol() === 'vendedor';
     if (tab === 'compras') return esVendedor;
     if (tab === 'reportes') return !esVendedor;
+    if (tab === 'almacen') return !esVendedor;
     return true;
 }
 
@@ -124,6 +126,10 @@ function cambiarTab(tab) {
         document.getElementById('tab-inventario').classList.add('active');
         document.getElementById('btn-tab-inventario').classList.add('active');
         actualizarNombresPresentaciones();
+    } else if (tab === 'almacen') {
+        document.getElementById('tab-almacen').classList.add('active');
+        document.getElementById('btn-tab-almacen').classList.add('active');
+        renderizarAlmacen();
     } else if (tab === 'caja') {
         document.getElementById('tab-caja').classList.add('active');
         document.getElementById('btn-tab-caja').classList.add('active');
@@ -146,12 +152,14 @@ function cambiarTab(tab) {
 function actualizarNombresPresentaciones() {
     const pCategoria = document.getElementById('p-categoria');
     const pNombre = document.getElementById('p-nombre');
-    
+
     const catVal = pCategoria ? pCategoria.value.trim().toUpperCase() : '';
     const nomVal = pNombre ? pNombre.value.trim().toUpperCase() : '';
-    
+
     const esArrozAzucar = (catVal.includes('ARROZ') || catVal.includes('AZUCAR') || catVal.includes('AZÚCAR') ||
                            nomVal.includes('ARROZ') || nomVal.includes('AZUCAR') || nomVal.includes('AZÚCAR'));
+
+    const esFideo = (catVal.includes('FIDEO') || nomVal.includes('FIDEO'));
 
     if (esArrozAzucar) {
         if (document.getElementById('sum-pres-1')) document.getElementById('sum-pres-1').textContent = '▼ 1. VENTAS KG';
@@ -173,6 +181,26 @@ function actualizarNombresPresentaciones() {
         if (document.getElementById('lbl-costo-4')) document.getElementById('lbl-costo-4').textContent = 'Precio Costo Saco (S/)';
         if (document.getElementById('lbl-precio-4')) document.getElementById('lbl-precio-4').textContent = 'Precio Venta Saco (S/)';
         if (document.getElementById('lbl-stock-4')) document.getElementById('lbl-stock-4').textContent = 'Stock Inicial Saco';
+    } else if (esFideo) {
+        if (document.getElementById('sum-pres-1')) document.getElementById('sum-pres-1').textContent = '▼ 1. VENTAS POR UNID';
+        if (document.getElementById('lbl-costo-1')) document.getElementById('lbl-costo-1').textContent = 'Precio Costo Unid (S/)';
+        if (document.getElementById('lbl-precio-1')) document.getElementById('lbl-precio-1').textContent = 'Precio Venta Unid (S/)';
+        if (document.getElementById('lbl-stock-1')) document.getElementById('lbl-stock-1').textContent = 'Stock Inicial Unid';
+
+        if (document.getElementById('sum-pres-2')) document.getElementById('sum-pres-2').textContent = '▼ 2. VENTAS KG';
+        if (document.getElementById('lbl-costo-2')) document.getElementById('lbl-costo-2').textContent = 'Precio Costo KG (S/)';
+        if (document.getElementById('lbl-precio-2')) document.getElementById('lbl-precio-2').textContent = 'Precio Venta KG (S/)';
+        if (document.getElementById('lbl-stock-2')) document.getElementById('lbl-stock-2').textContent = 'Stock Inicial KG';
+
+        if (document.getElementById('sum-pres-3')) document.getElementById('sum-pres-3').textContent = '▼ 3. VENTAS POR PQTE';
+        if (document.getElementById('lbl-costo-3')) document.getElementById('lbl-costo-3').textContent = 'Precio Costo Pqte (S/)';
+        if (document.getElementById('lbl-precio-3')) document.getElementById('lbl-precio-3').textContent = 'Precio Venta Pqte (S/)';
+        if (document.getElementById('lbl-stock-3')) document.getElementById('lbl-stock-3').textContent = 'Stock Inicial Pqte';
+
+        if (document.getElementById('sum-pres-4')) document.getElementById('sum-pres-4').textContent = '▼ 4. VENTAS POR CAJA';
+        if (document.getElementById('lbl-costo-4')) document.getElementById('lbl-costo-4').textContent = 'Precio Costo Caja (S/)';
+        if (document.getElementById('lbl-precio-4')) document.getElementById('lbl-precio-4').textContent = 'Precio Venta Caja (S/)';
+        if (document.getElementById('lbl-stock-4')) document.getElementById('lbl-stock-4').textContent = 'Stock Inicial Caja';
     } else {
         if (document.getElementById('sum-pres-1')) document.getElementById('sum-pres-1').textContent = '▼ 1. VENTAS POR UNIDAD';
         if (document.getElementById('lbl-costo-1')) document.getElementById('lbl-costo-1').textContent = 'Precio Costo Unid (S/)';
@@ -199,7 +227,7 @@ function actualizarNombresPresentaciones() {
     for (let i = 1; i <= 4; i++) {
         const inputCosto = document.getElementById(`p-costo-${i}`);
         const lblCosto = document.getElementById(`lbl-costo-${i}`);
-        
+
         if (inputCosto) {
             const grupo = inputCosto.closest('.form-group') || inputCosto.parentElement;
             if (grupo) {
@@ -231,6 +259,8 @@ let comandas = JSON.parse(localStorage.getItem('lista_comandas')) || [];
 let historialComandasRealizadas = JSON.parse(localStorage.getItem('historial_comandas_realizadas')) || [];
 let gastosDelDia = JSON.parse(localStorage.getItem('lista_gastos_dia')) || [];
 let historialCierresCaja = JSON.parse(localStorage.getItem('historial_cierres_caja')) || [];
+let almacen = JSON.parse(localStorage.getItem('lista_almacen')) || [];
+let salidasAlmacen = JSON.parse(localStorage.getItem('lista_salidas_almacen')) || [];
 let carrito = [];
 let carritoCompras = [];
 let comandaActualAprobar = null;
@@ -240,7 +270,7 @@ let totalPagarActual = 0;
 // Variables de paginación
 let paginaInventario = 1;
 let paginaCatalogo = 1;
-const itemsPorPagina = 10;
+const itemsPorPagina = 18;
 
 function verificarAlertaStockUnidades() {
     let productosAlertados = [];
@@ -336,10 +366,27 @@ function esPresentacionArrozAzucar(prod) {
         nomVal.includes('ARROZ') || nomVal.includes('AZUCAR') || nomVal.includes('AZÚCAR');
 }
 
+function esProductoAGranel(prod) {
+    const catVal = String((prod && prod.categoria) || '').trim().toUpperCase();
+    const nomVal = String((prod && prod.nombre) || '').trim().toUpperCase();
+    return catVal.includes('ARROZ') || catVal.includes('AZUCAR') || catVal.includes('AZÚCAR') ||
+           catVal.includes('FIDEO') || catVal.includes('MENESTRAS') || catVal.includes('ACEITE') ||
+           nomVal.includes('ARROZ') || nomVal.includes('AZUCAR') || nomVal.includes('AZÚCAR') ||
+           nomVal.includes('FIDEO') || nomVal.includes('MENESTRAS') || nomVal.includes('ACEITE');
+}
+
 function etiquetasPresentaciones(prod) {
-    return esPresentacionArrozAzucar(prod)
-        ? { unid: 'KG', doc: '10 KG', paq: '1/2 Saco', caja: 'Saco' }
-        : { unid: 'Unid', doc: 'Docena', paq: 'Pqte', caja: 'Caja' };
+    const catVal = String((prod && prod.categoria) || '').trim().toUpperCase();
+    const nomVal = String((prod && prod.nombre) || '').trim().toUpperCase();
+    const esFideo = catVal.includes('FIDEO') || nomVal.includes('FIDEO');
+
+    if (esPresentacionArrozAzucar(prod)) {
+        return { unid: 'KG', doc: '10 KG', paq: '1/2 Saco', caja: 'Saco' };
+    } else if (esFideo) {
+        return { unid: 'Unid', doc: 'KG', paq: 'Pqte', caja: 'Caja' };
+    } else {
+        return { unid: 'Unid', doc: 'Docena', paq: 'Pqte', caja: 'Caja' };
+    }
 }
 
 function extraerPresentacionesProducto(prod) {
@@ -537,13 +584,12 @@ function renderizarCompras(filtro = '') {
     const productosPaginaCompras = productosFiltrados.slice(inicioCompras, finCompras);
 
     productosPaginaCompras.forEach(prod => {
-            const catUp = (prod.categoria || '').toUpperCase();
-            const esArrozAzucar = (catUp === 'ARROZ' || catUp === 'AZUCAR' || catUp === 'AZÚCAR');
             const pres = extraerPresentacionesProducto(prod);
-            let optsCompra = `<option value="Unidad|${pres.precioUnid}">${esArrozAzucar ? 'KG' : 'Unidad'} (S/ ${pres.precioUnid})</option>`;
-            if (pres.precioDoc) optsCompra += `<option value="Docena/10KG|${pres.precioDoc}">${esArrozAzucar ? '10 KG' : 'Docena'} (S/ ${pres.precioDoc})</option>`;
-            if (pres.precioPaq) optsCompra += `<option value="Paquete/Saco|${pres.precioPaq}">${esArrozAzucar ? '1/2 Saco' : 'Paquete'} (S/ ${pres.precioPaq})</option>`;
-            if (pres.precioCaja) optsCompra += `<option value="Caja/Saco|${pres.precioCaja}">${esArrozAzucar ? 'Saco' : 'Caja'} (S/ ${pres.precioCaja})</option>`;
+            const labels = etiquetasPresentaciones(prod);
+            let optsCompra = `<option value="Unidad|${pres.precioUnid}">${labels.unid} (S/ ${pres.precioUnid})</option>`;
+            if (pres.precioDoc) optsCompra += `<option value="Docena/10KG|${pres.precioDoc}">${labels.doc} (S/ ${pres.precioDoc})</option>`;
+            if (pres.precioPaq) optsCompra += `<option value="Paquete/Saco|${pres.precioPaq}">${labels.paq} (S/ ${pres.precioPaq})</option>`;
+            if (pres.precioCaja) optsCompra += `<option value="Caja/Saco|${pres.precioCaja}">${labels.caja} (S/ ${pres.precioCaja})</option>`;
 
             catalogoCompras.innerHTML += `
                 <div class="prod-card">
@@ -873,8 +919,7 @@ function detectarEscaneoInput(event) {
 
 function agregarProductoPorCodigo(prod, codigo) {
     const pres = extraerPresentacionesProducto(prod);
-    const catUp = (prod.categoria || '').toUpperCase();
-    const esArrozAzucar = (catUp === 'ARROZ' || catUp === 'AZUCAR' || catUp === 'AZÚCAR');
+    const labels = etiquetasPresentaciones(prod);
 
     let tipoPres = 'unid';
     let precioPres = pres.precioUnid || 0;
@@ -921,7 +966,7 @@ function agregarProductoPorCodigo(prod, codigo) {
     const cantidadEnCarrito = item ? item.cantidad : 0;
 
     if (cantidadEnCarrito + 1 > stockDisponible) {
-        alert(`❌ Stock insuficiente. Solo quedan ${stockDisponible} disponible(s) de ${esArrozAzucar ? 'KG' : 'Unidad'}.`);
+        alert(`❌ Stock insuficiente. Solo quedan ${stockDisponible} disponible(s) de ${labels.unid}.`);
         return;
     }
 
@@ -949,6 +994,52 @@ function agregarAlCarrito(id) {
     const tipoPres = selectPres[0];
     const precioPres = parseFloat(selectPres[1]);
 
+    // Manejar venta por monto para productos a granel
+    if (tipoPres === 'monto') {
+        const montoInput = document.getElementById(`monto-${id}`);
+        const montoIngresado = parseFloat(montoInput.value) || 0;
+
+        if (montoIngresado <= 0) {
+            alert('Por favor ingrese un monto válido.');
+            return;
+        }
+
+        const pres = extraerPresentacionesProducto(prod);
+        const kgCalculados = montoIngresado / pres.precioUnid;
+
+        if (kgCalculados > pres.stockUnid) {
+            alert(`❌ Stock insuficiente. Solo quedan ${pres.stockUnid.toFixed(2)} KG disponible(s).`);
+            return;
+        }
+
+        const itemKey = `${id}-monto`;
+        const item = carrito.find(i => i.key === itemKey);
+
+        if (item) {
+            item.cantidad += kgCalculados;
+            item.montoTotal += montoIngresado;
+        } else {
+            carrito.push({
+                key: itemKey,
+                id: prod.id,
+                tipoPres: 'monto',
+                nombre: prod.nombre,
+                precio: pres.precioUnid,
+                cantidad: kgCalculados,
+                montoTotal: montoIngresado,
+                stockMax: pres.stockUnid
+            });
+        }
+
+        // Limpiar el input de monto
+        montoInput.value = '';
+        montoInput.style.display = 'none';
+
+        actualizarCarritoUI();
+        return;
+    }
+
+    // Lógica normal para otras presentaciones
     const itemKey = `${id}-${tipoPres}`;
     const item = carrito.find(i => i.key === itemKey);
     const cantidadEnCarrito = item ? item.cantidad : 0;
@@ -974,16 +1065,46 @@ function agregarAlCarrito(id) {
     actualizarCarritoUI();
 }
 
+function habilitarInputMonto(prodId, valor) {
+    const tipoPres = valor.split('|')[0];
+    const montoInput = document.getElementById(`monto-${prodId}`);
+
+    if (tipoPres === 'monto') {
+        montoInput.style.display = 'block';
+        montoInput.focus();
+    } else {
+        montoInput.style.display = 'none';
+        montoInput.value = '';
+    }
+}
+
 function cambiarCantidad(key, delta) {
     const item = carrito.find(i => i.key === key);
     if (item) {
-        const nuevaCant = Math.round((item.cantidad + delta) * 100) / 100;
-        if (nuevaCant > item.stockMax) {
-            alert(`❌ Stock insuficiente. El límite es ${item.stockMax}.`);
-            return;
+        if (item.tipoPres === 'monto') {
+            // Para venta por monto, calcular el nuevo monto y KG
+            const nuevoMonto = Math.round((item.montoTotal + delta * item.precio) * 100) / 100;
+            const nuevoKG = nuevoMonto / item.precio;
+
+            if (nuevoKG > item.stockMax) {
+                alert(`❌ Stock insuficiente. El límite es ${item.stockMax.toFixed(2)} KG.`);
+                return;
+            }
+
+            item.montoTotal = nuevoMonto;
+            item.cantidad = nuevoKG;
+
+            if (item.montoTotal <= 0) carrito = carrito.filter(i => i.key !== key);
+        } else {
+            // Para presentaciones normales
+            const nuevaCant = Math.round((item.cantidad + delta) * 100) / 100;
+            if (nuevaCant > item.stockMax) {
+                alert(`❌ Stock insuficiente. El límite es ${item.stockMax}.`);
+                return;
+            }
+            item.cantidad = nuevaCant;
+            if (item.cantidad <= 0) carrito = carrito.filter(i => i.key !== key);
         }
-        item.cantidad = nuevaCant;
-        if (item.cantidad <= 0) carrito = carrito.filter(i => i.key !== key);
     }
     actualizarCarritoUI();
 }
@@ -992,15 +1113,34 @@ function modificarCantidadDirecta(key, valor) {
     const item = carrito.find(i => i.key === key);
     const num = parseFloat(valor);
     if (item) {
-        if (!isNaN(num) && num > 0) {
-            if (num > item.stockMax) {
-                alert(`❌ Stock insuficiente. El máximo es ${item.stockMax}.`);
-                item.cantidad = item.stockMax;
-            } else {
-                item.cantidad = num;
+        if (item.tipoPres === 'monto') {
+            // Para venta por monto, el valor ingresado es el monto en soles
+            if (!isNaN(num) && num > 0) {
+                const nuevoKG = num / item.precio;
+                if (nuevoKG > item.stockMax) {
+                    alert(`❌ Stock insuficiente. El máximo es ${item.stockMax.toFixed(2)} KG.`);
+                    item.montoTotal = item.stockMax * item.precio;
+                    item.cantidad = item.stockMax;
+                } else {
+                    item.montoTotal = num;
+                    item.cantidad = nuevoKG;
+                }
+            } else if (valor === '' || num <= 0) {
+                item.montoTotal = 0;
+                item.cantidad = 0;
             }
-        } else if (valor === '' || num <= 0) {
-            item.cantidad = 0;
+        } else {
+            // Para presentaciones normales
+            if (!isNaN(num) && num > 0) {
+                if (num > item.stockMax) {
+                    alert(`❌ Stock insuficiente. El máximo es ${item.stockMax}.`);
+                    item.cantidad = item.stockMax;
+                } else {
+                    item.cantidad = num;
+                }
+            } else if (valor === '' || num <= 0) {
+                item.cantidad = 0;
+            }
         }
     }
     actualizarCarritoUI();
@@ -1030,14 +1170,25 @@ function actualizarCarritoUI() {
 
     let total = 0;
     carrito.forEach(item => {
-        const subtotal = item.precio * item.cantidad;
+        let subtotal;
+        let displayInfo;
+
+        if (item.tipoPres === 'monto') {
+            // Para venta por monto, usar el monto total directamente
+            subtotal = item.montoTotal;
+            displayInfo = `💰 S/ ${item.montoTotal.toFixed(2)} (${item.cantidad.toFixed(2)} KG)`;
+        } else {
+            subtotal = item.precio * item.cantidad;
+            displayInfo = `S/ ${item.precio.toFixed(2)} x ${item.cantidad}`;
+        }
+
         total += subtotal;
 
         contenedor.innerHTML += `
             <div class="cart-item">
                 <div class="cart-item-info">
                     <div class="cart-item-title">${item.nombre}</div>
-                    <div class="cart-item-sub">S/ ${item.precio.toFixed(2)} x ${item.cantidad} = <strong>S/ ${subtotal.toFixed(2)}</strong></div>
+                    <div class="cart-item-sub">${displayInfo} = <strong>S/ ${subtotal.toFixed(2)}</strong></div>
                 </div>
                 <div class="cart-controls">
                     <button class="btn-qty" onclick="cambiarCantidad('${item.key}', -1)">-</button>
@@ -1137,11 +1288,11 @@ function confirmarCobro() {
         total: totalPagarActual.toFixed(2),
         montoEfectivo: montoEfectivo.toFixed(2),
         montoYape: montoYape.toFixed(2),
-        items: carrito.map(i => ({ desc: i.nombre, cant: i.cantidad, total: (i.precio * i.cantidad).toFixed(2) }))
+        items: carrito.map(i => ({ desc: i.nombre, cant: i.cantidad, total: (i.tipoPres === 'monto' ? i.montoTotal : (i.precio * i.cantidad)).toFixed(2) }))
     });
 
     carrito.forEach(item => {
-        const subtotal = item.precio * item.cantidad;
+        const subtotal = item.tipoPres === 'monto' ? item.montoTotal : (item.precio * item.cantidad);
         detalles.push(`${item.nombre} x${item.cantidad}`);
         itemsTicket.push({
             desc: item.nombre,
@@ -1153,101 +1304,125 @@ function confirmarCobro() {
         if (prod) {
             const catUp = (prod.categoria || '').toUpperCase();
             const esArrozAzucar = (catUp === 'ARROZ' || catUp === 'AZUCAR' || catUp === 'AZÚCAR');
+            const esAGranel = (catUp === 'ARROZ' || catUp === 'AZUCAR' || catUp === 'AZÚCAR' ||
+                            catUp === 'FIDEO' || catUp === 'MENESTRAS' || catUp === 'ACEITE');
             const pres = extraerPresentacionesProducto(prod);
 
-            // Conversión automática de stock
-            let cantidadADescontar = item.cantidad;
-            let stockDisponible = pres.stockUnid || 0;
+            // Para productos a granel: descuento directo sobre KG/Unidades
+            if (esAGranel) {
+                // Descuento directo al stock de KG/Unidades
+                const cantidadADescontar = item.cantidad;
+                const stockDisponible = pres.stockUnid || 0;
 
-            // Si el stock de unidades/KG es insuficiente, intentar convertir de presentaciones mayores
-            if (cantidadADescontar > stockDisponible) {
-                const deficit = cantidadADescontar - stockDisponible;
-
-                if (esArrozAzucar) {
-                    // Para arroz/azúcar: intentar convertir de sacos o 1/2 sacos
-                    const kgPorSaco = prod.kgCaja || prod.kg_caja || 50; // Valor por defecto: 50 KG por saco
-                    const kgPorMedioSaco = prod.kgPaq || prod.kg_paq || 25; // Valor por defecto: 25 KG por 1/2 saco
-
-                    // Primero intentar de 1/2 sacos
-                    let medioSacosAConvertir = Math.ceil(deficit / kgPorMedioSaco);
-                    if (pres.stockPaq >= medioSacosAConvertir) {
-                        prod.stockPaq -= medioSacosAConvertir;
-                        prod.stockUnid += (medioSacosAConvertir * kgPorMedioSaco);
-                        kardex.unshift({
-                            fecha: fechaActual,
-                            producto: item.nombre,
-                            tipo: 'Conversión Stock',
-                            cantidad: `-${medioSacosAConvertir} 1/2 Saco → +${(medioSacosAConvertir * kgPorMedioSaco).toFixed(2)} KG`,
-                            usuario: rol
-                        });
-                    } else {
-                        // Si no hay suficientes 1/2 sacos, intentar de sacos completos
-                        let sacosAConvertir = Math.ceil(deficit / kgPorSaco);
-                        if (pres.stockCaja >= sacosAConvertir) {
-                            prod.stockCaja -= sacosAConvertir;
-                            prod.stockUnid += (sacosAConvertir * kgPorSaco);
-                            kardex.unshift({
-                                fecha: fechaActual,
-                                producto: item.nombre,
-                                tipo: 'Conversión Stock',
-                                cantidad: `-${sacosAConvertir} Saco → +${(sacosAConvertir * kgPorSaco).toFixed(2)} KG`,
-                                usuario: rol
-                            });
-                        }
-                    }
-                } else {
-                    // Para otros productos: intentar convertir de cajas o paquetes
-                    const unidadesPorCaja = prod.unidadesCaja || prod.unidades_caja || 24; // Valor por defecto
-                    const unidadesPorPaquete = prod.unidadesPaq || prod.unidades_paq || 12; // Valor por defecto
-
-                    // Primero intentar de paquetes
-                    let paquetesAConvertir = Math.ceil(deficit / unidadesPorPaquete);
-                    if (pres.stockPaq >= paquetesAConvertir) {
-                        prod.stockPaq -= paquetesAConvertir;
-                        prod.stockUnid += (paquetesAConvertir * unidadesPorPaquete);
-                        kardex.unshift({
-                            fecha: fechaActual,
-                            producto: item.nombre,
-                            tipo: 'Conversión Stock',
-                            cantidad: `-${paquetesAConvertir} Pqte → +${paquetesAConvertir * unidadesPorPaquete} Unid`,
-                            usuario: rol
-                        });
-                    } else {
-                        // Si no hay suficientes paquetes, intentar de cajas
-                        let cajasAConvertir = Math.ceil(deficit / unidadesPorCaja);
-                        if (pres.stockCaja >= cajasAConvertir) {
-                            prod.stockCaja -= cajasAConvertir;
-                            prod.stockUnid += (cajasAConvertir * unidadesPorCaja);
-                            kardex.unshift({
-                                fecha: fechaActual,
-                                producto: item.nombre,
-                                tipo: 'Conversión Stock',
-                                cantidad: `-${cajasAConvertir} Caja → +${cajasAConvertir * unidadesPorCaja} Unid`,
-                                usuario: rol
-                            });
-                        }
-                    }
+                if (cantidadADescontar > stockDisponible) {
+                    alert(`❌ Stock insuficiente. Solo quedan ${stockDisponible.toFixed(2)} KG/Unid disponible(s) de ${prod.nombre}.`);
+                    return;
                 }
 
-                // Recalcular stock disponible después de la conversión
-                stockDisponible = prod.stockUnid || 0;
-            }
+                // Descontar directamente del stock
+                prod.stockUnid = Math.max(0, prod.stockUnid - cantidadADescontar);
+                kardex.unshift({
+                    fecha: fechaActual,
+                    producto: item.nombre,
+                    tipo: item.tipoPres === 'monto' ? 'Venta por Monto' : 'Venta a Granel',
+                    cantidad: `-${cantidadADescontar.toFixed(2)} KG/Unid (S/ ${subtotal.toFixed(2)})`,
+                    usuario: `${rol} (${metodoPagoSeleccionado})`
+                });
+            } else {
+                // Para otros productos: conversión automática de stock
+                let cantidadADescontar = item.cantidad;
+                let stockDisponible = pres.stockUnid || 0;
 
-            // Verificar si aún hay suficiente stock después de la conversión
-            if (cantidadADescontar > stockDisponible) {
-                alert(`❌ Stock insuficiente incluso después de conversión. Solo quedan ${stockDisponible.toFixed(2)} disponible(s).`);
-                return;
-            }
+                // Si el stock de unidades/KG es insuficiente, intentar convertir de presentaciones mayores
+                if (cantidadADescontar > stockDisponible) {
+                    const deficit = cantidadADescontar - stockDisponible;
 
-            // Descontar del stock de unidades/KG
-            prod.stockUnid = Math.max(0, prod.stockUnid - cantidadADescontar);
-            kardex.unshift({
-                fecha: fechaActual,
-                producto: item.nombre,
-                tipo: 'Venta',
-                cantidad: `-${cantidadADescontar.toFixed(2)}`,
-                usuario: `${rol} (${metodoPagoSeleccionado})`
-            });
+                    if (esArrozAzucar) {
+                        // Para arroz/azúcar: intentar convertir de sacos o 1/2 sacos
+                        const kgPorSaco = prod.kgCaja || prod.kg_caja || 50; // Valor por defecto: 50 KG por saco
+                        const kgPorMedioSaco = prod.kgPaq || prod.kg_paq || 25; // Valor por defecto: 25 KG por 1/2 saco
+
+                        // Primero intentar de 1/2 sacos
+                        let medioSacosAConvertir = Math.ceil(deficit / kgPorMedioSaco);
+                        if (pres.stockPaq >= medioSacosAConvertir) {
+                            prod.stockPaq -= medioSacosAConvertir;
+                            prod.stockUnid += (medioSacosAConvertir * kgPorMedioSaco);
+                            kardex.unshift({
+                                fecha: fechaActual,
+                                producto: item.nombre,
+                                tipo: 'Conversión Stock',
+                                cantidad: `-${medioSacosAConvertir} 1/2 Saco → +${(medioSacosAConvertir * kgPorMedioSaco).toFixed(2)} KG`,
+                                usuario: rol
+                            });
+                        } else {
+                            // Si no hay suficientes 1/2 sacos, intentar de sacos completos
+                            let sacosAConvertir = Math.ceil(deficit / kgPorSaco);
+                            if (pres.stockCaja >= sacosAConvertir) {
+                                prod.stockCaja -= sacosAConvertir;
+                                prod.stockUnid += (sacosAConvertir * kgPorSaco);
+                                kardex.unshift({
+                                    fecha: fechaActual,
+                                    producto: item.nombre,
+                                    tipo: 'Conversión Stock',
+                                    cantidad: `-${sacosAConvertir} Saco → +${(sacosAConvertir * kgPorSaco).toFixed(2)} KG`,
+                                    usuario: rol
+                                });
+                            }
+                        }
+                    } else {
+                        // Para otros productos: intentar convertir de cajas o paquetes
+                        const unidadesPorCaja = prod.unidadesCaja || prod.unidades_caja || 24; // Valor por defecto
+                        const unidadesPorPaquete = prod.unidadesPaq || prod.unidades_paq || 12; // Valor por defecto
+
+                        // Primero intentar de paquetes
+                        let paquetesAConvertir = Math.ceil(deficit / unidadesPorPaquete);
+                        if (pres.stockPaq >= paquetesAConvertir) {
+                            prod.stockPaq -= paquetesAConvertir;
+                            prod.stockUnid += (paquetesAConvertir * unidadesPorPaquete);
+                            kardex.unshift({
+                                fecha: fechaActual,
+                                producto: item.nombre,
+                                tipo: 'Conversión Stock',
+                                cantidad: `-${paquetesAConvertir} Pqte → +${paquetesAConvertir * unidadesPorPaquete} Unid`,
+                                usuario: rol
+                            });
+                        } else {
+                            // Si no hay suficientes paquetes, intentar de cajas
+                            let cajasAConvertir = Math.ceil(deficit / unidadesPorCaja);
+                            if (pres.stockCaja >= cajasAConvertir) {
+                                prod.stockCaja -= cajasAConvertir;
+                                prod.stockUnid += (cajasAConvertir * unidadesPorCaja);
+                                kardex.unshift({
+                                    fecha: fechaActual,
+                                    producto: item.nombre,
+                                    tipo: 'Conversión Stock',
+                                    cantidad: `-${cajasAConvertir} Caja → +${cajasAConvertir * unidadesPorCaja} Unid`,
+                                    usuario: rol
+                                });
+                            }
+                        }
+                    }
+
+                    // Recalcular stock disponible después de la conversión
+                    stockDisponible = prod.stockUnid || 0;
+                }
+
+                // Verificar si aún hay suficiente stock después de la conversión
+                if (cantidadADescontar > stockDisponible) {
+                    alert(`❌ Stock insuficiente incluso después de conversión. Solo quedan ${stockDisponible.toFixed(2)} disponible(s).`);
+                    return;
+                }
+
+                // Descontar del stock de unidades/KG
+                prod.stockUnid = Math.max(0, prod.stockUnid - cantidadADescontar);
+                kardex.unshift({
+                    fecha: fechaActual,
+                    producto: item.nombre,
+                    tipo: 'Venta',
+                    cantidad: `-${cantidadADescontar.toFixed(2)}`,
+                    usuario: `${rol} (${metodoPagoSeleccionado})`
+                });
+            }
         }
     });
 
@@ -1942,11 +2117,14 @@ function renderizarProductosPorLista(listaProductos) {
     productosPaginaInventario.forEach(prod => {
         const catUp = (prod.categoria || '').toUpperCase();
         const esArrozAzucar = (catUp === 'ARROZ' || catUp === 'AZUCAR' || catUp === 'AZÚCAR');
+        const esFideo = (catUp === 'FIDEO');
+        const pres = extraerPresentacionesProducto(prod);
+        const labels = etiquetasPresentaciones(prod);
 
         const precioVal = prod.precioUnid ? parseFloat(prod.precioUnid).toFixed(2) : '0.00';
         const costoVal = prod.costoUnid ? parseFloat(prod.costoUnid).toFixed(2) : '0.00';
 
-       let preciosHTML = `<span class="price-badge" style="color:#38bdf8;">${esArrozAzucar ? 'KG' : 'Unid'}: S/ ${precioVal}</span>`;
+       let preciosHTML = `<span class="price-badge" style="color:#38bdf8;">${labels.unid}: S/ ${precioVal}</span>`;
 
         let costosHTML = '';
         if (rolActual !== 'vendedor') {
@@ -1954,21 +2132,20 @@ function renderizarProductosPorLista(listaProductos) {
         } else {
             costosHTML = `<span style="color: #64748b; font-style: italic;">Oculto</span>`;
         }
-        const pres = extraerPresentacionesProducto(prod);
         if (pres.precioDoc) {
-            preciosHTML += `<br><span class="price-badge" style="color:#fbbf24;">${esArrozAzucar ? '10 KG' : 'Doc'} - Venta: S/ ${pres.precioDoc.toFixed(2)}</span>`;
+            preciosHTML += `<br><span class="price-badge" style="color:#fbbf24;">${labels.doc} - Venta: S/ ${pres.precioDoc.toFixed(2)}</span>`;
         }
         if (pres.precioPaq) {
-            preciosHTML += `<br><span class="price-badge" style="color:#c084fc;">${esArrozAzucar ? '1/2 Saco' : 'Pqte'} - Venta: S/ ${pres.precioPaq.toFixed(2)}</span>`;
+            preciosHTML += `<br><span class="price-badge" style="color:#c084fc;">${labels.paq} - Venta: S/ ${pres.precioPaq.toFixed(2)}</span>`;
         }
         if (pres.precioCaja) {
-            preciosHTML += `<br><span class="price-badge" style="color:#f87171;">${esArrozAzucar ? 'Saco' : 'Caja'} - Venta: S/ ${pres.precioCaja.toFixed(2)}</span>`;
+            preciosHTML += `<br><span class="price-badge" style="color:#f87171;">${labels.caja} - Venta: S/ ${pres.precioCaja.toFixed(2)}</span>`;
         }
 
-        let stockHTML = `<span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? 'KG' : 'Unid'}: ${pres.stockUnid || 0}</span>`;
-        if (pres.stockDoc > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? '10 KG' : 'Doc'}: ${pres.stockDoc}</span>`;
-        if (pres.stockPaq > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? '1/2 Saco' : 'Pqte'}: ${pres.stockPaq}</span>`;
-        if (pres.stockCaja > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${esArrozAzucar ? 'Saco' : 'Caja'}: ${pres.stockCaja}</span>`;
+        let stockHTML = `<span class="price-badge" style="color:#4ade80;">${labels.unid}: ${pres.stockUnid || 0}</span>`;
+        if (pres.stockDoc > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${labels.doc}: ${pres.stockDoc}</span>`;
+        if (pres.stockPaq > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${labels.paq}: ${pres.stockPaq}</span>`;
+        if (pres.stockCaja > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${labels.caja}: ${pres.stockCaja}</span>`;
 
         // Mostrar conversiones si existen
         const convPaq = prod.unidadesPaq || prod.unidades_paq || 0;
@@ -2030,22 +2207,29 @@ tablaInventario.innerHTML += `
 
     productosPaginaCatalogo.forEach(prod => {
         const catUp = (prod.categoria || '').toUpperCase();
-        const esArrozAzucar = (catUp === 'ARROZ' || catUp === 'AZUCAR' || catUp === 'AZÚCAR');
         const pres = extraerPresentacionesProducto(prod);
+        const labels = etiquetasPresentaciones(prod);
+        const esAGranel = esProductoAGranel(prod);
 
-        let optsHTML = `<option value="unid|${pres.precioUnid}">${esArrozAzucar ? 'KG' : 'Unidad'} (S/ ${pres.precioUnid})</option>`;
-        if (pres.precioDoc) optsHTML += `<option value="doc|${pres.precioDoc}">${esArrozAzucar ? '10 KG' : 'Docena'} (S/ ${pres.precioDoc})</option>`;
-        if (pres.precioPaq) optsHTML += `<option value="paq|${pres.precioPaq}">${esArrozAzucar ? '1/2 Saco' : 'Pqte'} (S/ ${pres.precioPaq})</option>`;
-        if (pres.precioCaja) optsHTML += `<option value="caja|${pres.precioCaja}">${esArrozAzucar ? 'Saco' : 'Caja'} (S/ ${pres.precioCaja})</option>`;
+        let optsHTML = `<option value="unid|${pres.precioUnid}">${labels.unid} (S/ ${pres.precioUnid})</option>`;
+        if (pres.precioDoc) optsHTML += `<option value="doc|${pres.precioDoc}">${labels.doc} (S/ ${pres.precioDoc})</option>`;
+        if (pres.precioPaq) optsHTML += `<option value="paq|${pres.precioPaq}">${labels.paq} (S/ ${pres.precioPaq})</option>`;
+        if (pres.precioCaja) optsHTML += `<option value="caja|${pres.precioCaja}">${labels.caja} (S/ ${pres.precioCaja})</option>`;
+
+        // Agregar opción de venta por monto para productos a granel
+        if (esAGranel && pres.precioUnid > 0) {
+            optsHTML += `<option value="monto|${pres.precioUnid}">💰 Venta por Monto (S/)</option>`;
+        }
 
         if (catalogoVentas) {
             catalogoVentas.innerHTML += `
                 <div class="prod-card">
                     <img src="${prod.imagen || 'https://via.placeholder.com/80'}">
                     <div class="prod-title">${prod.nombre}</div>
-                    <select id="pres-${prod.id}" class="select-pres">
+                    <select id="pres-${prod.id}" class="select-pres" onchange="habilitarInputMonto(${prod.id}, this.value)">
                         ${optsHTML}
                     </select>
+                    <input type="number" step="0.01" id="monto-${prod.id}" class="form-control" placeholder="Monto S/" style="display: none; margin-bottom: 6px; font-size: 12px; padding: 4px;">
                     <button class="btn-add-cart" onclick="agregarAlCarrito(${prod.id})">+ Añadir</button>
                 </div>`;
         }
@@ -2087,6 +2271,7 @@ window.onload = function() {
     if (typeof renderizarKardex === 'function') renderizarKardex();
     if (typeof renderizarReportes === 'function') renderizarReportes();
     if (typeof renderizarHistorialCierres === 'function') renderizarHistorialCierres();
+    if (typeof renderizarAlmacen === 'function') renderizarAlmacen();
 
     document.addEventListener('keydown', manejarAtajosTeclado);
 
@@ -2263,19 +2448,18 @@ function descargarInventarioWord() {
     `;
 
     productos.forEach(prod => {
-        const catUp = (prod.categoria || '').toUpperCase();
-        const esArrozAzucar = (catUp === 'ARROZ' || catUp === 'AZUCAR' || catUp === 'AZÚCAR');
         const pres = extraerPresentacionesProducto(prod);
+        const labels = etiquetasPresentaciones(prod);
 
-        let preciosHTML = `${esArrozAzucar ? 'KG' : 'Unid'}: S/ ${pres.precioUnid.toFixed(2)}`;
-        if (pres.precioDoc) preciosHTML += ` | ${esArrozAzucar ? '10 KG' : 'Doc'}: S/ ${pres.precioDoc.toFixed(2)}`;
-        if (pres.precioPaq) preciosHTML += ` | ${esArrozAzucar ? '1/2 Saco' : 'Pqte'}: S/ ${pres.precioPaq.toFixed(2)}`;
-        if (pres.precioCaja) preciosHTML += ` | ${esArrozAzucar ? 'Saco' : 'Caja'}: S/ ${pres.precioCaja.toFixed(2)}`;
+        let preciosHTML = `${labels.unid}: S/ ${pres.precioUnid.toFixed(2)}`;
+        if (pres.precioDoc) preciosHTML += ` | ${labels.doc}: S/ ${pres.precioDoc.toFixed(2)}`;
+        if (pres.precioPaq) preciosHTML += ` | ${labels.paq}: S/ ${pres.precioPaq.toFixed(2)}`;
+        if (pres.precioCaja) preciosHTML += ` | ${labels.caja}: S/ ${pres.precioCaja.toFixed(2)}`;
 
-        let stockHTML = `${esArrozAzucar ? 'KG' : 'Unid'}: ${pres.stockUnid || 0}`;
-        if (pres.stockDoc > 0) stockHTML += ` | ${esArrozAzucar ? '10 KG' : 'Doc'}: ${pres.stockDoc}`;
-        if (pres.stockPaq > 0) stockHTML += ` | ${esArrozAzucar ? '1/2 Saco' : 'Pqte'}: ${pres.stockPaq}`;
-        if (pres.stockCaja > 0) stockHTML += ` | ${esArrozAzucar ? 'Saco' : 'Caja'}: ${pres.stockCaja}`;
+        let stockHTML = `${labels.unid}: ${pres.stockUnid || 0}`;
+        if (pres.stockDoc > 0) stockHTML += ` | ${labels.doc}: ${pres.stockDoc}`;
+        if (pres.stockPaq > 0) stockHTML += ` | ${labels.paq}: ${pres.stockPaq}`;
+        if (pres.stockCaja > 0) stockHTML += ` | ${labels.caja}: ${pres.stockCaja}`;
 
         htmlContent += `
             <tr>
@@ -2350,3 +2534,300 @@ window.filtrarProductos = filtrarProductos;
 window.filtrarInventarioSinReset = filtrarInventarioSinReset;
 window.filtrarProductosSinReset = filtrarProductosSinReset;
 window.recargarListaProductos = recargarListaProductos;
+
+// Funciones de Almacén
+function guardarProductoAlmacen(e) {
+    e.preventDefault();
+    const fecha = document.getElementById('alm-fecha').value;
+    const producto = document.getElementById('alm-producto').value;
+    const presentacion = document.getElementById('alm-presentacion').value;
+    const costo = parseFloat(document.getElementById('alm-costo').value) || 0;
+    const stock = parseFloat(document.getElementById('alm-stock').value) || 0;
+
+    const nuevoProducto = {
+        id: Date.now(),
+        fecha: fecha,
+        producto: producto,
+        presentacion: presentacion,
+        costo: costo,
+        actualCosto: costo,
+        actualCostoFecha: fecha,
+        stock: stock
+    };
+
+    almacen.push(nuevoProducto);
+    localStorage.setItem('lista_almacen', JSON.stringify(almacen));
+
+    document.getElementById('form-almacen').reset();
+    // Establecer fecha actual por defecto
+    document.getElementById('alm-fecha').value = new Date().toISOString().split('T')[0];
+
+    renderizarAlmacen();
+    alert('Producto guardado en almacén exitosamente.');
+}
+
+function registrarSalidaAlmacen(e) {
+    e.preventDefault();
+    const fecha = document.getElementById('sal-fecha').value;
+    const productoId = parseInt(document.getElementById('sal-producto').value);
+    const cantidad = parseFloat(document.getElementById('sal-cantidad').value) || 0;
+    const descripcion = document.getElementById('sal-descripcion').value;
+
+    const prodAlmacen = almacen.find(p => p.id === productoId);
+    if (!prodAlmacen) {
+        alert('Producto no encontrado en almacén.');
+        return;
+    }
+
+    if (cantidad > prodAlmacen.stock) {
+        alert(`Stock insuficiente. Solo hay ${prodAlmacen.stock} ${prodAlmacen.presentacion} disponible(s).`);
+        return;
+    }
+
+    // Descontar stock
+    prodAlmacen.stock -= cantidad;
+
+    // Registrar salida
+    const nuevaSalida = {
+        id: Date.now(),
+        fecha: fecha,
+        producto: prodAlmacen.producto,
+        presentacion: prodAlmacen.presentacion,
+        cantidad: cantidad,
+        descripcion: descripcion,
+        usuario: rol
+    };
+
+    salidasAlmacen.push(nuevaSalida);
+    localStorage.setItem('lista_almacen', JSON.stringify(almacen));
+    localStorage.setItem('lista_salidas_almacen', JSON.stringify(salidasAlmacen));
+
+    document.getElementById('form-salida-almacen').reset();
+    document.getElementById('sal-fecha').value = new Date().toISOString().split('T')[0];
+
+    renderizarAlmacen();
+    alert('Salida registrada exitosamente.');
+}
+
+function renderizarAlmacen() {
+    const tablaAlmacen = document.getElementById('tabla-almacen');
+    const tablaSalidas = document.getElementById('tabla-salidas-almacen');
+    const selectProducto = document.getElementById('sal-producto');
+
+    if (!tablaAlmacen || !tablaSalidas || !selectProducto) return;
+
+    // Renderizar tabla de almacén
+    tablaAlmacen.innerHTML = almacen.map(prod => `
+        <tr>
+            <td>${prod.fecha}</td>
+            <td><strong>${prod.producto}</strong></td>
+            <td>${prod.presentacion}</td>
+            <td>S/ ${prod.costo.toFixed(2)}</td>
+            <td>S/ ${prod.actualCosto.toFixed(2)} (${prod.actualCostoFecha})</td>
+            <td>${prod.stock.toFixed(2)} ${prod.presentacion}</td>
+            <td>
+                <button onclick="editarProductoAlmacen(${prod.id})" style="background: #2563eb; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">Editar</button>
+                <button onclick="eliminarProductoAlmacen(${prod.id})" style="background: #991b1b; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">Eliminar</button>
+            </td>
+        </tr>
+    `).join('') || '<tr><td colspan="7" style="text-align: center; color: #64748b;">No hay productos en almacén.</td></tr>';
+
+    // Renderizar tabla de salidas
+    tablaSalidas.innerHTML = salidasAlmacen.map(salida => `
+        <tr>
+            <td>${salida.fecha}</td>
+            <td><strong>${salida.producto}</strong></td>
+            <td style="color: #f87171;">-${salida.cantidad.toFixed(2)} ${salida.presentacion}</td>
+            <td>${salida.descripcion}</td>
+            <td>${salida.usuario}</td>
+        </tr>
+    `).join('') || '<tr><td colspan="5" style="text-align: center; color: #64748b;">No hay salidas registradas.</td></tr>';
+
+    // Actualizar select de productos
+    selectProducto.innerHTML = '<option value="">-- Seleccionar Producto --</option>' +
+        almacen.map(prod => `<option value="${prod.id}">${prod.producto} (Stock: ${prod.stock.toFixed(2)} ${prod.presentacion})</option>`).join('');
+
+    // Agregar evento para mostrar presentación al seleccionar producto
+    selectProducto.onchange = function() {
+        const prodId = parseInt(this.value);
+        const prod = almacen.find(p => p.id === prodId);
+        const presField = document.getElementById('sal-presentacion');
+        if (presField) {
+            presField.value = prod ? prod.presentacion : '';
+        }
+    };
+
+    // Establecer fecha actual por defecto
+    const fechaHoy = new Date().toISOString().split('T')[0];
+    document.getElementById('alm-fecha').value = fechaHoy;
+    document.getElementById('sal-fecha').value = fechaHoy;
+}
+
+function editarProductoAlmacen(id) {
+    const prod = almacen.find(p => p.id === id);
+    if (!prod) return;
+
+    const nuevoCosto = prompt('Nuevo costo (S/):', prod.actualCosto);
+    if (nuevoCosto !== null) {
+        const costoNum = parseFloat(nuevoCosto);
+        if (!isNaN(costoNum) && costoNum >= 0) {
+            prod.actualCosto = costoNum;
+            prod.actualCostoFecha = new Date().toISOString().split('T')[0];
+            localStorage.setItem('lista_almacen', JSON.stringify(almacen));
+            renderizarAlmacen();
+            alert('Costo actualizado exitosamente.');
+        }
+    }
+}
+
+function eliminarProductoAlmacen(id) {
+    if (confirm('¿Eliminar este producto del almacén?')) {
+        almacen = almacen.filter(p => p.id !== id);
+        localStorage.setItem('lista_almacen', JSON.stringify(almacen));
+        renderizarAlmacen();
+    }
+}
+
+function descargarAlmacenWord() {
+    let htmlContent = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
+        <head>
+            <meta charset="utf-8">
+            <title>Reporte Almacén - QUEVEDO ABARROTES</title>
+            <style>
+                body { font-family: Arial, sans-serif; font-size: 12px; }
+                table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+                th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+                th { background-color: #f0f0f0; font-weight: bold; }
+                h1 { text-align: center; }
+                .fecha { text-align: right; margin-bottom: 20px; }
+                h2 { margin-top: 30px; }
+            </style>
+        </head>
+        <body>
+            <h1>REPORTE DE ALMACÉN - QUEVEDO ABARROTES</h1>
+            <div class="fecha">Fecha: ${new Date().toLocaleDateString('es-PE')}</div>
+
+            <h2>Stock Actual</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Producto</th>
+                        <th>Presentación</th>
+                        <th>Costo (S/)</th>
+                        <th>Actual Costo (S/)</th>
+                        <th>Stock</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    almacen.forEach(prod => {
+        htmlContent += `
+            <tr>
+                <td>${prod.fecha}</td>
+                <td>${prod.producto}</td>
+                <td>${prod.presentacion}</td>
+                <td>S/ ${prod.costo.toFixed(2)}</td>
+                <td>S/ ${prod.actualCosto.toFixed(2)} (${prod.actualCostoFecha})</td>
+                <td>${prod.stock.toFixed(2)} ${prod.presentacion}</td>
+            </tr>
+        `;
+    });
+
+    htmlContent += `
+                </tbody>
+            </table>
+
+            <h2>Historial de Salidas</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Producto</th>
+                        <th>Cantidad Salida</th>
+                        <th>Descripción</th>
+                        <th>Registrado Por</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    salidasAlmacen.forEach(salida => {
+        htmlContent += `
+            <tr>
+                <td>${salida.fecha}</td>
+                <td>${salida.producto}</td>
+                <td>-${salida.cantidad.toFixed(2)} ${salida.presentacion}</td>
+                <td>${salida.descripcion}</td>
+                <td>${salida.usuario}</td>
+            </tr>
+        `;
+    });
+
+    htmlContent += `
+                </tbody>
+            </table>
+        </body>
+        </html>
+    `;
+
+    const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ReporteAlmacen_${new Date().toISOString().split('T')[0]}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+function imprimirAlmacen() {
+    const contenidoOriginal = document.body.innerHTML;
+    const tablaAlmacen = document.getElementById('tabla-almacen');
+    const tablaSalidas = document.getElementById('tabla-salidas-almacen');
+
+    if (!tablaAlmacen || !tablaSalidas) return;
+
+    const htmlImpresion = `
+        <html>
+        <head>
+            <title>Reporte Almacén</title>
+            <style>
+                body { font-family: Arial, sans-serif; font-size: 12px; padding: 20px; }
+                table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+                th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+                th { background-color: #f0f0f0; font-weight: bold; }
+                h1 { text-align: center; }
+                h2 { margin-top: 30px; }
+            </style>
+        </head>
+        <body>
+            <h1>REPORTE DE ALMACÉN - QUEVEDO ABARROTES</h1>
+            <p>Fecha: ${new Date().toLocaleDateString('es-PE')}</p>
+
+            <h2>Stock Actual</h2>
+            ${tablaAlmacen.outerHTML}
+
+            <h2>Historial de Salidas</h2>
+            ${tablaSalidas.outerHTML}
+        </body>
+        </html>
+    `;
+
+    const ventanaImpresion = window.open('', '_blank');
+    ventanaImpresion.document.write(htmlImpresion);
+    ventanaImpresion.document.close();
+    ventanaImpresion.print();
+}
+
+window.guardarProductoAlmacen = guardarProductoAlmacen;
+window.registrarSalidaAlmacen = registrarSalidaAlmacen;
+window.renderizarAlmacen = renderizarAlmacen;
+window.editarProductoAlmacen = editarProductoAlmacen;
+window.eliminarProductoAlmacen = eliminarProductoAlmacen;
+window.descargarAlmacenWord = descargarAlmacenWord;
+window.imprimirAlmacen = imprimirAlmacen;
+window.habilitarInputMonto = habilitarInputMonto;
