@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QUEVEDO ABARROTES - Sistema POS</title>
+    <style>
+
+        /* Si el body tiene la clase 'rol-vendedor', se ocultan todos los bloques de costo */
+body.rol-vendedor .campo-costo-admin {
+    display: none !important;
+}
+
+     /* Mostrar u ocultar costos dependiendo del rol en el body */
+    body.rol-vendedor .campo-costo-admin,
+    body.rol-vendedor .col-costo-admin {
+        display: none !important;
+    }
+
+    /* Agregar campos para unidades/kg por paquete y por caja */
+    #p-unidades-paq, #p-unidades-caja, #p-kg-paq, #p-kg-caja { display: block; }
+
+    /* Agregar modal de registro de compras por boleta/factura */
+    #modal-registro-compras, #modal-registro-compras .modal-card { background: #f8fafc; }
+    #modal-registro-compras .modal-card { color: #1e293b; }
+    #modal-registro-compras .modal-card button { background: #1e293b; color: #f8fafc; }
+    #modal-registro-compras .modal-card button:hover { background: #475569; }
+    #modal-registro-compras .modal-card label { color: #1e293b; }
+    #modal-registro-compras .modal-card input, #modal-registro-compras .modal-card select { background: #ffffff; border: 1px solid #e2e8f0; color: #1e293b; }
+    #modal-registro-compras .modal-card input:focus, #modal-registro-compras .modal-card select:focus { border: 1px solid #1e293b; }
+
+    body:not(.rol-vendedor) .campo-costo-admin {
+        display: block !important;
+    }
+
+    body:not(.rol-vendedor) .col-costo-admin {
+        display: table-cell !important;
+    }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f172a;
+            color: #ffffff;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        /* Navbar Header */
+        header {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .brand-section h1 { font-size: 20px; color: #ffffff; display: flex; align-items: center; gap: 10px; }
+        .caja-status { font-size: 13px; color: #4ade80; margin-top: 4px; font-weight: 500; }
+        .nav-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .search-input {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            color: white;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 14px;
+            width: 180px;
+        }
+        .nav-btn {
+            background-color: #334155;
+            color: #cbd5e1;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .nav-btn:hover { background-color: #475569; color: white; }
+        .nav-btn.active { background-color: #2563eb; color: white; }
+        .nav-btn.cierre { background-color: #854d0e; color: #fef08a; }
+        .nav-btn.cierre:hover { background-color: #a16207; }
+        .nav-btn.salir { background-color: #991b1b; color: #fecaca; }
+        .nav-btn.salir:hover { background-color: #dc2626; }
+
+        /* Contenedores de Vistas */
+        .tab-content { display: none; }
+        .tab-content.active { display: grid; }
+
+        /* Estilos de Tarjetas y Grillas */
+        .ventas-grid { grid-template-columns: 2.5fr 1fr; gap: 20px; }
+        .compras-grid { grid-template-columns: 2fr 1fr; gap: 20px; }
+        .inventario-grid { grid-template-columns: 360px 1fr; gap: 20px; }
+        .kardex-grid { grid-template-columns: 1fr; gap: 20px; }
+        
+        .reportes-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .report-card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 18px;
+        }
+        .report-card-title { font-size: 12px; color: #94a3b8; font-weight: bold; margin-bottom: 8px; }
+        .report-card-val { font-size: 24px; font-weight: bold; color: #4ade80; }
+        .report-card-val.purple { color: #c084fc; }
+        .report-card-val.blue { color: #38bdf8; }
+        .report-card-val.red { color: #f87171; }
+
+        .card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 20px;
+            min-height: 250px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Panel lateral de Resumen de Venta con altura fija */
+        .ventas-grid > .card:last-child {
+            max-height: 600px;
+            display: flex;
+            flex-direction: column;
+        }
+        .card-header { font-size: 18px; font-weight: bold; color: #ffffff; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+
+        /* Catálogo Visual */
+        .catalogo-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            width: 100%;
+        }
+        .prod-card {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-width: 140px;
+        }
+        .prod-card img {
+            width: 100%;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 6px;
+            margin-bottom: 6px;
+        }
+        .prod-title { font-size: 13px; font-weight: bold; color: #fff; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .select-pres {
+            width: 100%;
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            color: #38bdf8;
+            padding: 4px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-bottom: 6px;
+            font-weight: bold;
+        }
+        .btn-add-cart {
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            padding: 6px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn-add-cart:hover { background-color: #1d4ed8; }
+
+        /* Lista de Carrito / Compras */
+        .cart-list { flex: 1; overflow-y: auto; margin-bottom: 15px; }
+        .cart-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .cart-item-info { font-size: 12px; }
+        .cart-item-title { font-weight: bold; color: white; }
+        .cart-item-sub { color: #94a3b8; font-size: 11px; }
+        .cart-controls { display: flex; align-items: center; gap: 4px; }
+        .input-qty {
+            width: 50px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #4ade80;
+            font-weight: bold;
+            font-size: 13px;
+            text-align: center;
+            padding: 3px;
+            border-radius: 4px;
+        }
+        .btn-qty {
+            background-color: #334155;
+            color: white;
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .btn-qty:hover { background-color: #475569; }
+        .btn-del { background-color: #7f1d1d; color: #fca5a5; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+
+        /* Formulario Desplegable */
+        details {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 8px;
+        }
+        summary {
+            font-size: 12px;
+            font-weight: bold;
+            color: #38bdf8;
+            cursor: pointer;
+            outline: none;
+        }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+        .form-group { margin-bottom: 8px; }
+        .form-group label { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px; font-weight: 600; }
+        .form-control {
+            width: 100%;
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            color: white;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .btn-primary {
+            width: 100%;
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 15px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        /* Tabla Inventario, Kárdex y Reportes */
+        .table-wrapper { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+        th { border-bottom: 1px solid #334155; color: #94a3b8; padding: 10px; font-weight: 600; }
+        td { border-bottom: 1px solid #334155; padding: 10px; color: #cbd5e1; vertical-align: middle; }
+        
+        /* Precios y Stock apilados uno debajo del otro */
+        .price-badge {
+            display: block;
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-bottom: 3px;
+            width: fit-content;
+        }
+/* Si el body tiene la clase 'rol-vendedor', se ocultan todos los bloques de costo */
+body.rol-vendedor .campo-costo-admin {
+    display: none !important;
+}
+        /* Carrito Footer */
+        .cart-empty { flex: 1; display: flex; justify-content: center; align-items: center; color: #64748b; font-size: 15px; }
+        .cart-list { flex: 1; overflow-y: auto; margin-bottom: 15px; max-height: 400px; }
+        .cart-footer { border-top: 1px solid #334155; padding-top: 15px; margin-top: auto; }
+        .total-row { display: flex; justify-content: space-between; align-items: center; font-size: 20px; font-weight: bold; margin-bottom: 15px; }
+        .total-amount { color: #4ade80; font-size: 24px; }
+        .btn-procesar { width: 100%; background-color: #334155; color: #94a3b8; border: none; padding: 12px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: not-allowed; }
+        .btn-procesar.active { background-color: #16a34a; color: white; cursor: pointer; }
+        .btn-procesar.active:hover { background-color: #15803d; }
+
+        /* MODALES */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 25px;
+            width: 480px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+        .modal-card h3 { color: #38bdf8; margin-bottom: 10px; }
+
+        .modal-alerta-card {
+            background-color: #ffffff;
+            color: #1e293b;
+            border-radius: 12px;
+            width: 450px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: left;
+        }
+        .modal-alerta-header {
+            background-color: #16a34a;
+            color: #ffffff;
+            padding: 16px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .modal-alerta-body {
+            padding: 20px;
+            max-height: 280px;
+            overflow-y: auto;
+            font-size: 13px;
+        }
+        .modal-alerta-footer {
+            padding: 12px 20px;
+            background-color: #f1f5f9;
+            text-align: right;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .pago-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 15px 0; }
+        .btn-pago-opt {
+            padding: 12px;
+            border-radius: 8px;
+            border: 2px solid #334155;
+            background: #0f172a;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-pago-opt.selected { border-color: #38bdf8; background: #1e3a8a; }
+
+        .caja-efectivo {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: left;
+        }
+        .caja-efectivo label { display: block; font-size: 12px; color: #cbd5e1; margin-bottom: 4px; }
+        .caja-efectivo input {
+            width: 100%;
+            padding: 10px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #4ade80;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        .vuelto-box { font-size: 15px; font-weight: bold; color: #38bdf8; text-align: right; }
+
+        .qr-yape-box {
+            display: none;
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .qr-yape-box img {
+            width: 180px;
+            height: auto;
+            border-radius: 8px;
+            border: 2px solid #a855f7;
+            margin-bottom: 6px;
+        }
+        .qr-yape-box p { font-size: 12px; color: #cbd5e1; font-weight: bold; }
+
+        /* TICKET COMPROBANTE CON TEXTO NEGRO PARA IMPRESIÓN */
+        .ticket-modal {
+            background: #ffffff !important;
+            color: #000000 !important;
+            padding: 20px;
+            border-radius: 8px;
+            width: 380px;
+            font-family: 'Courier New', Courier, monospace;
+            text-align: left;
+        }
+        .ticket-header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; color: #000000 !important; }
+        .ticket-title { font-size: 16px; font-weight: bold; color: #000000 !important; }
+        .ticket-info { font-size: 11px; margin-bottom: 8px; color: #000000 !important; }
+        .ticket-table { width: 100%; font-size: 11px; border-collapse: collapse; margin-bottom: 10px; color: #000000 !important; }
+        .ticket-table th, .ticket-table td { text-align: left; padding: 4px 0; border-bottom: 1px dotted #888; color: #000000 !important; }
+        .ticket-total { font-weight: bold; border-top: 1px dashed #000; padding-top: 6px; text-align: right; font-size: 13px; color: #000000 !important; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #modal-ticket, #modal-ticket * { visibility: visible; color: #000000 !important; }
+            #modal-ticket { position: absolute; left: 0; top: 0; width: 100%; background: white !important; }
+            .no-print { display: none !important; }
+        }
+
+        .costo-item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #0f172a;
+            border: 1px solid #334155;
+            padding: 10px 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            text-align: left;
+            font-size: 13px;
+        }
+        .costo-item-input {
+            width: 100px;
+            background: #1e293b;
+            border: 1px solid #38bdf8;
+            color: #4ade80;
+            font-weight: bold;
+            padding: 6px;
+            border-radius: 6px;
+            text-align: right;
+        }
+
+        /* Tema claro */
+        body { background-color: #f1f5f9; color: #1e293b; }
+        header, .card, .report-card, details, .modal-card {
+            background-color: #ffffff;
+            border-color: #cbd5e1;
+            color: #1e293b;
+        }
+        .brand-section h1, .card-header, .prod-title, .cart-item-title { color: #1e293b; }
+        .nav-btn { background-color: #e2e8f0; color: #334155; }
+        .nav-btn:hover { background-color: #cbd5e1; color: #0f172a; }
+        .search-input, .form-control, .input-qty, .select-pres,
+        .caja-efectivo input, .costo-item-input {
+            background-color: #ffffff;
+            border-color: #cbd5e1;
+            color: #1e293b;
+        }
+        .prod-card, .cart-item, .caja-efectivo, .costo-item-row {
+            background-color: #f8fafc;
+            border-color: #cbd5e1;
+        }
+        th { color: #475569; border-color: #cbd5e1; }
+        td { color: #334155; border-color: #cbd5e1; }
+        .price-badge { background-color: #f8fafc; border-color: #cbd5e1; }
+        .form-group label, .cart-item-sub { color: #64748b; }
+        .cart-footer { border-color: #cbd5e1; }
+
+        /* Resumen de venta compacto */
+        .ventas-grid > .card:last-child { padding: 4px; }
+        .ventas-grid > .card:last-child .card-header { font-size: 13px; margin-bottom: 8px; }
+        .ventas-grid > .card:last-child .cart-item { padding: 4px; }
+        .ventas-grid > .card:last-child .cart-item-info,
+        .ventas-grid > .card:last-child .cart-item-sub { font-size: 12px; }
+        .ventas-grid > .card:last-child .total-row { font-size: 13px; margin-bottom: 8px; }
+        .ventas-grid > .card:last-child .total-amount { font-size: 13px; }
+        .ventas-grid > .card:last-child .cart-footer { padding-top: 8px; }
+
+        @media print {
+            body.imprimir-inventario * { visibility: hidden !important; }
+            body.imprimir-inventario { padding: 0 !important; background: #fff !important; }
+            body.imprimir-inventario #tab-inventario {
+                display: block !important; position: absolute; left: 0; top: 0; width: 100%;
+                grid-template-columns: 1fr !important; gap: 0 !important;
+            }
+            body.imprimir-inventario #card-inventario-lista,
+            body.imprimir-inventario #card-inventario-lista * { visibility: visible !important; }
+            body.imprimir-inventario #card-inventario-lista {
+                position: relative; left: 0; top: 0; width: 100%; min-height: 0;
+                padding: 0; background: #fff !important; color: #000 !important; border: 0; box-shadow: none;
+            }
+            body.imprimir-inventario #card-inventario-lista th,
+            body.imprimir-inventario #card-inventario-lista td { color: #000 !important; }
+            body.imprimir-inventario #card-inventario-lista .no-print { display: none !important; }
+            body.imprimir-inventario #card-inventario-lista table { width: 100%; font-size: 11px; }
+            body.imprimir-inventario #card-inventario-lista th,
+            body.imprimir-inventario #card-inventario-lista td { border-color: #999 !important; padding: 6px; }
+            @page { margin: 12mm; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Principal -->
+    <header>
+        <div class="brand-section">
+            <h1>🛒 QUEVEDO ABARROTES</h1>
+            <div class="caja-status" id="info-caja">
+                🟢 Caja Abierta por <span id="usuario-rol">admin</span> (Monto inicial: S/ <span id="monto-inicial">0.00</span>)
+            </div>
+        </div>
+
+        <div class="nav-actions">
+            <button class="nav-btn active" id="btn-tab-ventas" onclick="cambiarTab('ventas')">🛒 Ventas</button>
+            <button class="nav-btn" id="btn-tab-compras" onclick="cambiarTab('compras')">🛍️ Compras Directas</button>
+            <button class="nav-btn" id="btn-tab-inventario" onclick="cambiarTab('inventario')">📦 Inventario</button>
+            <button class="nav-btn" id="btn-tab-almacen" onclick="cambiarTab('almacen')" style="background: #7c3aed; color: white;">🏭 Almacén</button>
+            <button class="nav-btn" id="btn-tab-caja" onclick="cambiarTab('caja')">💵 Caja (Cuadre Diario)</button>
+            <button class="nav-btn" id="btn-tab-kardex" onclick="cambiarTab('kardex')">📋 Kárdex</button>
+            <button class="nav-btn" id="btn-tab-reportes" onclick="cambiarTab('reportes')">📊 Reportes Mensuales</button>
+            <button class="nav-btn" id="btn-registro-ventas" onclick="cambiarTab('registro-ventas')" style="background: #d97706; color: white;">📊 REGISTRO VENTAS</button>
+            <button class="nav-btn cierre" onclick="cerrarCaja()">🔒 Cierre / Arqueo de Caja</button>
+            <button class="nav-btn salir" onclick="cerrarSesion()">📁 Salir</button>
+        </div>
+    </header>
+
+    <!-- VISTA VENTAS -->
+    <div id="tab-ventas" class="tab-content ventas-grid active">
+        <div class="card">
+            <div class="card-header" style="flex-direction: column; align-items: stretch; gap: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span id="titulo-catalogo">Catálogo (0)</span>
+                    <input type="text" id="scanner-input" class="form-control" placeholder="📷 Código..." oninput="buscarPorCodigo(this.value)" onkeydown="manejarEscaneo(event)" onkeyup="detectarEscaneoInput(event)" style="width: 200px; font-size: 14px; padding: 8px 12px; border: 2px solid #38bdf8; border-radius: 6px; background: #1e293b; color: #38bdf8; font-weight: bold;" autocomplete="off">
+                </div>
+                <input type="text" class="search-input" placeholder="🔍 Buscar producto por nombre, código o categoría..." oninput="filtrarProductos(this.value)" style="width: 100%;">
+            </div>
+            <div id="catalogo-productos" class="catalogo-grid">
+                <!-- Se insertan productos -->
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Resumen de Venta</div>
+            
+            <div id="contenedor-carrito" class="cart-empty">
+                El carrito está vacío
+            </div>
+
+            <div class="cart-footer">
+                <div class="total-row">
+                    <span>Total:</span>
+                    <span class="total-amount" id="monto-total">S/ 0.00</span>
+                </div>
+                <button class="btn-procesar" id="btn-pago" onclick="abrirModalPago()" disabled>💳 Procesar Pago</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA COMPRAS DIRECTAS -->
+    <div id="tab-compras" class="tab-content compras-grid">
+        <div class="card">
+            <div class="card-header">
+                <span>Catálogo para Pedido a Proveedor</span>
+                <input type="text" class="search-input" placeholder="🔍 Buscar producto..." oninput="renderizarCompras(this.value)">
+            </div>
+            <div id="catalogo-compras" class="catalogo-grid">
+                <!-- Se insertan productos para pedir -->
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header" style="flex-wrap: wrap; gap: 8px;">
+                <span>Resumen de Compra</span>
+                <button id="btn-mis-comandas-vendedor" onclick="abrirModalMisComandas()" style="background: #d97706; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; display: none;">📦 Mis Comandas Pendientes</button>
+            </div>
+            
+            <div id="contenedor-carrito-compras" class="cart-empty">
+                No hay productos en la solicitud
+            </div>
+
+            <div class="cart-footer">
+                <button class="btn-procesar" id="btn-enviar-compra" onclick="enviarSolicitudCompra()" disabled style="background:#2563eb; cursor:pointer;">📨 Enviar Pedido a Admin</button>
+            </div>
+        </div>
+
+        <div class="card" style="grid-column: 1 / -1; min-height: 250px; margin-top: 10px;">
+            <div class="card-header">
+                <span>📋 Registro de Comandas Realizadas (Historial de Tickets)</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>N° Comanda</th>
+                            <th>Fecha y Hora</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-registro-comandas-vendedor">
+                        <!-- Historial dinámico -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA INVENTARIO -->
+    <div id="tab-inventario" class="tab-content inventario-grid">
+        <div class="card">
+            <div class="card-header" id="titulo-form-producto">Registrar / Editar Producto</div>
+            <form id="form-producto" onsubmit="guardarProductoLocal(event)">
+                <input type="hidden" id="p-id-edit">
+                
+                <div class="form-group">
+                    <label>Nombre del Producto</label>
+                    <input type="text" id="p-nombre" class="form-control" placeholder="Ej. Arroz Superior" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Categoría</label>
+                        <select id="p-categoria" class="form-control" onchange="actualizarNombresPresentaciones()">
+                            <option value="Abarrotes">Abarrotes</option>
+                            <option value="ARROZ">ARROZ</option>
+                            <option value="AZUCAR">AZUCAR</option>
+                            <option value="FIDEO">FIDEO</option>
+                            <option value="ACEITE">ACEITE</option>
+                            <option value="MAYONESES">MAYONESES</option>
+                            <option value="VINAGRE">VINAGRE</option>
+                            <option value="ATUN">ATUN</option>
+                            <option value="PH">PH</option>
+                            <option value="AJINOMOTO">AJINOMOTO</option>
+                            <option value="SHAMPOO">SHAMPOO</option>
+                            <option value="ENJUAGUE">ENJUAGUE</option>
+                            <option value="Bebidas">Bebidas</option>
+                            <option value="Detergente">Detergente</option>
+                            <option value="Galletas">Galletas</option>
+                            <option value="Golosinas">Golosinas</option>
+                            <option value="Lácteos">Lácteos</option>
+                            <option value="Limpieza">Limpieza</option>
+                            <option value="Mantequilla">Mantequilla</option>
+                            <option value="Yogurt">Yogurt</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Código de Barras</label>
+                        <input type="text" id="p-codigo" class="form-control" placeholder="Opcional">
+                    </div>
+                </div>
+
+                <details open>
+    <summary id="sum-pres-1">1. VENTAS POR UNIDAD</summary>
+    <div class="form-row">
+        <div class="form-group campo-costo-admin">
+    <label id="lbl-costo-1">Costo Unid (S/)</label>
+    <input type="number" step="0.01" id="p-costo-unid" class="form-control input-costo" placeholder="0.00">
+</div>
+        <div class="form-group">
+            <label id="lbl-precio-1">Precio Venta Unid (S/)</label>
+            <input type="number" step="0.01" id="p-precio-unid" class="form-control" placeholder="0.70" required>
+        </div>
+        <div class="form-group">
+            <label id="lbl-stock-1">Stock Inicial Unid</label>
+            <input type="number" step="0.1" id="p-stock-unid" class="form-control" placeholder="100" value="0" required>
+        </div>
+    </div>
+</details>
+
+<details>
+    <summary id="sum-pres-2">2. VENTAS POR DOCENA</summary>
+    <div class="form-row">
+        <div class="form-group campo-costo-admin">
+    <label id="lbl-costo-2">Costo Docena (S/)</label>
+    <input type="number" step="0.01" id="p-costo-doc" class="form-control input-costo" placeholder="0.00">
+</div>
+        <div class="form-group">
+            <label id="lbl-precio-2">Precio Venta Docena (S/)</label>
+            <input type="number" step="0.01" id="p-precio-doc" class="form-control" placeholder="35.00">
+        </div>
+        <div class="form-group">
+            <label id="lbl-stock-2">Stock Inicial Docena</label>
+            <input type="number" id="p-stock-doc" class="form-control" placeholder="10" value="0">
+        </div>
+    </div>
+</details>
+
+<details>
+    <summary id="sum-pres-3">3. VENTAS POR PQTE</summary>
+    <div class="form-row">
+        <div class="form-group campo-costo-admin">
+    <label id="lbl-costo-3">Costo Pqte (S/)</label>
+    <input type="number" step="0.01" id="p-costo-paq" class="form-control input-costo" placeholder="0.00">
+</div>
+        <div class="form-group">
+            <label id="lbl-precio-3">Precio Venta Pqte (S/)</label>
+            <input type="number" step="0.01" id="p-precio-paq" class="form-control" placeholder="75.00">
+        </div>
+        <div class="form-group">
+            <label id="lbl-stock-3">Stock Inicial Pqte</label>
+            <input type="number" id="p-stock-paq" class="form-control" placeholder="5" value="0">
+        </div>
+    </div>
+</details>
+
+<details>
+    <summary id="sum-pres-4">4. VENTAS POR CAJA</summary>
+    <div class="form-row">
+        <div class="form-group campo-costo-admin">
+    <label id="lbl-costo-4">Costo Caja (S/)</label>
+    <input type="number" step="0.01" id="p-costo-caja" class="form-control input-costo" placeholder="0.00">
+</div>
+        <div class="form-group">
+            <label id="lbl-precio-4">Precio Venta Caja (S/)</label>
+            <input type="number" step="0.01" id="p-precio-caja" class="form-control" placeholder="100.00">
+        </div>
+        <div class="form-group">
+            <label id="lbl-stock-4">Stock Inicial Caja</label>
+            <input type="number" id="p-stock-caja" class="form-control" placeholder="2" value="0">
+        </div>
+    </div>
+</details>
+
+                <div class="form-group">
+                    <label>Conversiones de presentación (opcional)</label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="p-unidades-paq">Unidades por paquete</label>
+                            <input type="number" step="0.01" min="0" id="p-unidades-paq" class="form-control" placeholder="Ej. 12">
+                        </div>
+                        <div class="form-group">
+                            <label for="p-unidades-caja">Unidades por caja</label>
+                            <input type="number" step="0.01" min="0" id="p-unidades-caja" class="form-control" placeholder="Ej. 24">
+                        </div>
+                        <div class="form-group">
+                            <label for="p-kg-paq">Kg por medio saco</label>
+                            <input type="number" step="0.01" min="0" id="p-kg-paq" class="form-control" placeholder="Ej. 25">
+                        </div>
+                        <div class="form-group">
+                            <label for="p-kg-caja">Kg por saco</label>
+                            <input type="number" step="0.01" min="0" id="p-kg-caja" class="form-control" placeholder="Ej. 50">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 10px;">
+                    <label>Imagen del Producto</label>
+                    <input type="file" id="input-imagen" class="form-control" accept="image/*" style="padding: 6px;">
+                    <input type="hidden" id="imagen-base64">
+                    <div id="vista-previa" style="margin-top: 8px; text-align: center; display: none;">
+                        <img id="img-preview" src="" style="max-height: 70px; border-radius: 6px; border: 1px solid #334155;">
+                    </div>
+                </div>
+
+                <button type="submit" id="btn-submit-prod" class="btn-primary">⚡ Guardar Producto</button>
+                <button type="button" id="btn-cancelar-edit" onclick="cancelarEdicion()" class="btn-primary" style="background:#475569; display:none; margin-top:6px;">Cancelar Edición</button>
+            </form>
+        </div>
+
+        <div class="card" id="card-inventario-lista">
+            <div class="card-header" style="flex-direction: column; align-items: stretch; gap: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Inventario Actual</span>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" id="btn-descargar-word" class="nav-btn no-print" onclick="descargarInventarioWord()">📄 Descargar Word</button>
+                        <button type="button" id="btn-imprimir-inv" class="nav-btn no-print" onclick="imprimirInventario()">🖨️ Imprimir inventario</button>
+                    </div>
+                </div>
+                <input type="text" class="search-input" placeholder="🔍 Buscar producto en inventario..." oninput="filtrarInventario(this.value)" style="width: 100%;">
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr id="header-tabla-inventario">
+    <th>Producto</th>
+    <th>Categoría</th>
+    <th class="col-costo-admin">Costo</th>
+    <th>Precios de Venta</th>
+    <th>Stock Disponible</th>
+    <th id="col-header-acciones">Acciones</th>
+</tr>
+                    </thead>
+                    <tbody id="tabla-inventario">
+                        <!-- Llenado dinámico -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA ALMACÉN (EXCLUSIVO ADMINISTRADOR) -->
+    <div id="tab-almacen" class="tab-content" style="grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div class="card">
+            <div class="card-header">Registrar Producto en Almacén</div>
+            <form id="form-almacen" onsubmit="guardarProductoAlmacen(event)">
+                <div class="form-group">
+                    <label>Fecha</label>
+                    <input type="date" id="alm-fecha" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Producto</label>
+                    <input type="text" id="alm-producto" class="form-control" placeholder="Nombre del producto" required>
+                </div>
+                <div class="form-group">
+                    <label>Presentación</label>
+                    <select id="alm-presentacion" class="form-control" required>
+                        <option value="Unidades">Unidades</option>
+                        <option value="Paquete">Paquete</option>
+                        <option value="Caja">Caja</option>
+                        <option value="Saco">Saco</option>
+                        <option value="KG">KG</option>
+                        <option value="Litros">Litros</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Costo (S/)</label>
+                        <input type="number" step="0.01" id="alm-costo" class="form-control" placeholder="0.00" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Stock</label>
+                        <input type="number" step="0.01" id="alm-stock" class="form-control" placeholder="0" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary">Guardar en Almacén</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <div class="card-header" style="flex-direction: column; align-items: stretch; gap: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Registrar Salida de Almacén</span>
+                </div>
+            </div>
+            <form id="form-salida-almacen" onsubmit="registrarSalidaAlmacen(event)">
+                <div class="form-group">
+                    <label>Fecha</label>
+                    <input type="date" id="sal-fecha" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Producto</label>
+                    <select id="sal-producto" class="form-control" required>
+                        <option value="">-- Seleccionar Producto --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Presentación</label>
+                    <input type="text" id="sal-presentacion" class="form-control" readonly style="background: #f1f5f9;">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Cantidad a Salir</label>
+                        <input type="number" step="0.01" id="sal-cantidad" class="form-control" placeholder="0" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Descripción del Descuento</label>
+                    <input type="text" id="sal-descripcion" class="form-control" placeholder="Motivo de la salida" required>
+                </div>
+                <button type="submit" class="btn-primary" style="background: #dc2626;">Registrar Salida</button>
+            </form>
+        </div>
+
+        <div class="card" style="grid-column: 1 / -1;">
+            <div class="card-header" style="flex-direction: column; align-items: stretch; gap: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Reporte de Almacén</span>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="nav-btn no-print" onclick="descargarAlmacenWord()">📄 Descargar Word</button>
+                        <button class="nav-btn no-print" onclick="imprimirAlmacen()">🖨️ Imprimir</button>
+                    </div>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Producto</th>
+                            <th>Presentación</th>
+                            <th>Costo (S/)</th>
+                            <th>Actual Costo (S/)</th>
+                            <th>Stock</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-almacen">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card" style="grid-column: 1 / -1;">
+            <div class="card-header">Historial de Salidas de Almacén</div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Producto</th>
+                            <th>Cantidad Salida</th>
+                            <th>Descripción</th>
+                            <th>Registrado Por</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-salidas-almacen">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA CAJA (CUADRE DIARIO DE TURNO) -->
+    <div id="tab-caja" class="tab-content kardex-grid">
+        <div class="reportes-cards">
+            <div class="report-card">
+                <div class="report-card-title">💵 INICIO DE CAJA (Efectivo Base)</div>
+                <div class="report-card-val blue" id="caja-card-inicio">S/ 0.00</div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-title">📱 VENTAS POR YAPE (Turno Hoy)</div>
+                <div class="report-card-val purple" id="caja-card-yape">S/ 0.00</div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-title">💵 VENTAS EN EFECTIVO (Turno Hoy)</div>
+                <div class="report-card-val" id="caja-card-efectivo">S/ 0.00</div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-title">📉 SALIDAS / PAGOS REALIZADOS</div>
+                <div class="report-card-val red" id="caja-card-gastos">S/ 0.00</div>
+            </div>
+        </div>
+
+        <!-- CUADRE FÍSICO DIARIO -->
+        <div class="card" style="background: #0f172a; border: 2px solid #38bdf8; margin-bottom: 15px;">
+            <div class="card-header" style="color: #38bdf8;">
+                <span>🎯 Resumen de Cuadre / Efectivo Esperado en Cajón (Turno)</span>
+                <button onclick="imprimirArqueoTurno()" style="background: #16a34a; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer;">🧾 Imprimir Cuadre de Caja</button>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; text-align: center;">
+                <div style="background: #1e293b; padding: 12px; border-radius: 8px;">
+                    <span style="font-size: 12px; color: #94a3b8;">Total Cobrado en Efectivo:</span>
+                    <div style="font-size: 20px; font-weight: bold; color: #4ade80;" id="cuadre-efectivo-cobrado">S/ 0.00</div>
+                </div>
+                <div style="background: #1e293b; padding: 12px; border-radius: 8px;">
+                    <span style="font-size: 12px; color: #94a3b8;">Total Pagos / Salidas:</span>
+                    <div style="font-size: 20px; font-weight: bold; color: #f87171;" id="cuadre-gastos-salida">- S/ 0.00</div>
+                </div>
+                <div style="background: #1e293b; padding: 12px; border-radius: 8px; border: 1px solid #4ade80;" id="box-efectivo-final-container">
+                    <span style="font-size: 12px; color: #cbd5e1; font-weight: bold;">EFECTIVO FINAL EN CAJÓN:</span>
+                    <div style="font-size: 22px; font-weight: bold; color: #38bdf8;" id="cuadre-efectivo-cajon">S/ 0.00</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <span>📉 Registrar Pago / Salida de Dinero (Boletas, Comandas, Personal)</span>
+            </div>
+            
+            <form id="form-registro-gasto" onsubmit="registrarGastoDia(event)" style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; background: #0f172a; padding: 15px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 15px;">
+                <div>
+                    <label style="font-size: 11px; color: #94a3b8; font-weight: bold; display: block; margin-bottom: 4px;">Tipo / Concepto de Gasto</label>
+                    <select id="gasto-tipo" class="form-control" onchange="evaluarTipoGasto(this.value)">
+                        <option value="Pago de personal (Semanal)">Pago de personal (Semanal)</option>
+                        <option value="Pago de Boleta/Factura (Diario)">Pago de Boleta/Factura (Diario)</option>
+                        <option value="Pago de comanda">Pago de comanda (Por cobrar)</option>
+                        <option value="Gastos Varios / Insumos">Gastos Varios / Insumos</option>
+                    </select>
+                </div>
+
+                <div id="box-gasto-comanda" style="display: none;">
+                    <label style="font-size: 11px; color: #fbbf24; font-weight: bold; display: block; margin-bottom: 4px;">Seleccionar Comanda (Por Cobrar)</label>
+                    <select id="gasto-comanda-select" class="form-control" onchange="seleccionarComandaCobrar(this.value)" style="color: #fbbf24; font-weight: bold;">
+                    </select>
+                </div>
+
+                <div>
+                    <label style="font-size: 11px; color: #94a3b8; font-weight: bold; display: block; margin-bottom: 4px;">Detalle / N° Documento / Recibo</label>
+                    <input type="text" id="gasto-detalle" class="form-control" placeholder="Ej. Pago servicio luz Octubre" required>
+                </div>
+
+                <div>
+                    <label style="font-size: 11px; color: #94a3b8; font-weight: bold; display: block; margin-bottom: 4px;">Monto de Gasto (S/)</label>
+                    <input type="number" step="0.01" id="gasto-monto" class="form-control" placeholder="0.00" required>
+                </div>
+
+                <button type="submit" class="btn-primary" style="background: #dc2626; margin-top: 0; padding: 10px 16px;">➕ Registrar Salida</button>
+            </form>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            <th>Concepto / Tipo</th>
+                            <th>Detalle de Documento / Desglose</th>
+                            <th>Monto Restado (S/)</th>
+                            <th>Registrado Por</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-gastos-dia">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- HISTORIAL DE CIERRES DE CAJA GUARDADOS -->
+        <div class="card">
+            <div class="card-header">
+                <span>📁 Historial de Cierres / Arqueos de Caja Guardados por Día</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID Cierre</th>
+                            <th>Fecha y Hora</th>
+                            <th>Usuario</th>
+                            <th>Efectivo Final Cajon</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-historial-cierres">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card" id="seccion-historial-diario-admin">
+            <div class="card-header">
+                <span>📊 Historial Consolidado Diario (Resumen General)</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Inicio de Caja</th>
+                            <th>Ventas Yape</th>
+                            <th>Ventas Efectivo</th>
+                            <th>Gastos del Día</th>
+                            <th>Total Neto en Caja</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-historial-diario">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA KÁRDEX -->
+    <div id="tab-kardex" class="tab-content" style="grid-template-columns: 1fr;">
+        <div class="card" style="min-height: 400px;">
+            <div class="card-header">Historial de Movimientos (Kárdex)</div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Producto</th>
+                            <th>Tipo de Movimiento</th>
+                            <th>Cantidad / Cambio Detallado</th>
+                            <th>Usuario / Detalle</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-kardex">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA REGISTRO VENTAS (PARA VENDEDOR) -->
+    <div id="tab-registro-ventas" class="tab-content" style="grid-template-columns: 1fr;">
+        <div class="card" style="min-height: 400px;">
+            <div class="card-header">Historial de Ventas Registradas</div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID Ticket</th>
+                            <th>Fecha</th>
+                            <th>Vendedor</th>
+                            <th>Método / Estado</th>
+                            <th>Total</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-ventas-registradas">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA REPORTES (EXCLUSIVO ADMINISTRADOR - CONSOLIDADO MENSUAL) -->
+    <div id="tab-reportes" class="tab-content" style="grid-template-columns: 1fr;">
+        <div>
+            <div class="reportes-cards">
+                <div class="report-card">
+                    <div class="report-card-title">Stock Total (Unidades)</div>
+                    <div class="report-card-val blue" id="rep-stock-total">0</div>
+                </div>
+                <div class="report-card">
+                    <div class="report-card-title">Valor en Inventario</div>
+                    <div class="report-card-val" id="rep-valor-inventario">S/ 0.00</div>
+                </div>
+                <div class="report-card">
+                    <div class="report-card-title">Ventas Efectivo Acumuladas</div>
+                    <div class="report-card-val" id="rep-ventas-efectivo">S/ 0.00</div>
+                </div>
+                <div class="report-card">
+                    <div class="report-card-title">Ventas Yape Acumuladas</div>
+                    <div class="report-card-val purple" id="rep-ventas-yape">S/ 0.00</div>
+                </div>
+            </div>
+
+            <!-- PANEL GERENCIAL MENSUAL DE UTILIDAD NETO -->
+            <div class="card" style="background: #0f172a; border: 1px solid #38bdf8; margin-bottom: 20px;">
+                <div class="card-header" style="color: #38bdf8;">
+                    <span>📊 Balance Financiero Neto del Mes (Exclusivo Administrador)</span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; text-align: center;">
+                    <div style="background: #1e293b; padding: 15px; border-radius: 8px;">
+                        <span style="font-size: 11px; color: #94a3b8;">(+) Total Ingresos Mes</span>
+                        <div style="font-size: 20px; font-weight: bold; color: #4ade80;" id="mes-total-ingresos">S/ 0.00</div>
+                    </div>
+                    <div style="background: #1e293b; padding: 15px; border-radius: 8px;">
+                        <span style="font-size: 11px; color: #94a3b8;">(-) Egresos Diarios / Comandas</span>
+                        <div style="font-size: 20px; font-weight: bold; color: #f87171;" id="mes-gastos-diarios">S/ 0.00</div>
+                    </div>
+                    <div style="background: #1e293b; padding: 15px; border-radius: 8px;">
+                        <span style="font-size: 11px; color: #94a3b8;">(-) Planilla / Pago Personal</span>
+                        <div style="font-size: 20px; font-weight: bold; color: #fbbf24;" id="mes-gastos-personal">S/ 0.00</div>
+                    </div>
+                    <div style="background: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #4ade80;">
+                        <span style="font-size: 11px; color: #cbd5e1; font-weight: bold;">(=) UTILIDAD NETA MENSUAL</span>
+                        <div style="font-size: 22px; font-weight: bold; color: #38bdf8;" id="mes-utilidad-neta">S/ 0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="min-height: 400px;">
+                <div class="card-header">
+                    <span>Historial de Ventas Registradas</span>
+                    <button onclick="abrirModalComandasLista()" style="background: #d97706; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px;">📦 COMANDAS <span id="badge-comandas-count" style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 4px;">0</span></button>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID Ticket</th>
+                                <th>Fecha</th>
+                                <th>Vendedor</th>
+                                <th>Método / Estado</th>
+                                <th>Total</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-reportes-ventas">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALES -->
+    <div class="modal-overlay" id="modal-alerta-stock">
+        <div class="modal-alerta-card">
+            <div class="modal-alerta-header">
+                ⚠️ <span>ALERTA DE STOCK BAJO</span>
+            </div>
+            <div class="modal-alerta-body" id="modal-alerta-contenido"></div>
+            <div class="modal-alerta-footer">
+                <button onclick="cerrarModalAlerta()" style="background: #16a34a; color: white; border: none; padding: 8px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px;">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-mis-comandas">
+        <div class="modal-card" style="width: 520px;">
+            <h3 style="color: #fbbf24; margin-bottom: 4px;">📦 Mis Comandas Pendientes</h3>
+            <p style="font-size: 12px; color: #94a3b8; margin-bottom: 15px;">Aquí puedes revisar tus pedidos enviados al administrador o eliminarlos si te equivocaste:</p>
+            <div id="contenedor-mis-comandas" style="max-height: 320px; overflow-y: auto; margin-bottom: 15px;"></div>
+            <button class="btn-primary" style="background: #475569;" onclick="cerrarModalMisComandas()">Cerrar</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-comandas-lista">
+        <div class="modal-card">
+            <h3 style="color: #fbbf24; margin-bottom: 4px;">Comandas / Solicitudes de Compra</h3>
+            <p style="font-size: 12px; color: #94a3b8; margin-bottom: 15px;">Selecciona una orden enviada por el vendedor para ingresar sus costos directos:</p>
+            <div id="contenedor-comandas-pendientes" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px;"></div>
+            <button class="btn-primary" style="background: #475569;" onclick="cerrarModalComandasLista()">Cerrar</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-costos-comanda">
+        <div class="modal-card">
+            <h3 style="color: #38bdf8; margin-bottom: 4px;">Ingresar Precios de Costo Proveedor</h3>
+            <p style="font-size: 12px; color: #94a3b8; margin-bottom: 15px;" id="subtitulo-comanda-id">Comanda N°</p>
+            <div style="background: #0f172a; border: 1px solid #334155; padding: 10px; border-radius: 8px; margin-bottom: 15px; text-align: left;">
+                <label style="font-size: 12px; color: #cbd5e1; font-weight: bold; display: block; margin-bottom: 4px;">Estado del Pago de la Comanda:</label>
+                <select id="select-estado-comanda" class="form-control" style="background: #1e293b; color: #4ade80; font-weight: bold;">
+                    <option value="CANCELADO">✅ CANCELADO (Pagado)</option>
+                    <option value="POR PAGAR">⏳ POR PAGAR (Pendiente)</option>
+                </select>
+            </div>
+            <div id="lista-items-costos" style="max-height: 220px; overflow-y: auto; margin-bottom: 15px;"></div>
+            <button class="btn-primary" style="background: #16a34a;" onclick="confirmarCostosComanda()">✅ Guardar y Registrar Comanda</button>
+            <button class="btn-primary" style="background: #475569; margin-top: 6px;" onclick="cerrarModalCostos()">Regresar</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-pago">
+        <div class="modal-card" style="width: 420px;">
+            <h3>Selecciona Método de Pago</h3>
+            <p id="modal-monto" style="font-size: 24px; font-weight: bold; color: #4ade80; margin-bottom: 10px;">S/ 0.00</p>
+            <div class="pago-options">
+                <button class="btn-pago-opt selected" id="btn-efectivo" onclick="seleccionarMetodo('Efectivo')">💵 Efectivo</button>
+                <button class="btn-pago-opt" id="btn-yape" onclick="seleccionarMetodo('Yape')">📱 Yape</button>
+                <button class="btn-pago-opt" id="btn-mixto" onclick="seleccionarMetodo('Mixto')">💳 Mixto</button>
+            </div>
+            <div class="caja-efectivo" id="panel-efectivo">
+                <label>Paga con (S/):</label>
+                <input type="number" step="0.10" id="monto-recibido" placeholder="0.00" oninput="calcularVuelto()">
+                <div class="vuelto-box">Vuelto: S/ <span id="monto-vuelto">0.00</span></div>
+            </div>
+            <div class="qr-yape-box" id="panel-yape">
+                <img src="assets/yape-qr.jpg" alt="QR Yape" id="img-qr-yape">
+                <p>Jackeline Lizbeth Quevedo Agurto</p>
+            </div>
+            <div class="qr-yape-box" id="panel-mixto" style="display: none;">
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 12px; color: #cbd5e1; font-weight: bold; display: block; margin-bottom: 4px;">Monto en Efectivo (S/):</label>
+                    <input type="number" step="0.10" id="monto-efectivo-mixto" placeholder="0.00" oninput="calcularVueltoMixto()" style="width: 100%; padding: 10px; background: #1e293b; border: 1px solid #334155; color: #4ade80; font-weight: bold; border-radius: 6px;">
+                </div>
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 12px; color: #cbd5e1; font-weight: bold; display: block; margin-bottom: 4px;">Monto en Yape (S/):</label>
+                    <input type="number" step="0.10" id="monto-yape-mixto" placeholder="0.00" oninput="calcularVueltoMixto()" style="width: 100%; padding: 10px; background: #1e293b; border: 1px solid #334155; color: #c084fc; font-weight: bold; border-radius: 6px;">
+                </div>
+                <div style="background: #0f172a; padding: 10px; border-radius: 6px; margin-bottom: 10px;">
+                    <div style="font-size: 12px; color: #94a3b8;">Total Pagado: S/ <span id="total-pagado-mixto" style="color: #4ade80; font-weight: bold;">0.00</span></div>
+                    <div style="font-size: 12px; color: #94a3b8;">Vuelto en Efectivo: S/ <span id="vuelto-mixto" style="color: #38bdf8; font-weight: bold;">0.00</span></div>
+                </div>
+                <img src="assets/yape-qr.jpg" alt="QR Yape" style="width: 120px; margin-bottom: 6px;">
+                <p style="font-size: 11px;">Jackeline Lizbeth Quevedo Agurto</p>
+            </div>
+            <button class="btn-primary" style="background: #16a34a;" onclick="confirmarCobro()">Confirmar y Cobrar</button>
+            <button class="btn-primary" style="background: #2563eb; margin-top: 6px;" onclick="imprimirTicketActual()">🖨️ Imprimir Ticket</button>
+            <button class="btn-primary" style="background: #475569; margin-top: 6px;" onclick="cerrarModalPago()">Cancelar</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-ticket">
+        <div class="ticket-modal">
+            <div class="ticket-header">
+                <div class="ticket-title" id="t-titulo-comprobante">QUEVEDO ABARROTES</div>
+                <div>RUC: 10458963211</div>
+                <div>Talara, Piura - Perú</div>
+            </div>
+            <div class="ticket-info">
+                <div><strong>Comprobante / Comanda N°:</strong> <span id="t-id">TK-000</span></div>
+                <div><strong>Fecha y Hora:</strong> <span id="t-fecha">--/--/----</span></div>
+                <div><strong>Usuario:</strong> <span id="t-vendedor">--</span></div>
+                <div><strong>Estado / Tipo:</strong> <span id="t-metodo">--</span></div>
+            </div>
+            <table class="ticket-table">
+                <thead>
+                    <tr>
+                        <th id="th-t-col1">Descripción / Producto</th>
+                        <th id="th-t-col2">Cant.</th>
+                        <th style="text-align: right;" id="th-t-col3">Total</th>
+                    </tr>
+                </thead>
+                <tbody id="t-items"></tbody>
+            </table>
+            <div class="ticket-total" id="t-footer-total">TOTAL: S/ <span id="t-total">0.00</span></div>
+            <div class="no-print" style="margin-top: 15px; display: flex; gap: 8px;">
+                <button class="btn-primary" style="background: #16a34a; margin-top: 0;" onclick="window.print()">🖨️ Imprimir Ticket</button>
+                <button class="btn-primary" style="background: #475569; margin-top: 0;" onclick="cerrarTicket()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="app.js"></script>
+    <script>
+        function obtenerRol() {
+            const raw = (localStorage.getItem('usuario_rol') || localStorage.getItem('rol_usuario') || localStorage.getItem('rol') || 'admin').trim().toLowerCase();
+            if (raw === 'administrador' || raw === 'admin') return 'admin';

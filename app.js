@@ -11,6 +11,34 @@ function obtenerRol() {
     return raw;
 }
 
+// Configuración de Supabase
+const SUPABASE_URL = 'https://nxiviidirmzqbcldegus.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Qf-bMKqDet0Xgh6PHExtsA_s3g0jXzn';
+
+let supabaseClient = null;
+let isOnline = navigator.onLine;
+let syncQueue = [];
+
+// Inicializar cliente de Supabase
+function initSupabase() {
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        return supabaseClient;
+    }
+    try {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        console.log('✅ Supabase inicializado correctamente');
+        return supabaseClient;
+    } catch (error) {
+        console.error('❌ Error al inicializar Supabase:', error);
+        return null;
+    }
+}
+
+// Inicializar Supabase al cargar
+if (typeof window.supabase !== 'undefined') {
+    initSupabase();
+}
+
 const rol = obtenerRol();
 let montoInicialCaja = (rol === 'vendedor') ? parseFloat(localStorage.getItem('caja_inicial') || '50.00') : 0.00;
 
@@ -530,6 +558,9 @@ function guardarProductoLocal(e) {
 
     localStorage.setItem('lista_productos', JSON.stringify(productos));
     localStorage.setItem('lista_kardex', JSON.stringify(kardex));
+
+    // Sincronizar con Supabase
+    syncProductoToSupabase(productoData);
 
     renderizarProductos();
     cancelarEdicion();
@@ -1429,6 +1460,27 @@ function confirmarCobro() {
     localStorage.setItem('lista_productos', JSON.stringify(productos));
     localStorage.setItem('lista_kardex', JSON.stringify(kardex));
 
+    // Sincronizar venta y productos con Supabase
+    syncVentaToSupabase({
+        ticketId: ticketId,
+        fecha: fechaActual,
+        items: itemsTicket,
+        total: totalPagarActual,
+        metodoPago: metodoPagoTexto,
+        montoEfectivo: montoEfectivo,
+        montoYape: montoYape,
+        usuario: rol,
+        vendedor: rol
+    });
+
+    // Sincronizar productos actualizados
+    carrito.forEach(item => {
+        const prod = productos.find(p => p.id === item.id);
+        if (prod) {
+            syncProductoToSupabase(prod);
+        }
+    });
+
     ultimoTicketId = ticketId;
     cerrarModalPago();
     carrito = [];
@@ -2222,9 +2274,10 @@ tablaInventario.innerHTML += `
         }
 
         if (catalogoVentas) {
+            const imagenSrc = prod.imagen && prod.imagen !== 'https://via.placeholder.com/80' ? prod.imagen : 'https://via.placeholder.com/80';
             catalogoVentas.innerHTML += `
                 <div class="prod-card">
-                    <img src="${prod.imagen || 'https://via.placeholder.com/80'}">
+                    <img src="${imagenSrc}" alt="${prod.nombre}" onerror="this.src='https://via.placeholder.com/80'">
                     <div class="prod-title">${prod.nombre}</div>
                     <select id="pres-${prod.id}" class="select-pres" onchange="habilitarInputMonto(${prod.id}, this.value)">
                         ${optsHTML}
@@ -2558,6 +2611,9 @@ function guardarProductoAlmacen(e) {
     almacen.push(nuevoProducto);
     localStorage.setItem('lista_almacen', JSON.stringify(almacen));
 
+    // Sincronizar con Supabase
+    syncAlmacenToSupabase(nuevoProducto);
+
     document.getElementById('form-almacen').reset();
     // Establecer fecha actual por defecto
     document.getElementById('alm-fecha').value = new Date().toISOString().split('T')[0];
@@ -2601,6 +2657,10 @@ function registrarSalidaAlmacen(e) {
     salidasAlmacen.push(nuevaSalida);
     localStorage.setItem('lista_almacen', JSON.stringify(almacen));
     localStorage.setItem('lista_salidas_almacen', JSON.stringify(salidasAlmacen));
+
+    // Sincronizar con Supabase
+    syncSalidaAlmacenToSupabase(nuevaSalida);
+    syncAlmacenToSupabase(prodAlmacen);
 
     document.getElementById('form-salida-almacen').reset();
     document.getElementById('sal-fecha').value = new Date().toISOString().split('T')[0];
@@ -2674,6 +2734,10 @@ function editarProductoAlmacen(id) {
             prod.actualCosto = costoNum;
             prod.actualCostoFecha = new Date().toISOString().split('T')[0];
             localStorage.setItem('lista_almacen', JSON.stringify(almacen));
+
+            // Sincronizar con Supabase
+            syncAlmacenToSupabase(prod);
+
             renderizarAlmacen();
             alert('Costo actualizado exitosamente.');
         }
@@ -2682,8 +2746,18 @@ function editarProductoAlmacen(id) {
 
 function eliminarProductoAlmacen(id) {
     if (confirm('¿Eliminar este producto del almacén?')) {
+        const prodAEliminar = almacen.find(p => p.id === id);
         almacen = almacen.filter(p => p.id !== id);
         localStorage.setItem('lista_almacen', JSON.stringify(almacen));
+
+        // Nota: Para eliminar de Supabase necesitaríamos usar .delete()
+        // Por ahora solo sincronizamos el estado local
+        if (prodAEliminar && supabaseClient && isOnline) {
+            supabaseClient.from('almacen').delete().eq('id', id).then(({ error }) => {
+                if (error) console.error('Error al eliminar de Supabase:', error);
+            });
+        }
+
         renderizarAlmacen();
     }
 }
@@ -2831,3 +2905,473 @@ window.eliminarProductoAlmacen = eliminarProductoAlmacen;
 window.descargarAlmacenWord = descargarAlmacenWord;
 window.imprimirAlmacen = imprimirAlmacen;
 window.habilitarInputMonto = habilitarInputMonto;
+
+// ============================================
+// FUNCIONES DE SINCRONIZACIÓN CON SUPABASE
+// ============================================
+
+// Detectar cambios de conexión
+window.addEventListener('online', () => {
+    isOnline = true;
+    console.log('🟢 Conexión restaurada. Sincronizando datos...');
+    procesarColaSincronizacion();
+});
+
+window.addEventListener('offline', () => {
+    isOnline = false;
+    console.log('🔴 Sin conexión. Trabajando en modo offline.');
+});
+
+// Verificar si estamos online
+function checkOnlineStatus() {
+    isOnline = navigator.onLine;
+    return isOnline;
+}
+
+// ============================================
+// SINCRONIZACIÓN: LOCAL -> SUPABASE
+// ============================================
+
+// Sincronizar un producto con Supabase
+async function syncProductoToSupabase(producto) {
+    if (!supabaseClient || !isOnline) {
+        syncQueue.push({ type: 'producto', data: producto });
+        return;
+    }
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('productos')
+            .upsert({
+                id: producto.id,
+                nombre: producto.nombre,
+                categoria: producto.categoria,
+                codigo: producto.codigo,
+                costo_unid: producto.costoUnid || 0,
+                precio_unid: producto.precioUnid || 0,
+                stock_unid: producto.stockUnid || 0,
+                costo_doc: producto.costoDoc || 0,
+                precio_doc: producto.precioDoc || 0,
+                stock_doc: producto.stockDoc || 0,
+                costo_paq: producto.costoPaq || 0,
+                precio_paq: producto.precioPaq || 0,
+                stock_paq: producto.stockPaq || 0,
+                costo_caja: producto.costoCaja || 0,
+                precio_caja: producto.precioCaja || 0,
+                stock_caja: producto.stockCaja || 0,
+                imagen: producto.imagen || 'https://via.placeholder.com/80',
+                unidades_paq: producto.unidadesPaq || producto.unidades_paq || 0,
+                unidades_caja: producto.unidadesCaja || producto.unidades_caja || 0,
+                kg_paq: producto.kgPaq || producto.kg_paq || 0,
+                kg_caja: producto.kgCaja || producto.kg_caja || 0,
+                unidades_paquete: producto.unidadesPaq || 0,
+                unidades_caja_box: producto.unidadesCaja || 0,
+                kg_paquete: producto.kgPaq || 0,
+                kg_caja_box: producto.kgCaja || 0,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'id' });
+
+        if (error) {
+            console.error('Error al sincronizar producto:', error);
+            syncQueue.push({ type: 'producto', data: producto });
+        } else {
+            console.log('✅ Producto sincronizado:', producto.nombre);
+        }
+    } catch (error) {
+        console.error('Error de red al sincronizar producto:', error);
+        syncQueue.push({ type: 'producto', data: producto });
+    }
+}
+
+// Sincronizar un movimiento de Kárdex con Supabase
+async function syncKardexToSupabase(movimiento) {
+    if (!supabaseClient || !isOnline) {
+        syncQueue.push({ type: 'kardex', data: movimiento });
+        return;
+    }
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('kardex')
+            .insert({
+                ticket_id: movimiento.ticketId || null,
+                fecha: movimiento.fecha,
+                producto: movimiento.producto,
+                tipo: movimiento.tipo,
+                cantidad: movimiento.cantidad,
+                usuario: movimiento.usuario,
+                metodo: movimiento.metodo || null,
+                total: movimiento.total || null,
+                monto_efectivo: movimiento.montoEfectivo || null,
+                monto_yape: movimiento.montoYape || null,
+                items: movimiento.items || null
+            });
+
+        if (error) {
+            console.error('Error al sincronizar kardex:', error);
+            syncQueue.push({ type: 'kardex', data: movimiento });
+        } else {
+            console.log('✅ Kárdex sincronizado');
+        }
+    } catch (error) {
+        console.error('Error de red al sincronizar kardex:', error);
+        syncQueue.push({ type: 'kardex', data: movimiento });
+    }
+}
+
+// Sincronizar una venta completa con Supabase
+async function syncVentaToSupabase(venta) {
+    if (!supabaseClient || !isOnline) {
+        syncQueue.push({ type: 'venta', data: venta });
+        return;
+    }
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('ventas')
+            .insert({
+                ticket_id: venta.ticketId,
+                fecha: venta.fecha,
+                items: venta.items,
+                total: venta.total,
+                metodo_pago: venta.metodoPago,
+                monto_efectivo: venta.montoEfectivo || 0,
+                monto_yape: venta.montoYape || 0,
+                usuario: venta.usuario,
+                vendedor: venta.vendedor || null,
+                estado: 'completado'
+            });
+
+        if (error) {
+            console.error('Error al sincronizar venta:', error);
+            syncQueue.push({ type: 'venta', data: venta });
+        } else {
+            console.log('✅ Venta sincronizada:', venta.ticketId);
+        }
+    } catch (error) {
+        console.error('Error de red al sincronizar venta:', error);
+        syncQueue.push({ type: 'venta', data: venta });
+    }
+}
+
+// Sincronizar producto de almacén con Supabase
+async function syncAlmacenToSupabase(producto) {
+    if (!supabaseClient || !isOnline) {
+        syncQueue.push({ type: 'almacen', data: producto });
+        return;
+    }
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('almacen')
+            .upsert({
+                id: producto.id,
+                fecha: producto.fecha,
+                producto: producto.producto,
+                costo: producto.costo,
+                costo_actual: producto.actualCosto || producto.costo,
+                fecha_costo_actual: producto.actualCostoFecha || producto.fecha,
+                stock: producto.stock,
+                presentacion: producto.presentacion,
+                usuario: producto.usuario || rol,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'id' });
+
+        if (error) {
+            console.error('Error al sincronizar almacén:', error);
+            syncQueue.push({ type: 'almacen', data: producto });
+        } else {
+            console.log('✅ Almacén sincronizado:', producto.producto);
+        }
+    } catch (error) {
+        console.error('Error de red al sincronizar almacén:', error);
+        syncQueue.push({ type: 'almacen', data: producto });
+    }
+}
+
+// Sincronizar salida de almacén con Supabase
+async function syncSalidaAlmacenToSupabase(salida) {
+    if (!supabaseClient || !isOnline) {
+        syncQueue.push({ type: 'salida_almacen', data: salida });
+        return;
+    }
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('salidas_almacen')
+            .insert({
+                fecha: salida.fecha,
+                producto: salida.producto,
+                cantidad: salida.cantidad,
+                presentacion: salida.presentacion,
+                descripcion: salida.descripcion,
+                usuario: salida.usuario
+            });
+
+        if (error) {
+            console.error('Error al sincronizar salida de almacén:', error);
+            syncQueue.push({ type: 'salida_almacen', data: salida });
+        } else {
+            console.log('✅ Salida de almacén sincronizada');
+        }
+    } catch (error) {
+        console.error('Error de red al sincronizar salida de almacén:', error);
+        syncQueue.push({ type: 'salida_almacen', data: salida });
+    }
+}
+
+// Procesar cola de sincronización
+async function procesarColaSincronizacion() {
+    if (!isOnline || !supabaseClient || syncQueue.length === 0) {
+        return;
+    }
+
+    console.log(`🔄 Procesando ${syncQueue.length} items pendientes de sincronización...`);
+
+    const queueCopy = [...syncQueue];
+    syncQueue = [];
+
+    for (const item of queueCopy) {
+        switch (item.type) {
+            case 'producto':
+                await syncProductoToSupabase(item.data);
+                break;
+            case 'kardex':
+                await syncKardexToSupabase(item.data);
+                break;
+            case 'venta':
+                await syncVentaToSupabase(item.data);
+                break;
+            case 'almacen':
+                await syncAlmacenToSupabase(item.data);
+                break;
+            case 'salida_almacen':
+                await syncSalidaAlmacenToSupabase(item.data);
+                break;
+        }
+    }
+
+    console.log('✅ Sincronización completada');
+}
+
+// ============================================
+// SINCRONIZACIÓN: SUPABASE -> LOCAL
+// ============================================
+
+// Cargar productos desde Supabase
+async function loadProductosFromSupabase() {
+    if (!supabaseClient || !isOnline) {
+        console.log('⚠️ No se pueden cargar productos: offline o Supabase no inicializado');
+        return;
+    }
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('productos')
+            .select('*')
+            .order('updated_at', { ascending: false });
+
+        if (error) {
+            console.error('Error al cargar productos:', error);
+            return;
+        }
+
+        if (data && data.length > 0) {
+            // Convertir formato de Supabase a formato local
+            const productosSupabase = data.map(p => ({
+                id: p.id,
+                nombre: p.nombre,
+                categoria: p.categoria,
+                codigo: p.codigo,
+                costoUnid: p.costo_unid,
+                precioUnid: p.precio_unid,
+                stockUnid: p.stock_unid,
+                costoDoc: p.costo_doc,
+                precioDoc: p.precio_doc,
+                stockDoc: p.stock_doc,
+                costoPaq: p.costo_paq,
+                precioPaq: p.precio_paq,
+                stockPaq: p.stock_paq,
+                costoCaja: p.costo_caja,
+                precioCaja: p.precio_caja,
+                stockCaja: p.stock_caja,
+                imagen: p.imagen,
+                unidadesPaq: p.unidades_paq || p.unidades_paquete,
+                unidadesCaja: p.unidades_caja || p.unidades_caja_box,
+                kgPaq: p.kg_paq || p.kg_paquete,
+                kgCaja: p.kg_caja || p.kg_caja_box,
+                unidades_paq: p.unidades_paq || p.unidades_paquete,
+                unidades_caja: p.unidades_caja || p.unidades_caja_box,
+                kg_paq: p.kg_paq || p.kg_paquete,
+                kg_caja: p.kg_caja || p.kg_caja_box
+            }));
+
+            // Actualizar localStorage
+            localStorage.setItem('lista_productos', JSON.stringify(productosSupabase));
+            productos = productosSupabase;
+            console.log(`✅ ${productosSupabase.length} productos cargados desde Supabase`);
+        }
+    } catch (error) {
+        console.error('Error de red al cargar productos:', error);
+    }
+}
+
+// Cargar almacén desde Supabase
+async function loadAlmacenFromSupabase() {
+    if (!supabaseClient || !isOnline) {
+        return;
+    }
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('almacen')
+            .select('*')
+            .order('updated_at', { ascending: false });
+
+        if (error) {
+            console.error('Error al cargar almacén:', error);
+            return;
+        }
+
+        if (data && data.length > 0) {
+            const almacenSupabase = data.map(a => ({
+                id: a.id,
+                fecha: a.fecha,
+                producto: a.producto,
+                costo: a.costo,
+                actualCosto: a.costo_actual,
+                actualCostoFecha: a.fecha_costo_actual,
+                stock: a.stock,
+                presentacion: a.presentacion,
+                usuario: a.usuario
+            }));
+
+            localStorage.setItem('lista_almacen', JSON.stringify(almacenSupabase));
+            almacen = almacenSupabase;
+            console.log(`✅ ${almacenSupabase.length} productos de almacén cargados desde Supabase`);
+        }
+    } catch (error) {
+        console.error('Error de red al cargar almacén:', error);
+    }
+}
+
+// Cargar salidas de almacén desde Supabase
+async function loadSalidasAlmacenFromSupabase() {
+    if (!supabaseClient || !isOnline) {
+        return;
+    }
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('salidas_almacen')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error al cargar salidas de almacén:', error);
+            return;
+        }
+
+        if (data && data.length > 0) {
+            const salidasSupabase = data.map(s => ({
+                id: s.id,
+                fecha: s.fecha,
+                producto: s.producto,
+                cantidad: s.cantidad,
+                presentacion: s.presentacion,
+                descripcion: s.descripcion,
+                usuario: s.usuario
+            }));
+
+            localStorage.setItem('lista_salidas_almacen', JSON.stringify(salidasSupabase));
+            salidasAlmacen = salidasSupabase;
+            console.log(`✅ ${salidasSupabase.length} salidas de almacén cargadas desde Supabase`);
+        }
+    } catch (error) {
+        console.error('Error de red al cargar salidas de almacén:', error);
+    }
+}
+
+// ============================================
+// SUPABASE REALTIME
+// ============================================
+
+// Suscribirse a cambios en tiempo real
+function setupRealtimeSubscriptions() {
+    if (!supabaseClient) {
+        console.log('⚠️ Supabase no inicializado, no se pueden suscribir a Realtime');
+        return;
+    }
+
+    // Suscribirse a cambios en productos
+    const productosSubscription = supabaseClient
+        .channel('productos-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'productos' }, (payload) => {
+            console.log('📡 Cambio en productos detectado:', payload);
+            loadProductosFromSupabase();
+            renderizarProductos();
+        })
+        .subscribe();
+
+    // Suscribirse a cambios en almacén
+    const almacenSubscription = supabaseClient
+        .channel('almacen-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'almacen' }, (payload) => {
+            console.log('📡 Cambio en almacén detectado:', payload);
+            loadAlmacenFromSupabase();
+            renderizarAlmacen();
+        })
+        .subscribe();
+
+    // Suscribirse a cambios en salidas de almacén
+    const salidasSubscription = supabaseClient
+        .channel('salidas-almacen-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'salidas_almacen' }, (payload) => {
+            console.log('📡 Cambio en salidas de almacén detectado:', payload);
+            loadSalidasAlmacenFromSupabase();
+            renderizarAlmacen();
+        })
+        .subscribe();
+
+    console.log('✅ Suscripciones Realtime activas');
+}
+
+// ============================================
+// INICIALIZACIÓN DE SINCRONIZACIÓN
+// ============================================
+
+function initSync() {
+    if (!supabaseClient) {
+        console.log('⚠️ Supabase no disponible, trabajando en modo offline-only');
+        return;
+    }
+
+    // Cargar datos iniciales desde Supabase
+    loadProductosFromSupabase();
+    loadAlmacenFromSupabase();
+    loadSalidasAlmacenFromSupabase();
+
+    // Configurar Realtime
+    setupRealtimeSubscriptions();
+
+    // Procesar cola de sincronización pendiente
+    setTimeout(() => {
+        procesarColaSincronizacion();
+    }, 2000);
+}
+
+// Inicializar sincronización después de cargar la página
+setTimeout(() => {
+    initSync();
+}, 3000);
+
+// Exponer funciones de sincronización
+window.syncProductoToSupabase = syncProductoToSupabase;
+window.syncKardexToSupabase = syncKardexToSupabase;
+window.syncVentaToSupabase = syncVentaToSupabase;
+window.syncAlmacenToSupabase = syncAlmacenToSupabase;
+window.syncSalidaAlmacenToSupabase = syncSalidaAlmacenToSupabase;
+window.procesarColaSincronizacion = procesarColaSincronizacion;
+window.loadProductosFromSupabase = loadProductosFromSupabase;
+window.loadAlmacenFromSupabase = loadAlmacenFromSupabase;
+window.setupRealtimeSubscriptions = setupRealtimeSubscriptions;
