@@ -127,9 +127,12 @@ function aplicarRestriccionesConsulta() {
         // Ocultar información de caja
         const infoCaja = document.getElementById('info-caja');
         if (infoCaja) infoCaja.style.display = 'none';
-        
-        // Redirigir a inventario
-        cambiarTab('inventario');
+
+        // Activar la pestaña de inventario directamente (sin llamar a cambiarTab para evitar recursividad)
+        const tabInventario = document.getElementById('tab-inventario');
+        const btnTabInventario = document.getElementById('btn-tab-inventario');
+        if (tabInventario) tabInventario.classList.add('active');
+        if (btnTabInventario) btnTabInventario.classList.add('active');
     }
 }
 
@@ -265,7 +268,8 @@ function cambiarTab(tab) {
         document.getElementById('tab-inventario').classList.add('active');
         document.getElementById('btn-tab-inventario').classList.add('active');
         actualizarNombresPresentaciones();
-        if (typeof renderizarProductos === 'function') renderizarProductos();
+        // NO llamar a renderizarProductos aquí para evitar recursividad
+        // Los productos ya se renderizan en inicializarSistema
     } else if (tab === 'almacen') {
         document.getElementById('tab-almacen').classList.add('active');
         document.getElementById('btn-tab-almacen').classList.add('active');
@@ -2469,9 +2473,8 @@ function renderizarProductosPorLista(listaProductos) {
         catalogoVentas.parentNode.appendChild(paginacionCat);
     }
 
-    // Aplicar restricciones por rol después de renderizar
-    restringirPorRol();
-    aplicarRestriccionesConsulta();
+    // NO aplicar restricciones aquí para evitar recursividad
+    // Las restricciones se aplican en DOMContentLoaded y en inicializarSistema
 }
 
 let bufferEscaneo = '';
@@ -2486,15 +2489,16 @@ let ultimoTicketId = null;
 async function inicializarSistema() {
     // Cargar datos desde localStorage primero (async porque puede consultar Supabase)
     await cargarDatosDesdeLocalStorage();
-    
+
     aplicarMenuPorRol();
     if (typeof aplicarRestriccionesPorRol === 'function') aplicarRestriccionesPorRol();
-    if (obtenerRol() === 'inventario_consulta') cambiarTab('inventario');
+    // NO llamar a cambiarTab aquí para evitar recursividad
+    // aplicarRestriccionesConsulta() ya activa la pestaña de inventario si es necesario
     if (typeof actualizarNombresPresentaciones === 'function') actualizarNombresPresentaciones();
-    
+
     // Renderizar productos solo una vez (sin recursividad)
     if (typeof renderizarProductos === 'function') renderizarProductos();
-    
+
     if (typeof verificarAlertaStockUnidades === 'function') verificarAlertaStockUnidades();
     if (typeof renderizarRegistroComandasVendedor === 'function') renderizarRegistroComandasVendedor();
     if (typeof renderizarKardex === 'function') renderizarKardex();
