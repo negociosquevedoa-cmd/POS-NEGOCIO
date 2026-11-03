@@ -390,7 +390,7 @@ if (inputImg) {
 }
 
 // Cargar datos desde localStorage después de declarar las variables
-function cargarDatosDesdeLocalStorage() {
+async function cargarDatosDesdeLocalStorage() {
     productos = JSON.parse(localStorage.getItem('lista_productos')) || [];
     kardex = JSON.parse(localStorage.getItem('lista_kardex')) || [];
     comandas = JSON.parse(localStorage.getItem('lista_comandas')) || [];
@@ -399,6 +399,12 @@ function cargarDatosDesdeLocalStorage() {
     historialCierresCaja = JSON.parse(localStorage.getItem('historial_cierres_caja')) || [];
     almacen = JSON.parse(localStorage.getItem('lista_almacen')) || [];
     salidasAlmacen = JSON.parse(localStorage.getItem('lista_salidas_almacen')) || [];
+
+    // Si localStorage está vacío o no tiene productos, cargar desde Supabase
+    if (!productos || productos.length === 0) {
+        console.log('📥 localStorage vacío, cargando productos desde Supabase...');
+        await loadProductosFromSupabase();
+    }
 }
 
 function verificarAlertaStockUnidades() {
@@ -2441,9 +2447,9 @@ let timeoutInputEscaneo = null;
 let tiempoUltimoCaracterInput = 0;
 let ultimoTicketId = null;
 
-window.onload = function() {
-    // Cargar datos desde localStorage primero
-    cargarDatosDesdeLocalStorage();
+async function inicializarSistema() {
+    // Cargar datos desde localStorage primero (async porque puede consultar Supabase)
+    await cargarDatosDesdeLocalStorage();
     
     aplicarMenuPorRol();
     if (typeof aplicarRestriccionesPorRol === 'function') aplicarRestriccionesPorRol();
@@ -2464,7 +2470,9 @@ window.onload = function() {
     if (scannerInput) {
         scannerInput.focus();
     }
-};
+}
+
+window.onload = inicializarSistema;
 
 function mantenerFocoScanner() {
     const scannerInput = document.getElementById('scanner-input');
