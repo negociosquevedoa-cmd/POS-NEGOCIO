@@ -406,7 +406,7 @@ async function cargarDatosDesdeLocalStorage() {
     almacen = JSON.parse(localStorage.getItem('lista_almacen')) || [];
     salidasAlmacen = JSON.parse(localStorage.getItem('lista_salidas_almacen')) || [];
 
-    // Si localStorage está vacío o no tiene productos, cargar desde Supabase
+    // Si localStorage está vacío o no tiene productos, cargar desde Supabase (una sola vez)
     if (!productos || productos.length === 0) {
         console.log('📥 localStorage vacío, cargando productos desde Supabase...');
         await loadProductosFromSupabase();
@@ -692,11 +692,17 @@ function cancelarEdicion() {
 }
 
 function renderizarProductos(filtro = '') {
-    if ((!productos || productos.length === 0) && localStorage.getItem('lista_productos')) {
-        try {
-            productos = JSON.parse(localStorage.getItem('lista_productos')) || [];
-        } catch (e) {
-            productos = [];
+    console.log('🔄 renderizarProductos() llamado, productos cargados:', productos.length);
+
+    // Solo recargar desde localStorage si productos está vacío (evitar recarga innecesaria)
+    if (!productos || productos.length === 0) {
+        if (localStorage.getItem('lista_productos')) {
+            try {
+                productos = JSON.parse(localStorage.getItem('lista_productos')) || [];
+                console.log('📥 Recargados productos desde localStorage:', productos.length);
+            } catch (e) {
+                productos = [];
+            }
         }
     }
 
@@ -707,6 +713,8 @@ function renderizarProductos(filtro = '') {
         const categoria = (p.categoria || '').toLowerCase();
         return nombre.includes(filtroLower) || codigo.includes(filtroLower) || categoria.includes(filtroLower);
     });
+
+    console.log(`🔍 Productos filtrados: ${prodsFiltrados.length}`);
 
     // Resetear páginas al cargar
     paginaInventario = 1;
@@ -2271,6 +2279,14 @@ function renderizarProductosPorLista(listaProductos) {
     const catalogoVentas = document.getElementById('catalogo-productos');
     const catalogoCompras = document.getElementById('catalogo-compras');
 
+    // Si no existe la tabla de inventario, no hacer nada
+    if (!tablaInventario) {
+        console.warn('⚠️ No se encontró la tabla de inventario (#tabla-inventario)');
+        return;
+    }
+
+    console.log(`📊 Renderizando ${listaProductos.length} productos en la tabla de inventario`);
+
     if (tablaInventario) tablaInventario.innerHTML = '';
     if (catalogoVentas) catalogoVentas.innerHTML = '';
     if (catalogoCompras) catalogoCompras.innerHTML = '';
@@ -2348,24 +2364,28 @@ function renderizarProductosPorLista(listaProductos) {
                 </td>`;
         }
         if (rolActual === 'inventario_consulta') {
-            tablaInventario.innerHTML += `
-                <tr>
-                    <td><strong>${prod.nombre}</strong></td>
-                    <td>${prod.categoria}</td>
-                    <td>${preciosHTML}</td>
-                </tr>
-            `;
+            if (tablaInventario) {
+                tablaInventario.innerHTML += `
+                    <tr>
+                        <td><strong>${prod.nombre}</strong></td>
+                        <td>${prod.categoria}</td>
+                        <td>${preciosHTML}</td>
+                    </tr>
+                `;
+            }
         } else {
-            tablaInventario.innerHTML += `
-                <tr>
-                    <td><strong>${prod.nombre}</strong></td>
-                    <td>${prod.categoria}</td>
-                    <td class="col-costo-admin">${costosHTML}</td>
-                    <td>${preciosHTML}</td>
-                    <td>${stockHTML}</td>
-                    ${accionesTd}
-                </tr>
-            `;
+            if (tablaInventario) {
+                tablaInventario.innerHTML += `
+                    <tr>
+                        <td><strong>${prod.nombre}</strong></td>
+                        <td>${prod.categoria}</td>
+                        <td class="col-costo-admin">${costosHTML}</td>
+                        <td>${preciosHTML}</td>
+                        <td>${stockHTML}</td>
+                        ${accionesTd}
+                    </tr>
+                `;
+            }
         }
     });
 
@@ -2461,7 +2481,10 @@ async function inicializarSistema() {
     if (typeof aplicarRestriccionesPorRol === 'function') aplicarRestriccionesPorRol();
     if (obtenerRol() === 'inventario_consulta') cambiarTab('inventario');
     if (typeof actualizarNombresPresentaciones === 'function') actualizarNombresPresentaciones();
-    refrescarVistasProductos();
+    
+    // Renderizar productos solo una vez (sin recursividad)
+    if (typeof renderizarProductos === 'function') renderizarProductos();
+    
     if (typeof verificarAlertaStockUnidades === 'function') verificarAlertaStockUnidades();
     if (typeof renderizarRegistroComandasVendedor === 'function') renderizarRegistroComandasVendedor();
     if (typeof renderizarKardex === 'function') renderizarKardex();
@@ -3329,7 +3352,6 @@ async function loadProductosFromSupabase() {
     }
     if (!supabaseClient || !isOnline) {
         console.log('⚠️ No se pueden cargar productos: offline o Supabase no inicializado');
-        refrescarVistasProductos();
         return;
     }
 
@@ -3341,7 +3363,6 @@ async function loadProductosFromSupabase() {
 
         if (error) {
             console.error('Error al cargar productos:', error);
-            refrescarVistasProductos();
             return;
         }
 
@@ -3383,8 +3404,6 @@ async function loadProductosFromSupabase() {
     } catch (error) {
         console.error('Error de red al cargar productos:', error);
     }
-
-    refrescarVistasProductos();
 }
 
 // Cargar almacén desde Supabase
