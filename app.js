@@ -63,6 +63,12 @@ if (typeof window.supabase !== 'undefined') {
 const rol = obtenerRol();
 let montoInicialCaja = (rol === 'vendedor') ? parseFloat(localStorage.getItem('caja_inicial') || '50.00') : 0.00;
 
+// Asignar clase del rol al body inmediatamente para evitar parpadeo
+const rolUsuario = localStorage.getItem('usuario_rol');
+if (rolUsuario) {
+    document.body.classList.add('rol-' + rolUsuario);
+}
+
 // Función para restringir elementos según el rol
 function restringirPorRol() {
     const rolActual = localStorage.getItem('usuario_rol');
@@ -78,7 +84,7 @@ function restringirPorRol() {
 function aplicarRestriccionesConsulta() {
     const rolActivo = localStorage.getItem('usuario_rol');
     
-    // Agregar clase del rol al body
+    // Agregar clase del rol al body INMEDIATAMENTE al detectar el rol
     if (rolActivo) {
         document.body.classList.add('rol-' + rolActivo);
     }
