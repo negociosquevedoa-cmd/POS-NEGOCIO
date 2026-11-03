@@ -3514,6 +3514,11 @@ async function loadSalidasAlmacenFromSupabase() {
 // SUPABASE REALTIME
 // ============================================
 
+// Variables para guardar las suscripciones
+let productosSubscription = null;
+let almacenSubscription = null;
+let salidasSubscription = null;
+
 // Suscribirse a cambios en tiempo real
 function setupRealtimeSubscriptions() {
     if (!supabaseClient) {
@@ -3521,7 +3526,22 @@ function setupRealtimeSubscriptions() {
         return;
     }
 
-    const productosSubscription = supabaseClient
+    // Desasociar canales anteriores si existen
+    if (productosSubscription) {
+        supabaseClient.removeChannel(productosSubscription);
+        productosSubscription = null;
+    }
+    if (almacenSubscription) {
+        supabaseClient.removeChannel(almacenSubscription);
+        almacenSubscription = null;
+    }
+    if (salidasSubscription) {
+        supabaseClient.removeChannel(salidasSubscription);
+        salidasSubscription = null;
+    }
+
+    // Crear nuevas suscripciones
+    productosSubscription = supabaseClient
         .channel('productos-changes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'productos' }, (payload) => {
             console.log('📡 Cambio en productos detectado:', payload);
@@ -3529,7 +3549,7 @@ function setupRealtimeSubscriptions() {
         })
         .subscribe();
 
-    const almacenSubscription = supabaseClient
+    almacenSubscription = supabaseClient
         .channel('almacen-changes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'almacen' }, (payload) => {
             console.log('📡 Cambio en almacén detectado:', payload);
@@ -3537,7 +3557,7 @@ function setupRealtimeSubscriptions() {
         })
         .subscribe();
 
-    const salidasSubscription = supabaseClient
+    salidasSubscription = supabaseClient
         .channel('salidas-almacen-changes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'salidas_almacen' }, (payload) => {
             console.log('📡 Cambio en salidas de almacén detectado:', payload);
