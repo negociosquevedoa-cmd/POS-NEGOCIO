@@ -719,6 +719,8 @@ function renderizarProductos(filtro = '') {
     // Resetear páginas al cargar
     paginaInventario = 1;
     paginaCatalogo = 1;
+
+    // Renderizar UNA SOLA VEZ sin recursividad
     renderizarProductosPorLista(prodsFiltrados);
 }
 
@@ -2184,14 +2186,14 @@ function eliminarProducto(id) {
 function cerrarTicket() { document.getElementById('modal-ticket').style.display = 'none'; }
 
 function cambiarPaginaInventario(pagina) {
-    recargarListaProductos(); // Recargar desde localStorage
+    // No recargar desde localStorage, ya tenemos los datos en memoria
     const filtroActual = document.querySelector('#card-inventario-lista .search-input')?.value || '';
     paginaInventario = pagina;
     filtrarInventarioSinReset(filtroActual);
 }
 
 function cambiarPaginaCatalogo(pagina) {
-    recargarListaProductos(); // Recargar desde localStorage
+    // No recargar desde localStorage, ya tenemos los datos en memoria
     const filtroActual = document.querySelector('#tab-ventas .search-input')?.value || '';
     paginaCatalogo = pagina;
     filtrarProductosSinReset(filtroActual);
@@ -2305,6 +2307,9 @@ function renderizarProductosPorLista(listaProductos) {
     const finInv = inicioInv + itemsPorPagina;
     const productosPaginaInventario = listaProductos.slice(inicioInv, finInv);
 
+    // Construir HTML de filas en un string para evitar múltiples manipulaciones del DOM
+    let filasHTML = '';
+
     productosPaginaInventario.forEach(prod => {
         const catUp = (prod.categoria || '').toUpperCase();
         const esFideo = (catUp === 'FIDEO');
@@ -2364,30 +2369,35 @@ function renderizarProductosPorLista(listaProductos) {
                 </td>`;
         }
         if (rolActual === 'inventario_consulta') {
-            if (tablaInventario) {
-                tablaInventario.innerHTML += `
-                    <tr>
-                        <td><strong>${prod.nombre}</strong></td>
-                        <td>${prod.categoria}</td>
-                        <td>${preciosHTML}</td>
-                    </tr>
-                `;
-            }
+            filasHTML += `
+                <tr>
+                    <td><strong>${prod.nombre}</strong></td>
+                    <td>${prod.categoria}</td>
+                    <td>${preciosHTML}</td>
+                </tr>
+            `;
         } else {
-            if (tablaInventario) {
-                tablaInventario.innerHTML += `
-                    <tr>
-                        <td><strong>${prod.nombre}</strong></td>
-                        <td>${prod.categoria}</td>
-                        <td class="col-costo-admin">${costosHTML}</td>
-                        <td>${preciosHTML}</td>
-                        <td>${stockHTML}</td>
-                        ${accionesTd}
-                    </tr>
-                `;
-            }
+            filasHTML += `
+                <tr>
+                    <td><strong>${prod.nombre}</strong></td>
+                    <td>${prod.categoria}</td>
+                    <td class="col-costo-admin">${costosHTML}</td>
+                    <td>${preciosHTML}</td>
+                    <td>${stockHTML}</td>
+                    ${accionesTd}
+                </tr>
+            `;
         }
     });
+
+    // Inyectar todas las filas de una sola vez
+    if (tablaInventario && filasHTML) {
+        tablaInventario.innerHTML = filasHTML;
+        console.log(`✅ ${productosPaginaInventario.length} filas inyectadas en la tabla`);
+        console.log(`📏 Longitud del HTML inyectado: ${filasHTML.length} caracteres`);
+    } else {
+        console.warn('⚠️ No se pudo inyectar filas: tablaInventario=', !!tablaInventario, 'filasHTML=', !!filasHTML);
+    }
 
     // Agregar controles de paginación para inventario
     const totalPaginasInv = Math.ceil(listaProductos.length / itemsPorPagina);
