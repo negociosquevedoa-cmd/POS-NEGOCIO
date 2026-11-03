@@ -418,19 +418,28 @@ async function cargarDatosDesdeLocalStorage() {
 }
 
 function verificarAlertaStockUnidades() {
+    // 1. Obtener el rol actual guardado
+    const rolActual = localStorage.getItem('usuario_rol') || localStorage.getItem('rol');
+    
+    // 2. Si el usuario es de consulta, no ejecutar ni mostrar la alerta
+    if (rolActual === 'inventario_consulta' || rolActual === 'consulta') {
+        return;
+    }
+
     let productosAlertados = [];
     productos.forEach(p => {
         const catUpper = p.categoria ? p.categoria.toUpperCase() : '';
-        if (catUpper === 'ARROZ' || catUpper === 'AZUCAR' || catUpper === 'AZÚCAR' || catUpper === 'MENESTRAS') {
-            if (p.stockUnid < 33) productosAlertados.push(`• <strong>${p.nombre}</strong> (${p.categoria}): <span style="color:#dc2626; font-weight:bold;">${p.stockUnid} Kg</span>`);
+        if (catUpper === 'ARROZ' || catUpper === 'AZUCAR' || catUpper === 'AZÚCAR') {
+            if (p.stockUnid < 33) productosAlertados.push(`• <strong>${p.nombre}</strong> (${p.categoria || ''}): <span style="color:red; font-weight:bold;">${p.stockUnid} Unid</span>`);
         } else {
-            if (p.stockUnid < 4) productosAlertados.push(`• <strong>${p.nombre}</strong> (${p.categoria}): <span style="color:#dc2626; font-weight:bold;">${p.stockUnid} Unid</span>`);
+            if (p.stockUnid < 4) productosAlertados.push(`• <strong>${p.nombre}</strong> (${p.categoria || ''}): <span style="color:red; font-weight:bold;">${p.stockUnid} Unid</span>`);
         }
     });
+
     if (productosAlertados.length > 0) {
         const contenedor = document.getElementById('modal-alerta-contenido');
-        if(contenedor) {
-            contenedor.innerHTML = `<p style="margin-bottom: 12px; font-weight: 500;">Atención, los siguientes productos requieren reabastecimiento:</p>${productosAlertados.join('<br>')}`;
+        if (contenedor) {
+            contenedor.innerHTML = `<p style="margin-bottom: 12px; font-weight: 500;">Atención, los siguientes productos requieren reabastecimiento:</p>` + productosAlertados.join('<br>');
             document.getElementById('modal-alerta-stock').style.display = 'flex';
         }
     }
