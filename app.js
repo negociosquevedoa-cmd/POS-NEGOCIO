@@ -293,12 +293,206 @@ function cambiarTab(tab) {
     }
 }
 
-function actualizarNombresPresentaciones() {
+const CAMPOS_FORM_PRES = {
+    1: { precio: 'p-precio-unid', costo: 'p-costo-unid', stock: 'p-stock-unid', sum: 'sum-pres-1', lblPrecio: 'lbl-precio-1', lblCosto: 'lbl-costo-1', lblStock: 'lbl-stock-1' },
+    2: { precio: 'p-precio-doc', costo: 'p-costo-doc', stock: 'p-stock-doc', sum: 'sum-pres-2', lblPrecio: 'lbl-precio-2', lblCosto: 'lbl-costo-2', lblStock: 'lbl-stock-2' },
+    3: { precio: 'p-precio-paq', costo: 'p-costo-paq', stock: 'p-stock-paq', sum: 'sum-pres-3', lblPrecio: 'lbl-precio-3', lblCosto: 'lbl-costo-3', lblStock: 'lbl-stock-3' },
+    4: { precio: 'p-precio-caja', costo: 'p-costo-caja', stock: 'p-stock-caja', sum: 'sum-pres-4', lblPrecio: 'lbl-precio-4', lblCosto: 'lbl-costo-4', lblStock: 'lbl-stock-4' }
+};
+
+const REGLAS_PRESENTACION = {
+    PH: {
+        unidadBase: 'rollos sueltos',
+        slots: [
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 rollo)', precio: 1, factor: 1, resumen: '▼ 1. UNIDAD (1 rollo)' },
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Pareja', label: 'Pareja (2 rollos)', precio: 1.5, factor: 2, resumen: '▼ 2. PAREJA (2 rollos)' },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Bloque', label: 'Bloque (5 rollos)', precio: 6.3, factor: 5, resumen: '▼ 3. BLOQUE (5 rollos)' },
+            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Paquete', label: 'Paquete (10 pares / 20 rollos)', precio: 12.5, factor: 20, resumen: '▼ 4. PAQUETE (20 rollos)' }
+        ]
+    },
+    PHX4: {
+        unidadBase: 'rollos sueltos',
+        slots: [
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 rollo)', precio: 1, factor: 1, resumen: '▼ 1. UNIDAD (1 rollo)' },
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Pareja', label: 'Pareja (2 rollos)', precio: 1.5, factor: 2, resumen: '▼ 2. PAREJA (2 rollos)' },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Bloque', label: 'Bloque (5 rollos)', precio: 6.3, factor: 5, resumen: '▼ 3. BLOQUE (5 rollos)' },
+            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Paquete', label: 'Paquete (10 pares / 20 rollos)', precio: 12.5, factor: 20, resumen: '▼ 4. PAQUETE (20 rollos)' }
+        ]
+    },
+    PILA: {
+        unidadBase: 'pilas sueltas',
+        slots: [
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 pila)', precio: 1, factor: 1, resumen: '▼ 1. UNIDAD (1 pila)' },
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Par', label: 'Par (2 pilas)', precio: 2, factor: 2, resumen: '▼ 2. PAR (2 pilas)' },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Caja / Blíster', label: 'Caja / Blíster (20 pilas)', precio: 16, factor: 20, resumen: '▼ 3. CAJA / BLÍSTER (20 pilas)' }
+        ]
+    },
+    GUSTA: {
+        unidadBase: 'sobres',
+        slots: [
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 sobre)', precio: 0.4, factor: 1, resumen: '▼ 1. UNIDAD (1 sobre)' },
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Promoción 3x1', label: 'Promoción (3 sobres)', precio: 1, factor: 3, resumen: '▼ 2. PROMOCIÓN (3 sobres)' },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete completo (80 sobres)', precio: 21, factor: 80, resumen: '▼ 3. PAQUETE COMPLETO (80 sobres)' }
+        ]
+    },
+    OREGANO: {
+        unidadBase: 'sobres',
+        slots: [
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 sobre)', precio: 0.3, factor: 1, resumen: '▼ 1. UNIDAD (1 sobre)' },
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Promoción', label: 'Promoción (2 sobres)', precio: 0.5, factor: 2, resumen: '▼ 2. PROMOCIÓN (2 sobres)' },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Caja', label: 'Caja completo (40 sobres)', precio: 9, factor: 40, resumen: '▼ 3. CAJA COMPLETO (40 sobres)' }
+        ]
+    }
+};
+
+function reglaPresentacionProducto(prodOrCat) {
+    const cat = typeof prodOrCat === 'string'
+        ? prodOrCat
+        : (prodOrCat && prodOrCat.categoria);
+    const c = String(cat || '').trim().toUpperCase();
+    if (c === 'GUSTA' || c === 'GUSTAS') return REGLAS_PRESENTACION.GUSTA;
+    if (c.startsWith('PH')) return REGLAS_PRESENTACION.PH; // PH y PHX4 usan la misma regla
+    return REGLAS_PRESENTACION[c] || null;
+}
+
+function slotPorTipo(prod, tipoPres) {
+    const regla = reglaPresentacionProducto(prod);
+    if (!regla) return null;
+    const tipo = String(tipoPres || '').trim().toLowerCase();
+    const porTipo = { unid: 'Unid', doc: 'Doc', paq: 'Paq', caja: 'Caja' };
+    const campo = porTipo[tipo];
+    if (!campo) return null;
+    return regla.slots.find(s => s.campo === campo) || null;
+}
+
+function factorDePresentacion(prod, tipoPres) {
+    const slot = slotPorTipo(prod, tipoPres);
+    return slot ? slot.factor : 1;
+}
+
+function etiquetaDePresentacion(prod, tipoPres) {
+    const slot = slotPorTipo(prod, tipoPres);
+    if (slot) return slot.label;
+    const labels = etiquetasPresentaciones(prod);
+    const mapa = { unid: labels.unid, doc: labels.doc, paq: labels.paq, caja: labels.caja };
+    return mapa[String(tipoPres || '').toLowerCase()] || tipoPres || '';
+}
+
+function listaPresentacionesComerciales(prod) {
+    const pres = extraerPresentacionesProducto(prod);
+    const regla = reglaPresentacionProducto(prod);
+    if (regla) {
+        return regla.slots.map(slot => {
+            const guardado = pres['precio' + slot.campo];
+            return {
+                tipo: slot.tipo,
+                label: slot.label,
+                nombreCorto: slot.nombreCorto,
+                precio: guardado > 0 ? guardado : slot.precio,
+                factor: slot.factor,
+                campo: slot.campo
+            };
+        });
+    }
+    const labels = etiquetasPresentaciones(prod);
+    const lista = [{ tipo: 'unid', label: labels.unid, precio: pres.precioUnid, factor: 1, campo: 'Unid' }];
+    if (pres.precioDoc > 0) lista.push({ tipo: 'doc', label: labels.doc, precio: pres.precioDoc, factor: 1, campo: 'Doc' });
+    if (pres.precioPaq > 0) lista.push({ tipo: 'paq', label: labels.paq, precio: pres.precioPaq, factor: 1, campo: 'Paq' });
+    if (pres.precioCaja > 0) lista.push({ tipo: 'caja', label: labels.caja, precio: pres.precioCaja, factor: 1, campo: 'Caja' });
+    return lista;
+}
+
+function unidadesReservadasCarrito(prodId, exceptoKey) {
+    return carrito.reduce((acc, item) => {
+        if (String(item.id) !== String(prodId)) return acc;
+        if (exceptoKey && item.key === exceptoKey) return acc;
+        if (item.tipoPres === 'monto') return acc + (parseFloat(item.cantidad) || 0);
+        const factor = item.factorUnidades || 1;
+        return acc + (parseFloat(item.cantidad) || 0) * factor;
+    }, 0);
+}
+
+function normalizarPresentacionesCategoria(data) {
+    const regla = reglaPresentacionProducto(data);
+    if (!regla) return data;
+    ['Unid', 'Doc', 'Paq', 'Caja'].forEach((campo) => {
+        const slot = regla.slots.find(s => s.campo === campo);
+        if (!slot) {
+            data['precio' + campo] = 0;
+            data['costo' + campo] = 0;
+            data['stock' + campo] = 0;
+            return;
+        }
+        if (!(data['precio' + campo] > 0)) data['precio' + campo] = slot.precio;
+        if (campo !== 'Unid') data['stock' + campo] = 0;
+    });
+    return data;
+}
+
+function textoCampo(id, texto) {
+    const el = document.getElementById(id);
+    if (el && texto !== undefined) el.textContent = texto;
+}
+
+function aplicarFormularioCategoriaEspecial(regla, aplicarPrecios) {
+    for (let i = 1; i <= 4; i++) {
+        const meta = CAMPOS_FORM_PRES[i];
+        const slot = regla.slots.find(s => s.id === i);
+        const bloque = document.getElementById('bloque-pres-' + i);
+        if (bloque) bloque.style.display = slot ? '' : 'none';
+        if (!slot) continue;
+
+        textoCampo(meta.sum, slot.resumen);
+        textoCampo(meta.lblCosto, `Precio Costo ${slot.nombreCorto} (S/)`);
+        textoCampo(meta.lblPrecio, `Precio Venta ${slot.nombreCorto} (S/)`);
+        textoCampo(meta.lblStock, i === 1 ? `Stock (${regla.unidadBase})` : `Stock ${slot.nombreCorto}`);
+
+        const stockInput = document.getElementById(meta.stock);
+        const grupoStock = stockInput ? stockInput.closest('.form-group') : null;
+        if (grupoStock) grupoStock.style.display = i === 1 ? '' : 'none';
+
+        if (aplicarPrecios) {
+            const inputPrecio = document.getElementById(meta.precio);
+            if (inputPrecio) inputPrecio.value = slot.precio;
+        }
+    }
+}
+
+function mostrarBloquesPresentacionEstandar() {
+    for (let i = 1; i <= 4; i++) {
+        const bloque = document.getElementById('bloque-pres-' + i);
+        if (bloque) bloque.style.display = '';
+        const stockInput = document.getElementById(CAMPOS_FORM_PRES[i].stock);
+        const grupoStock = stockInput ? stockInput.closest('.form-group') : null;
+        if (grupoStock) grupoStock.style.display = '';
+    }
+}
+
+function actualizarNombresPresentaciones(aplicarPrecios) {
     const pCategoria = document.getElementById('p-categoria');
     const pNombre = document.getElementById('p-nombre');
 
     const catVal = pCategoria ? pCategoria.value.trim().toUpperCase() : '';
     const nomVal = pNombre ? pNombre.value.trim().toUpperCase() : '';
+    const regla = reglaPresentacionProducto(catVal);
+    const nota = document.getElementById('nota-stock-categoria');
+    const bloqueConv = document.getElementById('bloque-conversiones');
+
+    if (regla) {
+        aplicarFormularioCategoriaEspecial(regla, aplicarPrecios === true);
+        if (nota) {
+            const descuentos = regla.slots
+                .filter(s => s.factor > 1)
+                .map(s => `${s.label} descuenta ${s.factor}`)
+                .join('. ');
+            nota.style.display = 'block';
+            nota.textContent = `El stock se controla en ${regla.unidadBase}. ${descuentos}.`;
+        }
+        if (bloqueConv) bloqueConv.style.display = 'none';
+    } else {
+        if (nota) nota.style.display = 'none';
+        if (bloqueConv) bloqueConv.style.display = '';
+        mostrarBloquesPresentacionEstandar();
 
     const esCategoriaSaco = (catVal.includes('ARROZ') || catVal.includes('AZUCAR') || catVal.includes('AZÚCAR') ||
                              catVal.includes('MENESTRAS') ||
@@ -367,6 +561,7 @@ function actualizarNombresPresentaciones() {
         if (document.getElementById('lbl-costo-4')) document.getElementById('lbl-costo-4').textContent = 'Precio Costo Caja (S/)';
         if (document.getElementById('lbl-precio-4')) document.getElementById('lbl-precio-4').textContent = 'Precio Venta Caja (S/)';
         if (document.getElementById('lbl-stock-4')) document.getElementById('lbl-stock-4').textContent = 'Stock Inicial Caja';
+    }
     }
     // Control de visibilidad de costos según el rol
     const rolUsuario = obtenerRol();
@@ -532,6 +727,17 @@ function esProductoAGranel(prod) {
 }
 
 function etiquetasPresentaciones(prod) {
+    const regla = reglaPresentacionProducto(prod);
+    if (regla) {
+        const porCampo = {};
+        regla.slots.forEach(s => { porCampo[s.campo] = s.label; });
+        return {
+            unid: porCampo.Unid || 'Unid',
+            doc: porCampo.Doc || '',
+            paq: porCampo.Paq || '',
+            caja: porCampo.Caja || ''
+        };
+    }
     const catVal = String((prod && prod.categoria) || '').trim().toUpperCase();
     const nomVal = String((prod && prod.nombre) || '').trim().toUpperCase();
     const esFideo = catVal.includes('FIDEO') || nomVal.includes('FIDEO');
@@ -655,6 +861,7 @@ function guardarProductoLocal(e) {
         kg_paq: leerCampoNumero('p-kg-paq'),
         kg_caja: leerCampoNumero('p-kg-caja')
     };
+    normalizarPresentacionesCategoria(productoData);
 
     const fechaActual = new Date().toLocaleString('es-PE');
     if (editId) {
@@ -755,11 +962,8 @@ function renderizarCompras(filtro = '') {
 
     productosPaginaCompras.forEach(prod => {
             const pres = extraerPresentacionesProducto(prod);
-            const labels = etiquetasPresentaciones(prod);
-            let optsCompra = `<option value="Unidad|${pres.precioUnid}">${labels.unid} (S/ ${pres.precioUnid})</option>`;
-            if (pres.precioDoc) optsCompra += `<option value="Docena/10KG|${pres.precioDoc}">${labels.doc} (S/ ${pres.precioDoc})</option>`;
-            if (pres.precioPaq) optsCompra += `<option value="Paquete/Saco|${pres.precioPaq}">${labels.paq} (S/ ${pres.precioPaq})</option>`;
-            if (pres.precioCaja) optsCompra += `<option value="Caja/Saco|${pres.precioCaja}">${labels.caja} (S/ ${pres.precioCaja})</option>`;
+            const comerciales = listaPresentacionesComerciales(prod);
+            let optsCompra = comerciales.map(p => `<option value="${p.label}|${p.precio}">${p.label} (S/ ${Number(p.precio).toFixed(2)})</option>`).join('');
 
             catalogoCompras.innerHTML += `
                 <div class="prod-card">
@@ -1131,11 +1335,26 @@ function agregarProductoPorCodigo(prod, codigo) {
         stockDisponible = pres.stockCaja || 0;
     }
 
+    const reglaCodigo = reglaPresentacionProducto(prod);
+    if (reglaCodigo) {
+        tipoPres = 'unid';
+        const slotUnidad = slotPorTipo(prod, 'unid');
+        precioPres = pres.precioUnid > 0 ? pres.precioUnid : (slotUnidad ? slotUnidad.precio : 0);
+        stockDisponible = pres.stockUnid || 0;
+    }
+
     const itemKey = `${prod.id}-${tipoPres}`;
     const item = carrito.find(i => i.key === itemKey);
     const cantidadEnCarrito = item ? item.cantidad : 0;
+    const factorCodigo = reglaCodigo ? factorDePresentacion(prod, tipoPres) : 1;
+    const reservadasCodigo = unidadesReservadasCarrito(prod.id, null);
+    const topeCodigo = reglaCodigo ? (pres.stockUnid || 0) : stockDisponible;
 
-    if (cantidadEnCarrito + 1 > stockDisponible) {
+    if (reservadasCodigo + factorCodigo > topeCodigo && reglaCodigo) {
+        alert(`❌ Stock insuficiente. Solo quedan ${Math.max(0, (pres.stockUnid || 0) - reservadasCodigo)} ${reglaCodigo.unidadBase}.`);
+        return;
+    }
+    if (!reglaCodigo && cantidadEnCarrito + 1 > stockDisponible) {
         alert(`❌ Stock insuficiente. Solo quedan ${stockDisponible} disponible(s) de ${labels.unid}.`);
         return;
     }
@@ -1150,7 +1369,9 @@ function agregarProductoPorCodigo(prod, codigo) {
             nombre: prod.nombre,
             precio: precioPres,
             cantidad: 1,
-            stockMax: stockDisponible
+            stockMax: reglaCodigo ? Math.floor(Math.max(0, (pres.stockUnid || 0) - reservadasCodigo) / factorCodigo) : stockDisponible,
+            factorUnidades: reglaCodigo ? factorCodigo : 1,
+            etiquetaPres: reglaCodigo ? etiquetaDePresentacion(prod, tipoPres) : ''
         });
     }
     actualizarCarritoUI();
@@ -1213,15 +1434,35 @@ function agregarAlCarrito(id) {
     const itemKey = `${id}-${tipoPres}`;
     const item = carrito.find(i => i.key === itemKey);
     const cantidadEnCarrito = item ? item.cantidad : 0;
+    const reglaVenta = reglaPresentacionProducto(prod);
+    const factorVenta = reglaVenta ? factorDePresentacion(prod, tipoPres) : 1;
+    const etiquetaVenta = reglaVenta ? etiquetaDePresentacion(prod, tipoPres) : '';
 
-    if (cantidadEnCarrito + 1 > prod.stockUnid) {
+    if (reglaVenta) {
+        const reservadas = unidadesReservadasCarrito(id, null);
+        const sueltos = parseFloat(prod.stockUnid) || 0;
+        if (reservadas + factorVenta > sueltos) {
+            const quedan = Math.max(0, sueltos - reservadas);
+            alert(`❌ Stock insuficiente. Quedan ${quedan} ${reglaVenta.unidadBase} y esta presentación descuenta ${factorVenta}.`);
+            return;
+        }
+    } else if (cantidadEnCarrito + 1 > prod.stockUnid) {
         alert(`❌ Stock insuficiente. Solo quedan ${prod.stockUnid} disponible(s).`);
         return;
     }
 
     if (item) {
         item.cantidad += 1;
+        if (reglaVenta) {
+            item.factorUnidades = factorVenta;
+            item.etiquetaPres = etiquetaVenta;
+            const otras = unidadesReservadasCarrito(id, item.key);
+            const sueltos = parseFloat(prod.stockUnid) || 0;
+            item.stockMax = Math.floor(Math.max(0, sueltos - otras) / factorVenta);
+        }
     } else {
+        const otras = reglaVenta ? unidadesReservadasCarrito(id, null) : 0;
+        const sueltos = parseFloat(prod.stockUnid) || 0;
         carrito.push({
             key: itemKey,
             id: prod.id,
@@ -1229,7 +1470,9 @@ function agregarAlCarrito(id) {
             nombre: prod.nombre,
             precio: precioPres,
             cantidad: 1,
-            stockMax: prod.stockUnid
+            stockMax: reglaVenta ? Math.floor(Math.max(0, sueltos - otras) / factorVenta) : prod.stockUnid,
+            factorUnidades: factorVenta,
+            etiquetaPres: etiquetaVenta
         });
     }
     actualizarCarritoUI();
@@ -1266,10 +1509,21 @@ function cambiarCantidad(key, delta) {
 
             if (item.montoTotal <= 0) carrito = carrito.filter(i => i.key !== key);
         } else {
-            // Para presentaciones normales
+            const prodItem = productos.find(p => String(p.id) === String(item.id));
+            const reglaItem = prodItem && reglaPresentacionProducto(prodItem);
+            if (reglaItem) {
+                const factor = item.factorUnidades || factorDePresentacion(prodItem, item.tipoPres);
+                item.factorUnidades = factor;
+                const otras = unidadesReservadasCarrito(item.id, item.key);
+                const sueltos = parseFloat(prodItem.stockUnid) || 0;
+                item.stockMax = Math.floor(Math.max(0, sueltos - otras) / factor);
+            }
             const nuevaCant = Math.round((item.cantidad + delta) * 100) / 100;
             if (nuevaCant > item.stockMax) {
-                alert(`❌ Stock insuficiente. El límite es ${item.stockMax}.`);
+                const detalle = reglaItem
+                    ? ` Quedan ${Math.max(0, (parseFloat(prodItem.stockUnid) || 0) - unidadesReservadasCarrito(item.id, item.key))} ${reglaItem.unidadBase}.`
+                    : '';
+                alert(`❌ Stock insuficiente. El límite es ${item.stockMax}.${detalle}`);
                 return;
             }
             item.cantidad = nuevaCant;
@@ -1300,7 +1554,15 @@ function modificarCantidadDirecta(key, valor) {
                 item.cantidad = 0;
             }
         } else {
-            // Para presentaciones normales
+            const prodItem = productos.find(p => String(p.id) === String(item.id));
+            const reglaItem = prodItem && reglaPresentacionProducto(prodItem);
+            if (reglaItem) {
+                const factor = item.factorUnidades || factorDePresentacion(prodItem, item.tipoPres);
+                item.factorUnidades = factor;
+                const otras = unidadesReservadasCarrito(item.id, item.key);
+                const sueltos = parseFloat(prodItem.stockUnid) || 0;
+                item.stockMax = Math.floor(Math.max(0, sueltos - otras) / factor);
+            }
             if (!isNaN(num) && num > 0) {
                 if (num > item.stockMax) {
                     alert(`❌ Stock insuficiente. El máximo es ${item.stockMax}.`);
@@ -1349,7 +1611,11 @@ function actualizarCarritoUI() {
             displayInfo = `💰 S/ ${item.montoTotal.toFixed(2)} (${item.cantidad.toFixed(2)} KG)`;
         } else {
             subtotal = item.precio * item.cantidad;
-            displayInfo = `S/ ${item.precio.toFixed(2)} x ${item.cantidad}`;
+            const unidadesTxt = item.factorUnidades > 1
+                ? ` · ${item.cantidad * item.factorUnidades} unid`
+                : '';
+            const presTxt = item.etiquetaPres ? `${item.etiquetaPres} · ` : '';
+            displayInfo = `${presTxt}S/ ${item.precio.toFixed(2)} x ${item.cantidad}${unidadesTxt}`;
         }
 
         total += subtotal;
@@ -1472,12 +1738,31 @@ function confirmarCobro() {
 
         const prod = productos.find(p => p.id === item.id);
         if (prod) {
+            const reglaVenta = reglaPresentacionProducto(prod);
             const esCategoriaSaco = esPresentacionSaco(prod);
             const esAGranel = esProductoAGranel(prod);
             const pres = extraerPresentacionesProducto(prod);
 
-            // Para productos a granel: descuento directo sobre KG/Unidades
-            if (esAGranel) {
+            if (reglaVenta) {
+                const factor = item.factorUnidades || factorDePresentacion(prod, item.tipoPres);
+                const cantidadADescontar = (parseFloat(item.cantidad) || 0) * factor;
+                const stockDisponible = parseFloat(prod.stockUnid) || 0;
+                const etiqueta = item.etiquetaPres || etiquetaDePresentacion(prod, item.tipoPres);
+
+                if (cantidadADescontar > stockDisponible) {
+                    alert(`❌ Stock insuficiente. Solo quedan ${stockDisponible} ${reglaVenta.unidadBase} de ${prod.nombre}.`);
+                    return;
+                }
+
+                prod.stockUnid = Math.max(0, stockDisponible - cantidadADescontar);
+                kardex.unshift({
+                    fecha: fechaActual,
+                    producto: item.nombre,
+                    tipo: 'Venta',
+                    cantidad: `-${cantidadADescontar} ${reglaVenta.unidadBase} (${item.cantidad} ${etiqueta})`,
+                    usuario: `${rol} (${metodoPagoSeleccionado})`
+                });
+            } else if (esAGranel) {
                 // Descuento directo al stock de KG/Unidades
                 const cantidadADescontar = item.cantidad;
                 const stockDisponible = pres.stockUnid || 0;
@@ -2114,7 +2399,9 @@ function editarProducto(id) {
 
     const inputCategoria = document.getElementById('p-categoria');
     if (inputCategoria) {
-        inputCategoria.value = prod.categoria || '';
+        let catForm = prod.categoria || '';
+        if (String(catForm).trim().toUpperCase() === 'GUSTAS') catForm = 'GUSTA';
+        inputCategoria.value = catForm;
         actualizarNombresPresentaciones();
     }
 
@@ -2136,6 +2423,15 @@ function editarProducto(id) {
     setCampoForm('p-costo-caja', pres.costoCaja, 0);
     setCampoForm('p-precio-caja', pres.precioCaja, 0);
     setCampoForm('p-stock-caja', pres.stockCaja, 0);
+
+    const reglaEdicion = reglaPresentacionProducto(prod);
+    if (reglaEdicion) {
+        reglaEdicion.slots.forEach((slot) => {
+            const meta = CAMPOS_FORM_PRES[slot.id];
+            const inputPrecio = meta && document.getElementById(meta.precio);
+            if (inputPrecio && !(parseFloat(inputPrecio.value) > 0)) inputPrecio.value = slot.precio;
+        });
+    }
 
     setCampoForm('p-unidades-paq', prod.unidadesPaq || 0);
     setCampoForm('p-unidades-caja', prod.unidadesCaja || 0);
@@ -2324,15 +2620,18 @@ function renderizarProductosPorLista(listaProductos) {
     let filasHTML = '';
 
     productosPaginaInventario.forEach(prod => {
-        const catUp = (prod.categoria || '').toUpperCase();
-        const esFideo = (catUp === 'FIDEO');
         const pres = extraerPresentacionesProducto(prod);
         const labels = etiquetasPresentaciones(prod);
+        const reglaCat = reglaPresentacionProducto(prod);
+        const comerciales = listaPresentacionesComerciales(prod);
 
-        const precioVal = prod.precioUnid ? parseFloat(prod.precioUnid).toFixed(2) : '0.00';
         const costoVal = pres.costoUnid.toFixed(2);
 
-        let preciosHTML = `<span class="price-badge" style="color:#38bdf8;">${labels.unid}: S/ ${precioVal}</span>`;
+        const coloresPrecio = ['#38bdf8', '#fbbf24', '#c084fc', '#f87171'];
+        let preciosHTML = comerciales.map((p, idx) => {
+            const sep = idx ? '<br>' : '';
+            return `${sep}<span class="price-badge" style="color:${coloresPrecio[idx] || '#38bdf8'};">${p.label}: S/ ${Number(p.precio).toFixed(2)}</span>`;
+        }).join('');
 
         let costosHTML = '';
         if (rolActual !== 'vendedor' && rolActual !== 'inventario_consulta') {
@@ -2343,20 +2642,18 @@ function renderizarProductosPorLista(listaProductos) {
         } else if (rolActual === 'vendedor') {
             costosHTML = `<span style="color: #64748b; font-style: italic;">Oculto</span>`;
         }
-        if (pres.precioDoc) {
-            preciosHTML += `<br><span class="price-badge" style="color:#fbbf24;">${labels.doc} - Venta: S/ ${pres.precioDoc.toFixed(2)}</span>`;
-        }
-        if (pres.precioPaq) {
-            preciosHTML += `<br><span class="price-badge" style="color:#c084fc;">${labels.paq} - Venta: S/ ${pres.precioPaq.toFixed(2)}</span>`;
-        }
-        if (pres.precioCaja) {
-            preciosHTML += `<br><span class="price-badge" style="color:#f87171;">${labels.caja} - Venta: S/ ${pres.precioCaja.toFixed(2)}</span>`;
-        }
 
-        let stockHTML = `<span class="price-badge" style="color:#4ade80;">${labels.unid}: ${pres.stockUnid || 0}</span>`;
-        if (pres.stockDoc > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${labels.doc}: ${pres.stockDoc}</span>`;
-        if (pres.stockPaq > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${labels.paq}: ${pres.stockPaq}</span>`;
-        if (pres.stockCaja > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${labels.caja}: ${pres.stockCaja}</span>`;
+        let stockHTML = '';
+        if (reglaCat) {
+            stockHTML = `<span class="price-badge" style="color:#4ade80;">${reglaCat.unidadBase}: ${pres.stockUnid || 0}</span>`;
+            const eqs = reglaCat.slots.filter(s => s.factor > 1).map(s => `${s.nombreCorto}=${s.factor}`).join(' · ');
+            if (eqs) stockHTML += `<br><span class="price-badge" style="color:#94a3b8; font-size:10px;">Descuenta: ${eqs}</span>`;
+        } else {
+            stockHTML = `<span class="price-badge" style="color:#4ade80;">${labels.unid}: ${pres.stockUnid || 0}</span>`;
+            if (pres.stockDoc > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${labels.doc}: ${pres.stockDoc}</span>`;
+            if (pres.stockPaq > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${labels.paq}: ${pres.stockPaq}</span>`;
+            if (pres.stockCaja > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${labels.caja}: ${pres.stockCaja}</span>`;
+        }
 
         // Mostrar conversiones si existen
         const convPaq = prod.unidadesPaq || prod.unidades_paq || 0;
@@ -2436,15 +2733,11 @@ function renderizarProductosPorLista(listaProductos) {
     const productosPaginaCatalogo = listaProductos.slice(inicioCat, finCat);
 
     productosPaginaCatalogo.forEach(prod => {
-        const catUp = (prod.categoria || '').toUpperCase();
         const pres = extraerPresentacionesProducto(prod);
-        const labels = etiquetasPresentaciones(prod);
+        const comerciales = listaPresentacionesComerciales(prod);
         const esAGranel = esProductoAGranel(prod);
 
-        let optsHTML = `<option value="unid|${pres.precioUnid}">${labels.unid} (S/ ${pres.precioUnid})</option>`;
-        if (pres.precioDoc) optsHTML += `<option value="doc|${pres.precioDoc}">${labels.doc} (S/ ${pres.precioDoc})</option>`;
-        if (pres.precioPaq) optsHTML += `<option value="paq|${pres.precioPaq}">${labels.paq} (S/ ${pres.precioPaq})</option>`;
-        if (pres.precioCaja) optsHTML += `<option value="caja|${pres.precioCaja}">${labels.caja} (S/ ${pres.precioCaja})</option>`;
+        let optsHTML = comerciales.map(p => `<option value="${p.tipo}|${p.precio}">${p.label} (S/ ${Number(p.precio).toFixed(2)})</option>`).join('');
 
         // Agregar opción de venta por monto para productos a granel
         if (esAGranel && pres.precioUnid > 0) {
@@ -2525,7 +2818,25 @@ async function inicializarSistema() {
 }
 
 window.onload = inicializarSistema;
-
+document.addEventListener('keydown', function(event) {
+    // Detectar la combinacion de teclas Ctrl + 4
+    if (event.ctrlKey && event.key === '4') {
+        event.preventDefault(); // Evitar comportamientos predeterminados del navegador
+        
+        // Buscar el boton de guardar producto en el formulario activo
+        const btnGuardar = document.getElementById('btn-guardar-producto') || 
+                           document.querySelector('button[onclick*="guardar"]');
+        
+        if (btnGuardar) {
+            btnGuardar.click();
+            console.log('⚡ Producto guardado mediante el atajo Ctrl + 4');
+        } else if (typeof guardarProducto === 'function') {
+            guardarProducto();
+        } else {
+            console.warn('⚠️ No se encontro la funcion o boton de guardado para Ctrl + 4');
+        }
+    }
+});
 function mantenerFocoScanner() {
     const scannerInput = document.getElementById('scanner-input');
     if (scannerInput && document.activeElement !== scannerInput && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
@@ -2694,17 +3005,23 @@ function descargarInventarioWord() {
 
     productos.forEach(prod => {
         const pres = extraerPresentacionesProducto(prod);
-        const labels = etiquetasPresentaciones(prod);
+        const comerciales = listaPresentacionesComerciales(prod);
+        const reglaCat = reglaPresentacionProducto(prod);
 
-        let preciosHTML = `${labels.unid}: S/ ${pres.precioUnid.toFixed(2)}`;
-        if (pres.precioDoc) preciosHTML += ` | ${labels.doc}: S/ ${pres.precioDoc.toFixed(2)}`;
-        if (pres.precioPaq) preciosHTML += ` | ${labels.paq}: S/ ${pres.precioPaq.toFixed(2)}`;
-        if (pres.precioCaja) preciosHTML += ` | ${labels.caja}: S/ ${pres.precioCaja.toFixed(2)}`;
+        let preciosHTML = comerciales.map(p => `${p.label}: S/ ${Number(p.precio).toFixed(2)}`).join(' | ');
 
-        let stockHTML = `${labels.unid}: ${pres.stockUnid || 0}`;
-        if (pres.stockDoc > 0) stockHTML += ` | ${labels.doc}: ${pres.stockDoc}`;
-        if (pres.stockPaq > 0) stockHTML += ` | ${labels.paq}: ${pres.stockPaq}`;
-        if (pres.stockCaja > 0) stockHTML += ` | ${labels.caja}: ${pres.stockCaja}`;
+        let stockHTML = '';
+        if (reglaCat) {
+            stockHTML = `${reglaCat.unidadBase}: ${pres.stockUnid || 0}`;
+            const eqs = reglaCat.slots.filter(s => s.factor > 1).map(s => `${s.nombreCorto}=${s.factor}`).join(' · ');
+            if (eqs) stockHTML += ` (descuenta ${eqs})`;
+        } else {
+            const labels = etiquetasPresentaciones(prod);
+            stockHTML = `${labels.unid}: ${pres.stockUnid || 0}`;
+            if (pres.stockDoc > 0) stockHTML += ` | ${labels.doc}: ${pres.stockDoc}`;
+            if (pres.stockPaq > 0) stockHTML += ` | ${labels.paq}: ${pres.stockPaq}`;
+            if (pres.stockCaja > 0) stockHTML += ` | ${labels.caja}: ${pres.stockCaja}`;
+        }
 
         htmlContent += `
             <tr>

@@ -659,7 +659,7 @@ body.rol-vendedor .campo-costo-admin {
                 <div class="form-row">
                     <div class="form-group">
                         <label>Categoría</label>
-                        <select id="p-categoria" class="form-control" onchange="actualizarNombresPresentaciones()">
+                        <select id="p-categoria" class="form-control" onchange="actualizarNombresPresentaciones(true)">
                             <option value="Abarrotes">Abarrotes</option>
                             <option value="ARROZ">ARROZ</option>
                             <option value="AZUCAR">AZUCAR</option>
@@ -670,6 +670,12 @@ body.rol-vendedor .campo-costo-admin {
                             <option value="VINAGRE">VINAGRE</option>
                             <option value="ATUN">ATUN</option>
                             <option value="PH">PH</option>
+                            <option value="PHX4">PHX4</option>
+                            <option value="PILA">PILA</option>
+                            <option value="OREGANO">OREGANO</option>
+                            <option value="GUSTA">GUSTA</option>
+                            <option value="DESODORANTE">DESODORANTE</option>
+                            <option value="CAFE">CAFE</option>
                             <option value="AJINOMOTO">AJINOMOTO</option>
                             <option value="SHAMPOO">SHAMPOO</option>
                             <option value="ENJUAGUE">ENJUAGUE</option>
@@ -689,7 +695,9 @@ body.rol-vendedor .campo-costo-admin {
                     </div>
                 </div>
 
-                <details open>
+                <p id="nota-stock-categoria" style="display:none; color:#94a3b8; font-size:12px; margin:4px 0 10px;"></p>
+
+                <details id="bloque-pres-1" open>
     <summary id="sum-pres-1">1. VENTAS POR UNIDAD</summary>
     <div class="form-row">
         <div class="form-group campo-costo-admin">
@@ -707,7 +715,7 @@ body.rol-vendedor .campo-costo-admin {
     </div>
 </details>
 
-<details>
+<details id="bloque-pres-2">
     <summary id="sum-pres-2">2. VENTAS POR DOCENA</summary>
     <div class="form-row">
         <div class="form-group campo-costo-admin">
@@ -725,7 +733,7 @@ body.rol-vendedor .campo-costo-admin {
     </div>
 </details>
 
-<details>
+<details id="bloque-pres-3">
     <summary id="sum-pres-3">3. VENTAS POR PQTE</summary>
     <div class="form-row">
         <div class="form-group campo-costo-admin">
@@ -743,7 +751,7 @@ body.rol-vendedor .campo-costo-admin {
     </div>
 </details>
 
-<details>
+<details id="bloque-pres-4">
     <summary id="sum-pres-4">4. VENTAS POR CAJA</summary>
     <div class="form-row">
         <div class="form-group campo-costo-admin">
@@ -761,7 +769,7 @@ body.rol-vendedor .campo-costo-admin {
     </div>
 </details>
 
-                <div class="form-group">
+                <div class="form-group" id="bloque-conversiones">
                     <label>Conversiones de presentación (opcional)</label>
                     <div class="form-row">
                         <div class="form-group">
