@@ -248,17 +248,32 @@ if (pNombreInit) {
 }
 
 aplicarMenuPorRol();
+
+// Función auxiliar para ocultar todas las vistas
+function ocultarTodasLasVistas() {
+    const todasLasPestanas = [
+        'tab-ventas', 'tab-compras', 'tab-inventario', 'tab-almacen',
+        'tab-caja', 'tab-kardex', 'tab-reportes', 'tab-registro-ventas'
+    ];
+
+    todasLasPestanas.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.classList.remove('active');
+            el.style.display = 'none';
+        }
+    });
+}
+
 // Función global para cambiar de pestaña en el menú superior
 function cambiarTab(tab) {
     if (!puedeVerTab(tab)) {
         tab = obtenerRol() === 'inventario_consulta' ? 'inventario' : 'ventas';
     }
 
-    // Ocultar explícitamente todas las pestañas con display: none
-    document.querySelectorAll('.tab-content').forEach(el => {
-        el.classList.remove('active');
-        el.style.display = 'none';
-    });
+    // Ocultar explícitamente todas las pestañas primero
+    ocultarTodasLasVistas();
+
     document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
 
     if (tab === 'ventas') {
@@ -2854,6 +2869,12 @@ let ultimoTicketId = null;
 async function inicializarSistema() {
     // Cargar datos desde localStorage primero (async porque puede consultar Supabase)
     await cargarDatosDesdeLocalStorage();
+
+    // Ocultar todas las pestañas explícitamente al inicio
+    document.querySelectorAll('.tab-content').forEach(el => {
+        el.classList.remove('active');
+        el.style.display = 'none';
+    });
 
     aplicarMenuPorRol();
     if (typeof aplicarRestriccionesPorRol === 'function') aplicarRestriccionesPorRol();

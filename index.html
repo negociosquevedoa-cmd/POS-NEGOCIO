@@ -121,14 +121,14 @@ body.rol-vendedor .campo-costo-admin {
         .nav-btn.salir:hover { background-color: #dc2626; }
 
         /* Contenedores de Vistas */
-        .tab-content { display: none; }
-        .tab-content.active { display: grid; }
+        .tab-content { display: none !important; }
+        .tab-content.active { display: block !important; }
 
         /* Estilos de Tarjetas y Grillas */
-        .ventas-grid { grid-template-columns: 2.5fr 1fr; gap: 20px; }
-        .compras-grid { grid-template-columns: 2fr 1fr; gap: 20px; }
-        .inventario-grid { grid-template-columns: 360px 1fr; gap: 20px; }
-        .kardex-grid { grid-template-columns: 1fr; gap: 20px; }
+        .ventas-grid { display: grid; grid-template-columns: 2.5fr 1fr; gap: 20px; }
+        .compras-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+        .inventario-grid { display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
+        .kardex-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
         
         .reportes-cards {
             display: grid;
