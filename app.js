@@ -254,40 +254,76 @@ function cambiarTab(tab) {
         tab = obtenerRol() === 'inventario_consulta' ? 'inventario' : 'ventas';
     }
 
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    // Ocultar explícitamente todas las pestañas con display: none
+    document.querySelectorAll('.tab-content').forEach(el => {
+        el.classList.remove('active');
+        el.style.display = 'none';
+    });
     document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
 
     if (tab === 'ventas') {
-        document.getElementById('tab-ventas').classList.add('active');
+        const tabVentas = document.getElementById('tab-ventas');
+        if (tabVentas) {
+            tabVentas.classList.add('active');
+            tabVentas.style.display = 'block';
+        }
         document.getElementById('btn-tab-ventas').classList.add('active');
     } else if (tab === 'compras') {
-        document.getElementById('tab-compras').classList.add('active');
+        const tabCompras = document.getElementById('tab-compras');
+        if (tabCompras) {
+            tabCompras.classList.add('active');
+            tabCompras.style.display = 'block';
+        }
         document.getElementById('btn-tab-compras').classList.add('active');
         renderizarCompras();
     } else if (tab === 'inventario') {
-        document.getElementById('tab-inventario').classList.add('active');
+        const tabInventario = document.getElementById('tab-inventario');
+        if (tabInventario) {
+            tabInventario.classList.add('active');
+            tabInventario.style.display = 'block';
+        }
         document.getElementById('btn-tab-inventario').classList.add('active');
         actualizarNombresPresentaciones();
         // NO llamar a renderizarProductos aquí para evitar recursividad
         // Los productos ya se renderizan en inicializarSistema
     } else if (tab === 'almacen') {
-        document.getElementById('tab-almacen').classList.add('active');
+        const tabAlmacen = document.getElementById('tab-almacen');
+        if (tabAlmacen) {
+            tabAlmacen.classList.add('active');
+            tabAlmacen.style.display = 'block';
+        }
         document.getElementById('btn-tab-almacen').classList.add('active');
         renderizarAlmacen();
     } else if (tab === 'caja') {
-        document.getElementById('tab-caja').classList.add('active');
+        const tabCaja = document.getElementById('tab-caja');
+        if (tabCaja) {
+            tabCaja.classList.add('active');
+            tabCaja.style.display = 'block';
+        }
         document.getElementById('btn-tab-caja').classList.add('active');
         renderizarVistaCaja();
     } else if (tab === 'kardex') {
-        document.getElementById('tab-kardex').classList.add('active');
+        const tabKardex = document.getElementById('tab-kardex');
+        if (tabKardex) {
+            tabKardex.classList.add('active');
+            tabKardex.style.display = 'block';
+        }
         document.getElementById('btn-tab-kardex').classList.add('active');
         renderizarKardex();
     } else if (tab === 'reportes') {
-        document.getElementById('tab-reportes').classList.add('active');
+        const tabReportes = document.getElementById('tab-reportes');
+        if (tabReportes) {
+            tabReportes.classList.add('active');
+            tabReportes.style.display = 'block';
+        }
         document.getElementById('btn-tab-reportes').classList.add('active');
         renderizarReportes();
     } else if (tab === 'registro-ventas') {
-        document.getElementById('tab-registro-ventas').classList.add('active');
+        const tabRegistroVentas = document.getElementById('tab-registro-ventas');
+        if (tabRegistroVentas) {
+            tabRegistroVentas.classList.add('active');
+            tabRegistroVentas.style.display = 'block';
+        }
         document.getElementById('btn-registro-ventas').classList.add('active');
         renderizarRegistroVentas();
     }
