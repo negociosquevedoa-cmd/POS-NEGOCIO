@@ -366,7 +366,14 @@ function slotPorTipo(prod, tipoPres) {
 
 function factorDePresentacion(prod, tipoPres) {
     const slot = slotPorTipo(prod, tipoPres);
-    return slot ? slot.factor : 1;
+    if (!slot) return 1;
+
+    // Para PHX4, usar el factor dinámico del campo rollosPlancha si es la plancha
+    if (prod.categoria === 'PHX4' && slot.nombreCorto === 'Plancha') {
+        return prod.rollosPlancha || 24; // Usar el valor guardado o 24 por defecto
+    }
+
+    return slot.factor;
 }
 
 function etiquetaDePresentacion(prod, tipoPres) {
@@ -383,12 +390,19 @@ function listaPresentacionesComerciales(prod) {
     if (regla) {
         return regla.slots.map(slot => {
             const guardado = pres['precio' + slot.campo];
+            let factor = slot.factor;
+
+            // Para PHX4, usar el factor dinámico del campo rollosPlancha si es la plancha
+            if (prod.categoria === 'PHX4' && slot.nombreCorto === 'Plancha') {
+                factor = prod.rollosPlancha || 24; // Usar el valor guardado o 24 por defecto
+            }
+
             return {
                 tipo: slot.tipo,
                 label: slot.label,
                 nombreCorto: slot.nombreCorto,
                 precio: guardado > 0 ? guardado : slot.precio,
-                factor: slot.factor,
+                factor: factor,
                 campo: slot.campo
             };
         });
@@ -434,6 +448,14 @@ function textoCampo(id, texto) {
 }
 
 function aplicarFormularioCategoriaEspecial(regla, aplicarPrecios) {
+    // Mostrar/ocultar bloque específico para PHX4
+    const bloquePhx4 = document.getElementById('bloque-phx4');
+    const pCategoria = document.getElementById('p-categoria');
+    const catVal = pCategoria ? pCategoria.value.trim().toUpperCase() : '';
+    if (bloquePhx4) {
+        bloquePhx4.style.display = (catVal === 'PHX4') ? '' : 'none';
+    }
+
     for (let i = 1; i <= 4; i++) {
         const meta = CAMPOS_FORM_PRES[i];
         const slot = regla.slots.find(s => s.id === i);
@@ -854,6 +876,7 @@ function guardarProductoLocal(e) {
         unidadesCaja: leerCampoNumero('p-unidades-caja'),
         kgPaq: leerCampoNumero('p-kg-paq'),
         kgCaja: leerCampoNumero('p-kg-caja'),
+        rollosPlancha: leerCampoNumero('p-rollos-plancha') || 24, // Campo específico para PHX4
         // Nombres alternativos para compatibilidad
         unidades_paq: leerCampoNumero('p-unidades-paq'),
         unidades_caja: leerCampoNumero('p-unidades-caja'),
@@ -2443,6 +2466,9 @@ function editarProducto(id) {
     if (!prod.kgPaq && prod.kg_paq) setCampoForm('p-kg-paq', prod.kg_paq);
     if (!prod.kgCaja && prod.kg_caja) setCampoForm('p-kg-caja', prod.kg_caja);
 
+    // Cargar campo específico para PHX4
+    if (prod.rollosPlancha) setCampoForm('p-rollos-plancha', prod.rollosPlancha);
+
     document.querySelectorAll('#form-producto details').forEach((bloque) => {
         bloque.open = true;
     });
@@ -2659,13 +2685,15 @@ function renderizarProductosPorLista(listaProductos) {
         const convCaja = prod.unidadesCaja || prod.unidades_caja || 0;
         const convKgPaq = prod.kgPaq || prod.kg_paq || 0;
         const convKgCaja = prod.kgCaja || prod.kg_caja || 0;
+        const rollosPlancha = prod.rollosPlancha || 0;
 
-        if (convPaq > 0 || convCaja > 0 || convKgPaq > 0 || convKgCaja > 0) {
+        if (convPaq > 0 || convCaja > 0 || convKgPaq > 0 || convKgCaja > 0 || rollosPlancha > 0) {
             stockHTML += `<br><span class="price-badge" style="color:#fbbf24; font-size:10px;">Conv: `;
             if (convPaq > 0) stockHTML += `${convPaq}U/Pq `;
             if (convCaja > 0) stockHTML += `${convCaja}U/Cja `;
             if (convKgPaq > 0) stockHTML += `${convKgPaq}KG/Pq `;
-            if (convKgCaja > 0) stockHTML += `${convKgCaja}KG/Cja`;
+            if (convKgCaja > 0) stockHTML += `${convKgCaja}KG/Cja `;
+            if (rollosPlancha > 0) stockHTML += `Plancha=${rollosPlancha}R`;
             stockHTML += `</span>`;
         }
 
