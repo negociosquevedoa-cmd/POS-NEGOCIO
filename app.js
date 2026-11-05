@@ -304,19 +304,16 @@ const REGLAS_PRESENTACION = {
     PH: {
         unidadBase: 'rollos sueltos',
         slots: [
-            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 rollo)', precio: 1, factor: 1, resumen: '▼ 1. UNIDAD (1 rollo)' },
-            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Pareja', label: 'Pareja (2 rollos)', precio: 1.5, factor: 2, resumen: '▼ 2. PAREJA (2 rollos)' },
-            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Bloque', label: 'Bloque (5 rollos)', precio: 6.3, factor: 5, resumen: '▼ 3. BLOQUE (5 rollos)' },
-            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Paquete', label: 'Paquete (10 pares / 20 rollos)', precio: 12.5, factor: 20, resumen: '▼ 4. PAQUETE (20 rollos)' }
+            { id: 1, campo: 'Doc', tipo: 'doc', nombreCorto: 'Pareja', label: 'Pareja (2 rollos)', precio: 1.5, factor: 2, resumen: '▼ 1. PAREJA (2 rollos)' },
+            { id: 2, campo: 'Paq', tipo: 'paq', nombreCorto: 'Bloque', label: 'Bloque (10 rollos)', precio: 6.3, factor: 10, resumen: '▼ 2. BLOQUE (10 rollos)' },
+            { id: 3, campo: 'Caja', tipo: 'caja', nombreCorto: 'Paquete', label: 'Paquete (10 pares / 20 rollos)', precio: 12.5, factor: 20, resumen: '▼ 3. PAQUETE (20 rollos)' }
         ]
     },
     PHX4: {
         unidadBase: 'rollos sueltos',
         slots: [
-            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 rollo)', precio: 1, factor: 1, resumen: '▼ 1. UNIDAD (1 rollo)' },
-            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Pareja', label: 'Pareja (2 rollos)', precio: 1.5, factor: 2, resumen: '▼ 2. PAREJA (2 rollos)' },
-            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Bloque', label: 'Bloque (5 rollos)', precio: 6.3, factor: 5, resumen: '▼ 3. BLOQUE (5 rollos)' },
-            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Paquete', label: 'Paquete (10 pares / 20 rollos)', precio: 12.5, factor: 20, resumen: '▼ 4. PAQUETE (20 rollos)' }
+            { id: 1, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete (4 rollos)', precio: 4.5, factor: 4, resumen: '▼ 1. PAQUETE (4 rollos)' },
+            { id: 2, campo: 'Caja', tipo: 'caja', nombreCorto: 'Plancha', label: 'Plancha (6 paquetes / 24 rollos)', precio: 34, factor: 24, resumen: '▼ 2. PLANCHA (24 rollos)' }
         ]
     },
     PILA: {
@@ -332,7 +329,8 @@ const REGLAS_PRESENTACION = {
         slots: [
             { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 sobre)', precio: 0.4, factor: 1, resumen: '▼ 1. UNIDAD (1 sobre)' },
             { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Promoción 3x1', label: 'Promoción (3 sobres)', precio: 1, factor: 3, resumen: '▼ 2. PROMOCIÓN (3 sobres)' },
-            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete completo (80 sobres)', precio: 21, factor: 80, resumen: '▼ 3. PAQUETE COMPLETO (80 sobres)' }
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Docena', label: 'Docena (12 sobres)', precio: 4, factor: 12, resumen: '▼ 3. DOCENA (12 sobres)' },
+            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Paquete', label: 'Paquete completo (80 sobres)', precio: 21, factor: 80, resumen: '▼ 4. PAQUETE COMPLETO (80 sobres)' }
         ]
     },
     OREGANO: {
@@ -351,7 +349,8 @@ function reglaPresentacionProducto(prodOrCat) {
         : (prodOrCat && prodOrCat.categoria);
     const c = String(cat || '').trim().toUpperCase();
     if (c === 'GUSTA' || c === 'GUSTAS') return REGLAS_PRESENTACION.GUSTA;
-    if (c.startsWith('PH')) return REGLAS_PRESENTACION.PH; // PH y PHX4 usan la misma regla
+    if (c === 'PHX4') return REGLAS_PRESENTACION.PHX4; // PHX4 tiene su propia regla
+    if (c === 'PH') return REGLAS_PRESENTACION.PH; // PH tiene su propia regla
     return REGLAS_PRESENTACION[c] || null;
 }
 
