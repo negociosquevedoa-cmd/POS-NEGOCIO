@@ -3271,8 +3271,40 @@ function eliminarProductoAlmacen(id) {
     }
 }
 
+function obtenerTablasReporteAlmacen() {
+    const contenedorAlmacen = document.getElementById('tab-almacen');
+    const cuerpoTablaAlmacen = contenedorAlmacen?.querySelector('#tabla-almacen');
+    const cuerpoTablaSalidas = contenedorAlmacen?.querySelector('#tabla-salidas-almacen');
+    const tablaAlmacen = cuerpoTablaAlmacen?.closest('table');
+    const tablaSalidas = cuerpoTablaSalidas?.closest('table');
+
+    if (!contenedorAlmacen || !tablaAlmacen || !tablaSalidas ||
+        !contenedorAlmacen.contains(tablaAlmacen) || !contenedorAlmacen.contains(tablaSalidas)) {
+        console.error('No se encontraron las tablas del reporte de almacén dentro de #tab-almacen.');
+        return null;
+    }
+
+    const tablaStockReporte = tablaAlmacen.cloneNode(true);
+    const encabezadoStock = tablaStockReporte.querySelector('thead tr');
+    const indiceAcciones = encabezadoStock
+        ? Array.from(encabezadoStock.cells).findIndex(celda => celda.textContent.trim().toLowerCase() === 'acciones')
+        : -1;
+
+    if (indiceAcciones !== -1) {
+        tablaStockReporte.querySelectorAll('tr').forEach(fila => fila.cells[indiceAcciones]?.remove());
+    }
+
+    return {
+        tablaAlmacen: tablaStockReporte,
+        tablaSalidas: tablaSalidas.cloneNode(true)
+    };
+}
+
 function descargarAlmacenWord() {
-    let htmlContent = `
+    const tablas = obtenerTablasReporteAlmacen();
+    if (!tablas) return;
+
+    const htmlContent = `
         <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
         <head>
             <meta charset="utf-8">
@@ -3292,66 +3324,10 @@ function descargarAlmacenWord() {
             <div class="fecha">Fecha: ${new Date().toLocaleDateString('es-PE')}</div>
 
             <h2>Stock Actual</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Producto</th>
-                        <th>Presentación</th>
-                        <th>Costo (S/)</th>
-                        <th>Actual Costo (S/)</th>
-                        <th>Stock</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
-
-    almacen.forEach(prod => {
-        htmlContent += `
-            <tr>
-                <td>${prod.fecha}</td>
-                <td>${prod.producto}</td>
-                <td>${prod.presentacion}</td>
-                <td>S/ ${prod.costo.toFixed(2)}</td>
-                <td>S/ ${prod.actualCosto.toFixed(2)} (${prod.actualCostoFecha})</td>
-                <td>${prod.stock.toFixed(2)} ${prod.presentacion}</td>
-            </tr>
-        `;
-    });
-
-    htmlContent += `
-                </tbody>
-            </table>
+            ${tablas.tablaAlmacen.outerHTML}
 
             <h2>Historial de Salidas</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Producto</th>
-                        <th>Cantidad Salida</th>
-                        <th>Descripción</th>
-                        <th>Registrado Por</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
-
-    salidasAlmacen.forEach(salida => {
-        htmlContent += `
-            <tr>
-                <td>${salida.fecha}</td>
-                <td>${salida.producto}</td>
-                <td>-${salida.cantidad.toFixed(2)} ${salida.presentacion}</td>
-                <td>${salida.descripcion}</td>
-                <td>${salida.usuario}</td>
-            </tr>
-        `;
-    });
-
-    htmlContent += `
-                </tbody>
-            </table>
+            ${tablas.tablaSalidas.outerHTML}
         </body>
         </html>
     `;
@@ -3368,11 +3344,8 @@ function descargarAlmacenWord() {
 }
 
 function imprimirAlmacen() {
-    const contenidoOriginal = document.body.innerHTML;
-    const tablaAlmacen = document.getElementById('tabla-almacen');
-    const tablaSalidas = document.getElementById('tabla-salidas-almacen');
-
-    if (!tablaAlmacen || !tablaSalidas) return;
+    const tablas = obtenerTablasReporteAlmacen();
+    if (!tablas) return;
 
     const htmlImpresion = `
         <html>
@@ -3392,10 +3365,10 @@ function imprimirAlmacen() {
             <p>Fecha: ${new Date().toLocaleDateString('es-PE')}</p>
 
             <h2>Stock Actual</h2>
-            ${tablaAlmacen.outerHTML}
+            ${tablas.tablaAlmacen.outerHTML}
 
             <h2>Historial de Salidas</h2>
-            ${tablaSalidas.outerHTML}
+            ${tablas.tablaSalidas.outerHTML}
         </body>
         </html>
     `;
