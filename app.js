@@ -251,17 +251,9 @@ aplicarMenuPorRol();
 
 // Función auxiliar para ocultar todas las vistas
 function ocultarTodasLasVistas() {
-    const todasLasPestanas = [
-        'tab-ventas', 'tab-compras', 'tab-inventario', 'tab-almacen',
-        'tab-caja', 'tab-kardex', 'tab-reportes', 'tab-registro-ventas'
-    ];
-
-    todasLasPestanas.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.classList.remove('active');
-            el.style.display = 'none';
-        }
+    document.querySelectorAll('.tab-content').forEach(el => {
+        el.classList.remove('active');
+        el.style.display = 'none';
     });
 }
 
