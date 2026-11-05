@@ -37,6 +37,35 @@ body.rol-vendedor .campo-costo-admin {
         display: table-cell !important;
     }
 
+    body.rol-inventario-consulta .tab-content:not(#tab-inventario),
+    body.rol-inventario-consulta #card-inventario-form,
+    body.rol-inventario-consulta #info-caja,
+    body.rol-inventario-consulta .nav-actions > .nav-btn:not(#btn-tab-inventario):not(.salir),
+    body.rol-inventario-consulta #col-header-costos,
+    body.rol-inventario-consulta #col-header-stock,
+    body.rol-inventario-consulta #col-header-acciones,
+    body.rol-inventario-consulta #btn-descargar-word,
+    body.rol-inventario-consulta #btn-imprimir-inv,
+    body.rol-inventario-consulta .col-costo-admin,
+    body.rol-inventario-consulta td.col-costo-admin,
+    body.rol-inventario-consulta .campo-costo-admin,
+    body.rol-inventario-consulta input[type="number"].input-costo,
+    body.rol-inventario-consulta label[id^="lbl-costo"],
+    body.rol-inventario-consulta button[onclick*="editarProducto"],
+    body.rol-inventario-consulta button[onclick*="eliminarProducto"],
+    body.rol-inventario-consulta #form-producto,
+    body.rol-inventario-consulta .nav-admin,
+    body.rol-inventario-consulta #panel-ventas,
+    body.rol-inventario-consulta #tab-ventas,
+    body.rol-inventario-consulta #tab-almacen,
+    body.rol-inventario-consulta #tab-caja,
+    body.rol-inventario-consulta #tab-kardex,
+    body.rol-inventario-consulta #tab-reportes,
+    body.rol-inventario-consulta #tab-compras,
+    body.rol-inventario-consulta #tab-registro-ventas {
+        display: none !important;
+    }
+
     body.rol-inventario-consulta .inventario-grid {
         grid-template-columns: 1fr !important;
     }
@@ -92,15 +121,14 @@ body.rol-vendedor .campo-costo-admin {
         .nav-btn.salir:hover { background-color: #dc2626; }
 
         /* Contenedores de Vistas */
-        .tab-content { display: none !important; }
-        .tab-content.active { display: block !important; }
-        .tab-content.active[style*="grid-template-columns"] { display: grid !important; }
+        .tab-content { display: none; }
+        .tab-content.active { display: grid; }
 
         /* Estilos de Tarjetas y Grillas */
-        .ventas-grid { display: grid; grid-template-columns: 2.5fr 1fr; gap: 20px; }
-        .compras-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
-        .inventario-grid { display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
-        .kardex-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        .ventas-grid { grid-template-columns: 2.5fr 1fr; gap: 20px; }
+        .compras-grid { grid-template-columns: 2fr 1fr; gap: 20px; }
+        .inventario-grid { grid-template-columns: 360px 1fr; gap: 20px; }
+        .kardex-grid { grid-template-columns: 1fr; gap: 20px; }
         
         .reportes-cards {
             display: grid;
@@ -508,12 +536,6 @@ body.rol-vendedor .campo-costo-admin {
             body.imprimir-inventario #card-inventario-lista td { border-color: #999 !important; padding: 6px; }
             @page { margin: 12mm; }
         }
-        .tab-content {
-    display: none !important;
-}
-.tab-content.active {
-    display: block !important;
-}
     </style>
 </head>
 <body>
@@ -767,13 +789,6 @@ body.rol-vendedor .campo-costo-admin {
                             <input type="number" step="0.01" min="0" id="p-kg-caja" class="form-control" placeholder="Ej. 50">
                         </div>
                     </div>
-                </div>
-
-                <div class="form-group" id="bloque-phx4" style="display: none;">
-                    <label>Total Rollos por Plancha (PHX4)</label>
-                    <input type="number" step="1" min="1" id="p-rollos-plancha" class="form-control" placeholder="Ej. 24" value="24">
-                    <small style="color: #94a3b8;">Especifica cuántos rollos contiene una plancha (por defecto 24)</small>
-                </div>
                 </div>
 
                 <div class="form-group" style="margin-top: 10px;">

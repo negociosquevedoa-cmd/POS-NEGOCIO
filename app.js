@@ -248,93 +248,46 @@ if (pNombreInit) {
 }
 
 aplicarMenuPorRol();
-
-// Función auxiliar para ocultar todas las vistas
-function ocultarTodasLasVistas() {
-    document.querySelectorAll('.tab-content').forEach(el => {
-        el.classList.remove('active');
-        el.style.display = 'none';
-        el.style.setProperty('display', 'none', 'important');
-    });
-}
-
-function mostrarTabActivo(tabElement) {
-    if (!tabElement) return;
-
-    const requiereGrid = tabElement.style.gridTemplateColumns || (tabElement.getAttribute('style') || '').includes('grid-template-columns');
-    const valorDisplay = requiereGrid ? 'grid' : 'block';
-
-    tabElement.classList.add('active');
-    tabElement.style.display = valorDisplay;
-    tabElement.style.setProperty('display', valorDisplay, 'important');
-}
-
 // Función global para cambiar de pestaña en el menú superior
 function cambiarTab(tab) {
     if (!puedeVerTab(tab)) {
         tab = obtenerRol() === 'inventario_consulta' ? 'inventario' : 'ventas';
     }
 
-    // Ocultar explícitamente todas las pestañas primero
-    ocultarTodasLasVistas();
-
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
 
     if (tab === 'ventas') {
-        const tabVentas = document.getElementById('tab-ventas');
-        if (tabVentas) {
-            mostrarTabActivo(tabVentas);
-        }
+        document.getElementById('tab-ventas').classList.add('active');
         document.getElementById('btn-tab-ventas').classList.add('active');
     } else if (tab === 'compras') {
-        const tabCompras = document.getElementById('tab-compras');
-        if (tabCompras) {
-            mostrarTabActivo(tabCompras);
-        }
+        document.getElementById('tab-compras').classList.add('active');
         document.getElementById('btn-tab-compras').classList.add('active');
         renderizarCompras();
     } else if (tab === 'inventario') {
-        const tabInventario = document.getElementById('tab-inventario');
-        if (tabInventario) {
-            mostrarTabActivo(tabInventario);
-        }
+        document.getElementById('tab-inventario').classList.add('active');
         document.getElementById('btn-tab-inventario').classList.add('active');
         actualizarNombresPresentaciones();
         // NO llamar a renderizarProductos aquí para evitar recursividad
         // Los productos ya se renderizan en inicializarSistema
     } else if (tab === 'almacen') {
-        const tabAlmacen = document.getElementById('tab-almacen');
-        if (tabAlmacen) {
-            mostrarTabActivo(tabAlmacen);
-        }
+        document.getElementById('tab-almacen').classList.add('active');
         document.getElementById('btn-tab-almacen').classList.add('active');
         renderizarAlmacen();
     } else if (tab === 'caja') {
-        const tabCaja = document.getElementById('tab-caja');
-        if (tabCaja) {
-            mostrarTabActivo(tabCaja);
-        }
+        document.getElementById('tab-caja').classList.add('active');
         document.getElementById('btn-tab-caja').classList.add('active');
         renderizarVistaCaja();
     } else if (tab === 'kardex') {
-        const tabKardex = document.getElementById('tab-kardex');
-        if (tabKardex) {
-            mostrarTabActivo(tabKardex);
-        }
+        document.getElementById('tab-kardex').classList.add('active');
         document.getElementById('btn-tab-kardex').classList.add('active');
         renderizarKardex();
     } else if (tab === 'reportes') {
-        const tabReportes = document.getElementById('tab-reportes');
-        if (tabReportes) {
-            mostrarTabActivo(tabReportes);
-        }
+        document.getElementById('tab-reportes').classList.add('active');
         document.getElementById('btn-tab-reportes').classList.add('active');
         renderizarReportes();
     } else if (tab === 'registro-ventas') {
-        const tabRegistroVentas = document.getElementById('tab-registro-ventas');
-        if (tabRegistroVentas) {
-            mostrarTabActivo(tabRegistroVentas);
-        }
+        document.getElementById('tab-registro-ventas').classList.add('active');
         document.getElementById('btn-registro-ventas').classList.add('active');
         renderizarRegistroVentas();
     }
@@ -351,16 +304,19 @@ const REGLAS_PRESENTACION = {
     PH: {
         unidadBase: 'rollos sueltos',
         slots: [
-            { id: 1, campo: 'Doc', tipo: 'doc', nombreCorto: 'Pareja', label: 'Pareja (2 rollos)', precio: 1.5, factor: 2, resumen: '▼ 1. PAREJA (2 rollos)' },
-            { id: 2, campo: 'Paq', tipo: 'paq', nombreCorto: 'Bloque', label: 'Bloque (10 rollos)', precio: 6.3, factor: 10, resumen: '▼ 2. BLOQUE (10 rollos)' },
-            { id: 3, campo: 'Caja', tipo: 'caja', nombreCorto: 'Paquete', label: 'Paquete (10 pares / 20 rollos)', precio: 12.5, factor: 20, resumen: '▼ 3. PAQUETE (20 rollos)' }
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 rollo)', precio: 1, factor: 1, resumen: '▼ 1. UNIDAD (1 rollo)' },
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Pareja', label: 'Pareja (2 rollos)', precio: 1.5, factor: 2, resumen: '▼ 2. PAREJA (2 rollos)' },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Bloque', label: 'Bloque (5 rollos)', precio: 6.3, factor: 5, resumen: '▼ 3. BLOQUE (5 rollos)' },
+            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Paquete', label: 'Paquete (10 pares / 20 rollos)', precio: 12.5, factor: 20, resumen: '▼ 4. PAQUETE (20 rollos)' }
         ]
     },
     PHX4: {
         unidadBase: 'rollos sueltos',
         slots: [
-            { id: 1, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete (4 rollos)', precio: 4.5, factor: 4, resumen: '▼ 1. PAQUETE (4 rollos)' },
-            { id: 2, campo: 'Caja', tipo: 'caja', nombreCorto: 'Plancha', label: 'Plancha (6 paquetes / 24 rollos)', precio: 34, factor: 24, resumen: '▼ 2. PLANCHA (24 rollos)' }
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 rollo)', precio: 1, factor: 1, resumen: '▼ 1. UNIDAD (1 rollo)' },
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Pareja', label: 'Pareja (2 rollos)', precio: 1.5, factor: 2, resumen: '▼ 2. PAREJA (2 rollos)' },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Bloque', label: 'Bloque (5 rollos)', precio: 6.3, factor: 5, resumen: '▼ 3. BLOQUE (5 rollos)' },
+            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Paquete', label: 'Paquete (10 pares / 20 rollos)', precio: 12.5, factor: 20, resumen: '▼ 4. PAQUETE (20 rollos)' }
         ]
     },
     PILA: {
@@ -376,8 +332,7 @@ const REGLAS_PRESENTACION = {
         slots: [
             { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 sobre)', precio: 0.4, factor: 1, resumen: '▼ 1. UNIDAD (1 sobre)' },
             { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Promoción 3x1', label: 'Promoción (3 sobres)', precio: 1, factor: 3, resumen: '▼ 2. PROMOCIÓN (3 sobres)' },
-            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Docena', label: 'Docena (12 sobres)', precio: 4, factor: 12, resumen: '▼ 3. DOCENA (12 sobres)' },
-            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Paquete', label: 'Paquete completo (80 sobres)', precio: 21, factor: 80, resumen: '▼ 4. PAQUETE COMPLETO (80 sobres)' }
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete completo (80 sobres)', precio: 21, factor: 80, resumen: '▼ 3. PAQUETE COMPLETO (80 sobres)' }
         ]
     },
     OREGANO: {
@@ -396,8 +351,7 @@ function reglaPresentacionProducto(prodOrCat) {
         : (prodOrCat && prodOrCat.categoria);
     const c = String(cat || '').trim().toUpperCase();
     if (c === 'GUSTA' || c === 'GUSTAS') return REGLAS_PRESENTACION.GUSTA;
-    if (c === 'PHX4') return REGLAS_PRESENTACION.PHX4; // PHX4 tiene su propia regla
-    if (c === 'PH') return REGLAS_PRESENTACION.PH; // PH tiene su propia regla
+    if (c.startsWith('PH')) return REGLAS_PRESENTACION.PH; // PH y PHX4 usan la misma regla
     return REGLAS_PRESENTACION[c] || null;
 }
 
@@ -413,14 +367,7 @@ function slotPorTipo(prod, tipoPres) {
 
 function factorDePresentacion(prod, tipoPres) {
     const slot = slotPorTipo(prod, tipoPres);
-    if (!slot) return 1;
-
-    // Para PHX4, usar el factor dinámico del campo rollosPlancha si es la plancha
-    if (prod.categoria === 'PHX4' && slot.nombreCorto === 'Plancha') {
-        return prod.rollosPlancha || 24; // Usar el valor guardado o 24 por defecto
-    }
-
-    return slot.factor;
+    return slot ? slot.factor : 1;
 }
 
 function etiquetaDePresentacion(prod, tipoPres) {
@@ -437,19 +384,12 @@ function listaPresentacionesComerciales(prod) {
     if (regla) {
         return regla.slots.map(slot => {
             const guardado = pres['precio' + slot.campo];
-            let factor = slot.factor;
-
-            // Para PHX4, usar el factor dinámico del campo rollosPlancha si es la plancha
-            if (prod.categoria === 'PHX4' && slot.nombreCorto === 'Plancha') {
-                factor = prod.rollosPlancha || 24; // Usar el valor guardado o 24 por defecto
-            }
-
             return {
                 tipo: slot.tipo,
                 label: slot.label,
                 nombreCorto: slot.nombreCorto,
                 precio: guardado > 0 ? guardado : slot.precio,
-                factor: factor,
+                factor: slot.factor,
                 campo: slot.campo
             };
         });
@@ -495,14 +435,6 @@ function textoCampo(id, texto) {
 }
 
 function aplicarFormularioCategoriaEspecial(regla, aplicarPrecios) {
-    // Mostrar/ocultar bloque específico para PHX4
-    const bloquePhx4 = document.getElementById('bloque-phx4');
-    const pCategoria = document.getElementById('p-categoria');
-    const catVal = pCategoria ? pCategoria.value.trim().toUpperCase() : '';
-    if (bloquePhx4) {
-        bloquePhx4.style.display = (catVal === 'PHX4') ? '' : 'none';
-    }
-
     for (let i = 1; i <= 4; i++) {
         const meta = CAMPOS_FORM_PRES[i];
         const slot = regla.slots.find(s => s.id === i);
@@ -923,7 +855,6 @@ function guardarProductoLocal(e) {
         unidadesCaja: leerCampoNumero('p-unidades-caja'),
         kgPaq: leerCampoNumero('p-kg-paq'),
         kgCaja: leerCampoNumero('p-kg-caja'),
-        rollosPlancha: leerCampoNumero('p-rollos-plancha') || 24, // Campo específico para PHX4
         // Nombres alternativos para compatibilidad
         unidades_paq: leerCampoNumero('p-unidades-paq'),
         unidades_caja: leerCampoNumero('p-unidades-caja'),
@@ -2513,9 +2444,6 @@ function editarProducto(id) {
     if (!prod.kgPaq && prod.kg_paq) setCampoForm('p-kg-paq', prod.kg_paq);
     if (!prod.kgCaja && prod.kg_caja) setCampoForm('p-kg-caja', prod.kg_caja);
 
-    // Cargar campo específico para PHX4
-    if (prod.rollosPlancha) setCampoForm('p-rollos-plancha', prod.rollosPlancha);
-
     document.querySelectorAll('#form-producto details').forEach((bloque) => {
         bloque.open = true;
     });
@@ -2732,15 +2660,13 @@ function renderizarProductosPorLista(listaProductos) {
         const convCaja = prod.unidadesCaja || prod.unidades_caja || 0;
         const convKgPaq = prod.kgPaq || prod.kg_paq || 0;
         const convKgCaja = prod.kgCaja || prod.kg_caja || 0;
-        const rollosPlancha = prod.rollosPlancha || 0;
 
-        if (convPaq > 0 || convCaja > 0 || convKgPaq > 0 || convKgCaja > 0 || rollosPlancha > 0) {
+        if (convPaq > 0 || convCaja > 0 || convKgPaq > 0 || convKgCaja > 0) {
             stockHTML += `<br><span class="price-badge" style="color:#fbbf24; font-size:10px;">Conv: `;
             if (convPaq > 0) stockHTML += `${convPaq}U/Pq `;
             if (convCaja > 0) stockHTML += `${convCaja}U/Cja `;
             if (convKgPaq > 0) stockHTML += `${convKgPaq}KG/Pq `;
-            if (convKgCaja > 0) stockHTML += `${convKgCaja}KG/Cja `;
-            if (rollosPlancha > 0) stockHTML += `Plancha=${rollosPlancha}R`;
+            if (convKgCaja > 0) stockHTML += `${convKgCaja}KG/Cja`;
             stockHTML += `</span>`;
         }
 
@@ -2865,12 +2791,6 @@ let ultimoTicketId = null;
 async function inicializarSistema() {
     // Cargar datos desde localStorage primero (async porque puede consultar Supabase)
     await cargarDatosDesdeLocalStorage();
-
-    // Ocultar todas las pestañas explícitamente al inicio
-    document.querySelectorAll('.tab-content').forEach(el => {
-        el.classList.remove('active');
-        el.style.display = 'none';
-    });
 
     aplicarMenuPorRol();
     if (typeof aplicarRestriccionesPorRol === 'function') aplicarRestriccionesPorRol();
