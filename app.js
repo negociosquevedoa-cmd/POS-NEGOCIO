@@ -306,7 +306,7 @@ const REGLAS_PRESENTACION = {
         slots: [
             { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 rollo)', precio: 1, factor: 1, resumen: '▼ 1. UNIDAD (1 rollo)' },
             { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Pareja', label: 'Pareja (2 rollos)', precio: 1.5, factor: 2, resumen: '▼ 2. PAREJA (2 rollos)' },
-            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Bloque', label: 'Bloque (5 rollos)', precio: 6.3, factor: 5, resumen: '▼ 3. BLOQUE (5 rollos)' },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Bloque', label: 'Bloque (5 pares / 10 rollos)', precio: 6.3, factor: 10, resumen: '▼ 3. BLOQUE (5 pares / 10 rollos)' },
             { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Paquete', label: 'Paquete (10 pares / 20 rollos)', precio: 12.5, factor: 20, resumen: '▼ 4. PAQUETE (20 rollos)' }
         ]
     },
