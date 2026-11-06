@@ -294,10 +294,10 @@ function cambiarTab(tab) {
 }
 
 const CAMPOS_FORM_PRES = {
-    1: { precio: 'p-precio-unid', costo: 'p-costo-unid', stock: 'p-stock-unid', sum: 'sum-pres-1', lblPrecio: 'lbl-precio-1', lblCosto: 'lbl-costo-1', lblStock: 'lbl-stock-1' },
-    2: { precio: 'p-precio-doc', costo: 'p-costo-doc', stock: 'p-stock-doc', sum: 'sum-pres-2', lblPrecio: 'lbl-precio-2', lblCosto: 'lbl-costo-2', lblStock: 'lbl-stock-2' },
-    3: { precio: 'p-precio-paq', costo: 'p-costo-paq', stock: 'p-stock-paq', sum: 'sum-pres-3', lblPrecio: 'lbl-precio-3', lblCosto: 'lbl-costo-3', lblStock: 'lbl-stock-3' },
-    4: { precio: 'p-precio-caja', costo: 'p-costo-caja', stock: 'p-stock-caja', sum: 'sum-pres-4', lblPrecio: 'lbl-precio-4', lblCosto: 'lbl-costo-4', lblStock: 'lbl-stock-4' }
+    1: { campo: 'Unid', precio: 'p-precio-unid', costo: 'p-costo-unid', stock: 'p-stock-unid', sum: 'sum-pres-1', lblPrecio: 'lbl-precio-1', lblCosto: 'lbl-costo-1', lblStock: 'lbl-stock-1' },
+    2: { campo: 'Doc', precio: 'p-precio-doc', costo: 'p-costo-doc', stock: 'p-stock-doc', sum: 'sum-pres-2', lblPrecio: 'lbl-precio-2', lblCosto: 'lbl-costo-2', lblStock: 'lbl-stock-2' },
+    3: { campo: 'Paq', precio: 'p-precio-paq', costo: 'p-costo-paq', stock: 'p-stock-paq', sum: 'sum-pres-3', lblPrecio: 'lbl-precio-3', lblCosto: 'lbl-costo-3', lblStock: 'lbl-stock-3' },
+    4: { campo: 'Caja', precio: 'p-precio-caja', costo: 'p-costo-caja', stock: 'p-stock-caja', sum: 'sum-pres-4', lblPrecio: 'lbl-precio-4', lblCosto: 'lbl-costo-4', lblStock: 'lbl-stock-4' }
 };
 
 const REGLAS_PRESENTACION = {
@@ -476,6 +476,10 @@ function aplicarFormularioCategoriaEspecial(regla, aplicarPrecios) {
         const slot = regla.slots.find(s => s.id === i);
         const bloque = document.getElementById('bloque-pres-' + i);
         if (bloque) bloque.style.display = slot ? '' : 'none';
+        const inputPrecio = document.getElementById(meta.precio);
+        const inputStock = document.getElementById(meta.stock);
+        if (inputPrecio) inputPrecio.required = Boolean(slot);
+        if (inputStock) inputStock.required = Boolean(slot && slot.factor === 1);
         if (!slot) continue;
 
         textoCampo(meta.sum, slot.resumen);
@@ -483,12 +487,10 @@ function aplicarFormularioCategoriaEspecial(regla, aplicarPrecios) {
         textoCampo(meta.lblPrecio, `Precio Venta ${slot.nombreCorto} (S/)`);
         textoCampo(meta.lblStock, slot.factor === 1 ? `Stock (${regla.unidadBase})` : `Stock ${slot.nombreCorto}`);
 
-        const stockInput = document.getElementById(meta.stock);
-        const grupoStock = stockInput ? stockInput.closest('.form-group') : null;
+        const grupoStock = inputStock ? inputStock.closest('.form-group') : null;
         if (grupoStock) grupoStock.style.display = slot.factor === 1 ? '' : 'none';
 
         if (aplicarPrecios) {
-            const inputPrecio = document.getElementById(meta.precio);
             if (inputPrecio) inputPrecio.value = slot.precio;
         }
     }
@@ -498,7 +500,11 @@ function mostrarBloquesPresentacionEstandar() {
     for (let i = 1; i <= 4; i++) {
         const bloque = document.getElementById('bloque-pres-' + i);
         if (bloque) bloque.style.display = '';
-        const stockInput = document.getElementById(CAMPOS_FORM_PRES[i].stock);
+        const meta = CAMPOS_FORM_PRES[i];
+        const precioInput = document.getElementById(meta.precio);
+        const stockInput = document.getElementById(meta.stock);
+        if (precioInput) precioInput.required = i === 1;
+        if (stockInput) stockInput.required = i === 1;
         const grupoStock = stockInput ? stockInput.closest('.form-group') : null;
         if (grupoStock) grupoStock.style.display = '';
     }
@@ -880,6 +886,15 @@ function leerCampoNumero(id) {
     return aNumeroProd(el ? el.value : 0, 0);
 }
 
+function leerPresentacionesFormulario() {
+    return Object.values(CAMPOS_FORM_PRES).reduce((presentaciones, meta) => {
+        presentaciones['costo' + meta.campo] = leerCampoNumero(meta.costo);
+        presentaciones['precio' + meta.campo] = leerCampoNumero(meta.precio);
+        presentaciones['stock' + meta.campo] = leerCampoNumero(meta.stock);
+        return presentaciones;
+    }, {});
+}
+
 function guardarProductoLocal(e) {
     if (e) e.preventDefault();
     if (obtenerRol() === 'inventario_consulta') return;
@@ -890,20 +905,7 @@ function guardarProductoLocal(e) {
     const prodAnterior = editId
         ? productos.find(p => String(p.id) === String(editId))
         : null;
-    const presentacionesForm = {
-        costoUnid: leerCampoNumero('p-costo-unid'),
-        precioUnid: leerCampoNumero('p-precio-unid'),
-        stockUnid: leerCampoNumero('p-stock-unid'),
-        costoDoc: leerCampoNumero('p-costo-doc'),
-        precioDoc: leerCampoNumero('p-precio-doc'),
-        stockDoc: leerCampoNumero('p-stock-doc'),
-        costoPaq: leerCampoNumero('p-costo-paq'),
-        precioPaq: leerCampoNumero('p-precio-paq'),
-        stockPaq: leerCampoNumero('p-stock-paq'),
-        costoCaja: leerCampoNumero('p-costo-caja'),
-        precioCaja: leerCampoNumero('p-precio-caja'),
-        stockCaja: leerCampoNumero('p-stock-caja')
-    };
+    const presentacionesForm = leerPresentacionesFormulario();
 
     const imagenNueva = (document.getElementById('imagen-base64') || {}).value;
     const categoriaProducto = document.getElementById('p-categoria').value;
