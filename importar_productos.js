@@ -54,13 +54,15 @@ function parseNumber(value) {
     return isNaN(num) ? null : num;
 }
 
-// Función para detectar tipo de producto (ARROZ/AZUCAR, FIDEO, OTROS)
+// Función para detectar tipo de producto (ARROZ/AZUCAR/MENESTRAS, FIDEO, OTROS)
 function detectarTipoProducto(nombre, categoria) {
     const catUpper = (categoria || '').toUpperCase();
     const nomUpper = (nombre || '').toUpperCase();
     
     if (catUpper.includes('ARROZ') || catUpper.includes('AZUCAR') || catUpper.includes('AZÚCAR') ||
-        nomUpper.includes('ARROZ') || nomUpper.includes('AZUCAR') || nomUpper.includes('AZÚCAR')) {
+        catUpper.includes('MENESTRAS') ||
+        nomUpper.includes('ARROZ') || nomUpper.includes('AZUCAR') || nomUpper.includes('AZÚCAR') ||
+        nomUpper.includes('MENESTRAS')) {
         return 'ARROZ_AZUCAR';
     }
     

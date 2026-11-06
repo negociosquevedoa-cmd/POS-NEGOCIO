@@ -1364,20 +1364,5 @@ body.rol-vendedor .campo-costo-admin {
             }
         })();
     </script>
-    <script>
-// Restricción automática para el rol inventario_consulta
-document.addEventListener("DOMContentLoaded", function() {
-    const rol = localStorage.getItem("usuario_rol");
-    if (rol === "inventario_consulta") {
-        // Ocultar elementos administrativos y de caja
-        const elementosAExcluir = document.querySelectorAll(
-            '.btn-editar, .btn-eliminar, .col-costo, #form-producto, #btn-nuevo-producto, .nav-tabs, form'
-        );
-        elementosAExcluir.forEach(el => {
-            if (el) el.style.display = "none";
-        });
-    }
-});
-</script>
 </body>
 </html>

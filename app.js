@@ -71,17 +71,21 @@ let montoInicialCaja = rol === 'vendedor' && localStorage.getItem('caja_apertura
     : 0;
 
 // Asignar clase del rol al body inmediatamente para evitar parpadeo
-const rolUsuario = localStorage.getItem('usuario_rol');
-if (rolUsuario) {
-    document.body.classList.add('rol-' + rolUsuario);
-}
+const rolUsuario = obtenerRol();
+document.body.classList.toggle('rol-vendedor', rolUsuario === 'vendedor');
+document.body.classList.toggle('rol-inventario-consulta', rolUsuario === 'inventario_consulta');
+document.body.setAttribute('data-rol', rolUsuario);
 
 // Función para restringir elementos según el rol
 function restringirPorRol() {
-    const rolActual = localStorage.getItem('usuario_rol');
+    const rolActual = obtenerRol();
     if (rolActual === 'inventario_consulta') {
-        // Ocultar botones de acción, costos y formularios de edición de productos
-        document.querySelectorAll('.col-costo, .btn-editar, .btn-eliminar, #form-producto, #btn-nuevo-producto, .campo-costo-admin').forEach(el => {
+        document.querySelectorAll(
+            '.col-costo-admin, .campo-costo-admin, .btn-editar, .btn-eliminar, ' +
+            'button[onclick*="editarProducto"], button[onclick*="eliminarProducto"], ' +
+            '#col-header-costos, #col-header-stock, #col-header-acciones, ' +
+            '#card-inventario-form, #form-producto, #btn-nuevo-producto'
+        ).forEach(el => {
             if (el) el.style.display = 'none';
         });
     }
@@ -89,7 +93,7 @@ function restringirPorRol() {
 
 // Función completa para aplicar restricciones de consulta de inventario
 function aplicarRestriccionesConsulta() {
-    const rolActivo = localStorage.getItem('usuario_rol');
+    const rolActivo = obtenerRol();
     
     // Agregar clase del rol al body INMEDIATAMENTE al detectar el rol
     if (rolActivo) {
@@ -255,7 +259,6 @@ if (pNombreInit) {
     pNombreInit.addEventListener('input', actualizarNombresPresentaciones);
 }
 
-aplicarMenuPorRol();
 // Función global para cambiar de pestaña en el menú superior
 function cambiarTab(tab) {
     if (!puedeVerTab(tab)) {
@@ -690,8 +693,7 @@ async function cargarDatosDesdeLocalStorage() {
 }
 
 function verificarAlertaStockUnidades() {
-    // 1. Obtener el rol actual guardado
-    const rolActual = localStorage.getItem('usuario_rol') || localStorage.getItem('rol');
+    const rolActual = obtenerRol();
     
     // 2. Si el usuario es de consulta, no ejecutar ni mostrar la alerta
     if (rolActual === 'inventario_consulta' || rolActual === 'consulta') {
@@ -700,11 +702,12 @@ function verificarAlertaStockUnidades() {
 
     let productosAlertados = [];
     productos.forEach(p => {
-        const catUpper = p.categoria ? p.categoria.toUpperCase() : '';
-        if (catUpper === 'ARROZ' || catUpper === 'AZUCAR' || catUpper === 'AZÚCAR') {
-            if (p.stockUnid < 33) productosAlertados.push(`• <strong>${p.nombre}</strong> (${p.categoria || ''}): <span style="color:red; font-weight:bold;">${p.stockUnid} Unid</span>`);
+        const labels = etiquetasPresentaciones(p);
+        const stock = extraerPresentacionesProducto(p).stockUnid;
+        if (esPresentacionSaco(p)) {
+            if (stock < 33) productosAlertados.push(`• <strong>${p.nombre}</strong> (${p.categoria || ''}): <span style="color:red; font-weight:bold;">${stock} ${labels.unid}</span>`);
         } else {
-            if (p.stockUnid < 4) productosAlertados.push(`• <strong>${p.nombre}</strong> (${p.categoria || ''}): <span style="color:red; font-weight:bold;">${p.stockUnid} Unid</span>`);
+            if (stock < 4) productosAlertados.push(`• <strong>${p.nombre}</strong> (${p.categoria || ''}): <span style="color:red; font-weight:bold;">${stock} ${labels.unid}</span>`);
         }
     });
 
@@ -2842,7 +2845,7 @@ function renderizarProductosPorLista(listaProductos) {
     const tituloCat = document.getElementById('titulo-catalogo');
     if (tituloCat) tituloCat.textContent = `Catálogo (${listaProductos.length})`;
 
-    const rolActual = typeof rol !== 'undefined' ? rol : 'admin';
+    const rolActual = obtenerRol();
 
     // Paginación para inventario
     const inicioInv = (paginaInventario - 1) * itemsPorPagina;
@@ -3216,6 +3219,7 @@ function imprimirInventario() {
 }
 
 function descargarInventarioWord() {
+    const esInventarioConsulta = obtenerRol() === 'inventario_consulta';
     let htmlContent = `
         <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
         <head>
@@ -3239,7 +3243,7 @@ function descargarInventarioWord() {
                         <th>Producto</th>
                         <th>Categoría</th>
                         <th>Precios de Venta</th>
-                        <th>Stock Disponible</th>
+                        ${esInventarioConsulta ? '' : '<th>Stock Disponible</th>'}
                     </tr>
                 </thead>
                 <tbody>
@@ -3253,16 +3257,18 @@ function descargarInventarioWord() {
         let preciosHTML = comerciales.map(p => `${p.label}: S/ ${Number(p.precio).toFixed(2)}`).join(' | ');
 
         let stockHTML = '';
-        if (reglaCat) {
-            stockHTML = `${reglaCat.unidadBase}: ${pres.stockUnid || 0}`;
-            const eqs = reglaCat.slots.filter(s => s.factor > 1).map(s => `${s.nombreCorto}=${s.factor}`).join(' · ');
-            if (eqs) stockHTML += ` (descuenta ${eqs})`;
-        } else {
-            const labels = etiquetasPresentaciones(prod);
-            stockHTML = `${labels.unid}: ${pres.stockUnid || 0}`;
-            if (pres.stockDoc > 0) stockHTML += ` | ${labels.doc}: ${pres.stockDoc}`;
-            if (pres.stockPaq > 0) stockHTML += ` | ${labels.paq}: ${pres.stockPaq}`;
-            if (pres.stockCaja > 0) stockHTML += ` | ${labels.caja}: ${pres.stockCaja}`;
+        if (!esInventarioConsulta) {
+            if (reglaCat) {
+                stockHTML = `${reglaCat.unidadBase}: ${pres.stockUnid || 0}`;
+                const eqs = reglaCat.slots.filter(s => s.factor > 1).map(s => `${s.nombreCorto}=${s.factor}`).join(' · ');
+                if (eqs) stockHTML += ` (descuenta ${eqs})`;
+            } else {
+                const labels = etiquetasPresentaciones(prod);
+                stockHTML = `${labels.unid}: ${pres.stockUnid || 0}`;
+                if (pres.stockDoc > 0) stockHTML += ` | ${labels.doc}: ${pres.stockDoc}`;
+                if (pres.stockPaq > 0) stockHTML += ` | ${labels.paq}: ${pres.stockPaq}`;
+                if (pres.stockCaja > 0) stockHTML += ` | ${labels.caja}: ${pres.stockCaja}`;
+            }
         }
 
         htmlContent += `
@@ -3270,7 +3276,7 @@ function descargarInventarioWord() {
                 <td>${prod.nombre}</td>
                 <td>${prod.categoria}</td>
                 <td>${preciosHTML}</td>
-                <td>${stockHTML}</td>
+                ${esInventarioConsulta ? '' : `<td>${stockHTML}</td>`}
             </tr>
         `;
     });
