@@ -2914,10 +2914,17 @@ function renderizarProductosPorLista(listaProductos) {
                     { campo: 'Tira', label: labels.tira },
                     { campo: 'Docena', label: labels.docena }
                 ];
-            costosHTML = presentacionesCosto
+            const costoPrincipal = presentacionesCosto
+                .map(p => ({ ...p, valor: pres['costo' + p.campo] }))
+                .find(p => Number.isFinite(p.valor) && p.valor > 0);
+            const costoPrincipalHTML = pres.costoUnid <= 0 && costoPrincipal
+                ? `<span class="price-badge" style="color:#4ade80;">Costo principal (${costoPrincipal.label}): S/ ${costoPrincipal.valor.toFixed(2)}</span>`
+                : '';
+            const costosPresentacionesHTML = presentacionesCosto
                 .filter(p => pres['costo' + p.campo] > 0)
                 .map(p => `<span class="price-badge" style="color:#4ade80;">Costo ${p.label}: S/ ${pres['costo' + p.campo].toFixed(2)}</span>`)
                 .join('<br>');
+            costosHTML = [costoPrincipalHTML, costosPresentacionesHTML].filter(Boolean).join('<br>');
         } else if (rolActual === 'vendedor') {
             costosHTML = `<span style="color: #64748b; font-style: italic;">Oculto</span>`;
         }
