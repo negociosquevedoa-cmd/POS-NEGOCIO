@@ -311,12 +311,10 @@ const REGLAS_PRESENTACION = {
         ]
     },
     PHX4: {
-        unidadBase: 'rollos sueltos',
+        unidadBase: 'paquetes',
         slots: [
-            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 rollo)', precio: 1, factor: 1, resumen: '▼ 1. UNIDAD (1 rollo)' },
-            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Pareja', label: 'Pareja (2 rollos)', precio: 1.5, factor: 2, resumen: '▼ 2. PAREJA (2 rollos)' },
-            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Bloque', label: 'Bloque (5 rollos)', precio: 6.3, factor: 5, resumen: '▼ 3. BLOQUE (5 rollos)' },
-            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Paquete', label: 'Paquete (10 pares / 20 rollos)', precio: 12.5, factor: 20, resumen: '▼ 4. PAQUETE (20 rollos)' }
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete', precio: 4.5, factor: 1, resumen: '▼ PAQUETE' },
+            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Plancha', label: 'Plancha (6 paquetes)', precio: 27, factor: 6, resumen: '▼ PLANCHA (6 paquetes)' }
         ]
     },
     PILA: {
@@ -351,7 +349,24 @@ function reglaPresentacionProducto(prodOrCat) {
         : (prodOrCat && prodOrCat.categoria);
     const c = String(cat || '').trim().toUpperCase();
     if (c === 'GUSTA' || c === 'GUSTAS') return REGLAS_PRESENTACION.GUSTA;
-    if (c.startsWith('PH')) return REGLAS_PRESENTACION.PH; // PH y PHX4 usan la misma regla
+    if (c === 'PHX4') {
+        const paquetesPlancha = Number(prodOrCat && typeof prodOrCat === 'object'
+            ? (prodOrCat.paquetesPlancha ?? prodOrCat.unidadesCaja ?? prodOrCat.unidades_caja)
+            : 0);
+        const factorPlancha = paquetesPlancha === 8 ? 8 : 6;
+        return {
+            ...REGLAS_PRESENTACION.PHX4,
+            slots: REGLAS_PRESENTACION.PHX4.slots.map(slot => slot.tipo === 'caja'
+                ? {
+                    ...slot,
+                    label: `Plancha (${factorPlancha} paquetes)`,
+                    factor: factorPlancha,
+                    resumen: `▼ PLANCHA (${factorPlancha} paquetes)`
+                }
+                : slot)
+        };
+    }
+    if (c === 'PH') return REGLAS_PRESENTACION.PH;
     return REGLAS_PRESENTACION[c] || null;
 }
 
@@ -415,6 +430,27 @@ function unidadesReservadasCarrito(prodId, exceptoKey) {
 function normalizarPresentacionesCategoria(data) {
     const regla = reglaPresentacionProducto(data);
     if (!regla) return data;
+    if (String(data.categoria || '').trim().toUpperCase() === 'PHX4') {
+        const paquetesPlancha = Number(data.paquetesPlancha ?? data.unidadesCaja ?? data.unidades_caja);
+        data.paquetesPlancha = paquetesPlancha === 8 ? 8 : 6;
+        data.unidadesCaja = data.paquetesPlancha;
+        data.unidades_caja = data.paquetesPlancha;
+        ['Unid', 'Doc'].forEach(campo => {
+            data['precio' + campo] = 0;
+            data['costo' + campo] = 0;
+            data['stock' + campo] = 0;
+        });
+        if (!(data.precioPaq > 0)) data.precioPaq = regla.slots.find(slot => slot.tipo === 'paq').precio;
+        if (!(data.precioCaja > 0)) {
+            const factorPlancha = regla.slots.find(slot => slot.tipo === 'caja').factor;
+            data.precioCaja = data.precioPaq * factorPlancha;
+        }
+        data.stockUnid = aNumeroProd(data.stockPaq);
+        data.stockDoc = 0;
+        data.stockPaq = 0;
+        data.stockCaja = 0;
+        return data;
+    }
     ['Unid', 'Doc', 'Paq', 'Caja'].forEach((campo) => {
         const slot = regla.slots.find(s => s.campo === campo);
         if (!slot) {
@@ -445,11 +481,11 @@ function aplicarFormularioCategoriaEspecial(regla, aplicarPrecios) {
         textoCampo(meta.sum, slot.resumen);
         textoCampo(meta.lblCosto, `Precio Costo ${slot.nombreCorto} (S/)`);
         textoCampo(meta.lblPrecio, `Precio Venta ${slot.nombreCorto} (S/)`);
-        textoCampo(meta.lblStock, i === 1 ? `Stock (${regla.unidadBase})` : `Stock ${slot.nombreCorto}`);
+        textoCampo(meta.lblStock, slot.factor === 1 ? `Stock (${regla.unidadBase})` : `Stock ${slot.nombreCorto}`);
 
         const stockInput = document.getElementById(meta.stock);
         const grupoStock = stockInput ? stockInput.closest('.form-group') : null;
-        if (grupoStock) grupoStock.style.display = i === 1 ? '' : 'none';
+        if (grupoStock) grupoStock.style.display = slot.factor === 1 ? '' : 'none';
 
         if (aplicarPrecios) {
             const inputPrecio = document.getElementById(meta.precio);
@@ -468,18 +504,41 @@ function mostrarBloquesPresentacionEstandar() {
     }
 }
 
+function actualizarPrecioPlanchaPHX4() {
+    const categoria = document.getElementById('p-categoria')?.value.trim().toUpperCase();
+    if (categoria !== 'PHX4') return;
+
+    const paquetesPlancha = Number(document.getElementById('p-paquetes-plancha')?.value) === 8 ? 8 : 6;
+    const precioPaquete = aNumeroProd(document.getElementById('p-precio-paq')?.value);
+    const precioPlancha = document.getElementById('p-precio-caja');
+    if (precioPlancha) precioPlancha.value = (precioPaquete * paquetesPlancha).toFixed(2);
+}
+
+function cambiarPaquetesPorPlancha() {
+    actualizarPrecioPlanchaPHX4();
+    actualizarNombresPresentaciones();
+}
+
 function actualizarNombresPresentaciones(aplicarPrecios) {
     const pCategoria = document.getElementById('p-categoria');
     const pNombre = document.getElementById('p-nombre');
 
     const catVal = pCategoria ? pCategoria.value.trim().toUpperCase() : '';
     const nomVal = pNombre ? pNombre.value.trim().toUpperCase() : '';
-    const regla = reglaPresentacionProducto(catVal);
+    const selectorPlancha = document.getElementById('p-paquetes-plancha');
+    const esPHX4 = catVal === 'PHX4';
+    const regla = reglaPresentacionProducto(esPHX4
+        ? { categoria: catVal, paquetesPlancha: Number(selectorPlancha?.value) || 6 }
+        : catVal);
     const nota = document.getElementById('nota-stock-categoria');
     const bloqueConv = document.getElementById('bloque-conversiones');
+    const bloquePlancha = document.getElementById('bloque-plancha-phx4');
+
+    if (bloquePlancha) bloquePlancha.style.display = esPHX4 ? '' : 'none';
 
     if (regla) {
         aplicarFormularioCategoriaEspecial(regla, aplicarPrecios === true);
+        if (esPHX4 && aplicarPrecios === true) actualizarPrecioPlanchaPHX4();
         if (nota) {
             const descuentos = regla.slots
                 .filter(s => s.factor > 1)
@@ -489,6 +548,10 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
             nota.textContent = `El stock se controla en ${regla.unidadBase}. ${descuentos}.`;
         }
         if (bloqueConv) bloqueConv.style.display = 'none';
+        if (esPHX4 && nota) {
+            const factorPlancha = regla.slots.find(slot => slot.tipo === 'caja').factor;
+            nota.textContent = `El stock se controla en paquetes. Cada plancha descuenta ${factorPlancha} paquetes. El precio de Plancha se calcula con el precio de Paquete, pero puedes editarlo.`;
+        }
     } else {
         if (nota) nota.style.display = 'none';
         if (bloqueConv) bloqueConv.style.display = '';
@@ -843,21 +906,27 @@ function guardarProductoLocal(e) {
     };
 
     const imagenNueva = (document.getElementById('imagen-base64') || {}).value;
+    const categoriaProducto = document.getElementById('p-categoria').value;
+    const esPHX4 = categoriaProducto.trim().toUpperCase() === 'PHX4';
+    const paquetesPlancha = esPHX4
+        ? (Number(document.getElementById('p-paquetes-plancha')?.value) === 8 ? 8 : 6)
+        : leerCampoNumero('p-unidades-caja');
     const productoData = {
         ...(prodAnterior || {}),
         id: editId ? parseInt(editId, 10) : Date.now(),
         nombre: document.getElementById('p-nombre').value,
-        categoria: document.getElementById('p-categoria').value,
+        categoria: categoriaProducto,
         codigo: document.getElementById('p-codigo').value || 'Sin código',
         ...presentacionesForm,
         imagen: imagenNueva || (prodAnterior && prodAnterior.imagen) || 'https://via.placeholder.com/80',
         unidadesPaq: leerCampoNumero('p-unidades-paq'),
-        unidadesCaja: leerCampoNumero('p-unidades-caja'),
+        unidadesCaja: paquetesPlancha,
+        paquetesPlancha: esPHX4 ? paquetesPlancha : 0,
         kgPaq: leerCampoNumero('p-kg-paq'),
         kgCaja: leerCampoNumero('p-kg-caja'),
         // Nombres alternativos para compatibilidad
         unidades_paq: leerCampoNumero('p-unidades-paq'),
-        unidades_caja: leerCampoNumero('p-unidades-caja'),
+        unidades_caja: paquetesPlancha,
         kg_paq: leerCampoNumero('p-kg-paq'),
         kg_caja: leerCampoNumero('p-kg-caja')
     };
@@ -2419,6 +2488,9 @@ function editarProducto(id) {
     setCampoForm('p-costo-paq', pres.costoPaq, 0);
     setCampoForm('p-precio-paq', pres.precioPaq, 0);
     setCampoForm('p-stock-paq', pres.stockPaq, 0);
+    if (String(prod.categoria || '').trim().toUpperCase() === 'PHX4') {
+        setCampoForm('p-stock-paq', pres.stockUnid, 0);
+    }
 
     setCampoForm('p-costo-caja', pres.costoCaja, 0);
     setCampoForm('p-precio-caja', pres.precioCaja, 0);
@@ -2443,6 +2515,13 @@ function editarProducto(id) {
     if (!prod.unidadesCaja && prod.unidades_caja) setCampoForm('p-unidades-caja', prod.unidades_caja);
     if (!prod.kgPaq && prod.kg_paq) setCampoForm('p-kg-paq', prod.kg_paq);
     if (!prod.kgCaja && prod.kg_caja) setCampoForm('p-kg-caja', prod.kg_caja);
+
+    if (String(prod.categoria || '').trim().toUpperCase() === 'PHX4') {
+        const paquetesPlancha = Number(prod.paquetesPlancha ?? prod.unidadesCaja ?? prod.unidades_caja);
+        setCampoForm('p-paquetes-plancha', paquetesPlancha === 8 ? 8 : 6);
+        setCampoForm('p-stock-paq', pres.stockUnid, 0);
+        actualizarNombresPresentaciones();
+    }
 
     document.querySelectorAll('#form-producto details').forEach((bloque) => {
         bloque.open = true;
@@ -2656,12 +2735,15 @@ function renderizarProductosPorLista(listaProductos) {
         }
 
         // Mostrar conversiones si existen
+        const esPHX4 = String(prod.categoria || '').trim().toUpperCase() === 'PHX4';
         const convPaq = prod.unidadesPaq || prod.unidades_paq || 0;
         const convCaja = prod.unidadesCaja || prod.unidades_caja || 0;
         const convKgPaq = prod.kgPaq || prod.kg_paq || 0;
         const convKgCaja = prod.kgCaja || prod.kg_caja || 0;
 
-        if (convPaq > 0 || convCaja > 0 || convKgPaq > 0 || convKgCaja > 0) {
+        if (esPHX4) {
+            stockHTML += `<br><span class="price-badge" style="color:#fbbf24; font-size:10px;">Plancha: ${reglaCat.slots.find(slot => slot.tipo === 'caja').factor} paquetes</span>`;
+        } else if (convPaq > 0 || convCaja > 0 || convKgPaq > 0 || convKgCaja > 0) {
             stockHTML += `<br><span class="price-badge" style="color:#fbbf24; font-size:10px;">Conv: `;
             if (convPaq > 0) stockHTML += `${convPaq}U/Pq `;
             if (convCaja > 0) stockHTML += `${convCaja}U/Cja `;
@@ -3700,6 +3782,9 @@ async function loadProductosFromSupabase() {
                 imagen: p.imagen,
                 unidadesPaq: p.unidades_paq || p.unidades_paquete,
                 unidadesCaja: p.unidades_caja || p.unidades_caja_box,
+                paquetesPlancha: String(p.categoria || '').trim().toUpperCase() === 'PHX4'
+                    ? (p.unidades_caja || p.unidades_caja_box || 6)
+                    : 0,
                 kgPaq: p.kg_paq || p.kg_paquete,
                 kgCaja: p.kg_caja || p.kg_caja_box,
                 unidades_paq: p.unidades_paq || p.unidades_paquete,
