@@ -1242,10 +1242,21 @@ function confirmarCostosComanda() {
 
     const fechaActual = new Date().toLocaleString('es-PE');
     let totalComanda = 0;
+    const itemsTicketComanda = [];
 
     comandaActualAprobar.items.forEach((it, idx) => {
         const costoInput = parseFloat(document.getElementById(`costo-item-${idx}`).value) || 0;
-        totalComanda += costoInput * it.cantidad;
+        const totalItem = costoInput * (Number(it.cantidad) || 0);
+        totalComanda += totalItem;
+        it.precioUnitario = costoInput.toFixed(2);
+        it.total = totalItem.toFixed(2);
+        itemsTicketComanda.push({
+            desc: `${it.nombre} (${it.tipoPres})`,
+            presentacion: it.tipoPres,
+            cant: it.cantidad,
+            precioUnitario: it.precioUnitario,
+            total: it.total
+        });
 
         const prod = productos.find(p => p.nombre.toLowerCase() === it.nombre.toLowerCase());
         if (prod) {
@@ -1270,8 +1281,15 @@ function confirmarCostosComanda() {
         usuario: `${comandaActualAprobar.usuario} (Admin Pagó)`,
         metodo: `Comanda [${estadoPago}]`,
         total: totalComanda.toFixed(2),
-        items: comandaActualAprobar.items.map(i => ({ desc: `${i.nombre} (${i.tipoPres})`, cant: i.cantidad, total: '0.00' }))
+        items: itemsTicketComanda
     });
+
+    const comandaHistorial = historialComandasRealizadas.find(item => item.comandaId === comandaActualAprobar.comandaId);
+    if (comandaHistorial) {
+        comandaHistorial.estado = estadoPago;
+        comandaHistorial.total = totalComanda.toFixed(2);
+        comandaHistorial.items = comandaActualAprobar.items.map(item => ({ ...item }));
+    }
 
     comandas = comandas.filter(c => c.comandaId !== comandaActualAprobar.comandaId);
 
@@ -1308,12 +1326,20 @@ function imprimirTicketComandaVendedor(comandaId) {
     document.getElementById('t-fecha').textContent = cmd.fecha;
     document.getElementById('t-vendedor').textContent = cmd.usuario;
     document.getElementById('t-metodo').textContent = cmd.estado || 'PENDIENTE';
+    const totalComanda = cmd.items.reduce((total, item) => {
+        const precio = Number(item.precioUnitario ?? item.precioEstimado) || 0;
+        return total + (Number(item.total) || precio * (Number(item.cantidad) || 0));
+    }, 0);
+    document.getElementById('t-total').textContent = Number(cmd.total || cmd.totalEstimado || totalComanda).toFixed(2);
 
     const tbody = document.getElementById('t-items');
-    tbody.innerHTML = '';
-    cmd.items.forEach(it => {
-        tbody.innerHTML += `<tr><td style="color:#000 !important;">${it.nombre} (${it.tipoPres})</td><td style="color:#000 !important;">x${it.cantidad}</td><td style="text-align:right; color:#000 !important;">${cmd.estado || 'PENDIENTE'}</td></tr>`;
-    });
+    tbody.innerHTML = cmd.items.map(it => filaItemTicket({
+        desc: it.nombre,
+        presentacion: it.tipoPres,
+        cant: it.cantidad,
+        precioUnitario: it.precioUnitario ?? it.precioEstimado,
+        total: it.total ?? ((Number(it.precioEstimado) || 0) * (Number(it.cantidad) || 0))
+    })).join('');
     document.getElementById('modal-ticket').style.display = 'flex';
 }
 
@@ -1775,7 +1801,25 @@ function confirmarCobro() {
     }
 
     let detalles = [];
-    let itemsTicket = [];
+    const itemsTicket = carrito.map(item => {
+        const producto = productos.find(prod => String(prod.id) === String(item.id));
+        const presentacion = item.etiquetaPres ||
+            (producto && item.tipoPres !== 'monto'
+                ? etiquetaDePresentacion(producto, item.tipoPres)
+                : (item.tipoPres === 'monto' ? 'KG' : item.tipoPres));
+        const total = item.tipoPres === 'monto'
+            ? Number(item.montoTotal) || 0
+            : (Number(item.precio) || 0) * (Number(item.cantidad) || 0);
+
+        return {
+            desc: item.nombre,
+            presentacion,
+            tipoPres: item.tipoPres,
+            cant: item.cantidad,
+            precioUnitario: (Number(item.precio) || 0).toFixed(2),
+            total: total.toFixed(2)
+        };
+    });
     const fechaActual = new Date().toLocaleString('es-PE');
     const ticketId = 'TK-' + Math.floor(1000 + Math.random() * 9000);
 
@@ -1795,17 +1839,11 @@ function confirmarCobro() {
         total: totalPagarActual.toFixed(2),
         montoEfectivo: montoEfectivo.toFixed(2),
         montoYape: montoYape.toFixed(2),
-        items: carrito.map(i => ({ desc: i.nombre, cant: i.cantidad, total: (i.tipoPres === 'monto' ? i.montoTotal : (i.precio * i.cantidad)).toFixed(2) }))
+        items: itemsTicket
     });
 
     carrito.forEach(item => {
-        const subtotal = item.tipoPres === 'monto' ? item.montoTotal : (item.precio * item.cantidad);
         detalles.push(`${item.nombre} x${item.cantidad}`);
-        itemsTicket.push({
-            desc: item.nombre,
-            cant: item.cantidad,
-            total: subtotal.toFixed(2)
-        });
 
         const prod = productos.find(p => p.id === item.id);
         if (prod) {
@@ -2371,6 +2409,33 @@ function renderizarReportes() {
     `).join('') || `<tr><td colspan="6" style="text-align:center; color:#64748b;">No hay registros de ventas.</td></tr>`;
 }
 
+function precioUnitarioTicket(item) {
+    const precioGuardado = Number(item.precioUnitario ?? item.precio);
+    if (Number.isFinite(precioGuardado) && precioGuardado > 0) return precioGuardado;
+
+    const cantidad = Number(item.cant ?? item.cantidad);
+    const total = Number(item.total);
+    return Number.isFinite(cantidad) && cantidad > 0 && Number.isFinite(total) && total > 0
+        ? total / cantidad
+        : 0;
+}
+
+function filaItemTicket(item) {
+    const cantidad = Number(item.cant ?? item.cantidad) || 0;
+    const total = Number(item.total) || 0;
+    const precioUnitario = precioUnitarioTicket(item);
+    const presentacion = item.presentacion || item.etiquetaPres || '';
+    const descripcion = presentacion && !String(item.desc || '').includes(presentacion)
+        ? `${item.desc} (${presentacion})`
+        : (item.desc || item.nombre || '');
+
+    return `<tr>
+        <td style="color:#000 !important;">${descripcion}</td>
+        <td style="color:#000 !important;">x${cantidad}</td>
+        <td style="text-align:right; color:#000 !important;">S/ ${precioUnitario.toFixed(2)} c/u<br><small>Total: S/ ${total.toFixed(2)}</small></td>
+    </tr>`;
+}
+
 function verTicketComprobante(ticketId) {
     const k = kardex.find(item => item.ticketId === ticketId);
     if (!k) return;
@@ -2383,9 +2448,7 @@ function verTicketComprobante(ticketId) {
     const tbody = document.getElementById('t-items');
     tbody.innerHTML = '';
     if (k.items && k.items.length > 0) {
-        k.items.forEach(it => {
-            tbody.innerHTML += `<tr><td style="color:#000 !important;">${it.desc}</td><td style="color:#000 !important;">x${it.cant}</td><td style="text-align:right; color:#000 !important;">S/ ${it.total}</td></tr>`;
-        });
+        tbody.innerHTML = k.items.map(filaItemTicket).join('');
     } else {
         tbody.innerHTML = `<tr><td colspan="3" style="color:#000 !important;">${k.producto || k.detalle}</td></tr>`;
     }
