@@ -1,3 +1,46 @@
+const REGLAS_PRESENTACION = {
+    PH: {
+        unidadBase: 'rollos sueltos',
+        slots: [
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 rollo)', precio: 1, factor: 1, resumen: '▼ 1. UNIDAD (1 rollo)' },
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Pareja', label: 'Pareja (2 rollos)', precio: 1.5, factor: 2, resumen: '▼ 2. PAREJA (2 rollos)' },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Bloque', label: 'Bloque (5 pares / 10 rollos)', precio: 6.3, factor: 10, resumen: '▼ 3. BLOQUE (5 pares / 10 rollos)' },
+            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Paquete', label: 'Paquete (10 pares / 20 rollos)', precio: 12.5, factor: 20, resumen: '▼ 4. PAQUETE (20 rollos)' }
+        ]
+    },
+    PHX4: {
+        unidadBase: 'paquetes',
+        slots: [
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete', precio: 4.5, factor: 1, resumen: '▼ PAQUETE' },
+            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Plancha', label: 'Plancha (6 paquetes)', precio: 27, factor: 6, resumen: '▼ PLANCHA (6 paquetes)' }
+        ]
+    },
+    PILA: {
+        unidadBase: 'pilas sueltas',
+        slots: [
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 pila)', precio: 1, factor: 1, resumen: '▼ 1. UNIDAD (1 pila)' },
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Par', label: 'Par (2 pilas)', precio: 2, factor: 2, resumen: '▼ 2. PAR (2 pilas)' },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Caja / Blíster', label: 'Caja / Blíster (20 pilas)', precio: 16, factor: 20, resumen: '▼ 3. CAJA / BLÍSTER (20 pilas)' }
+        ]
+    },
+    GUSTA: {
+        unidadBase: 'sobres',
+        slots: [
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 sobre)', precio: 0.4, factor: 1, resumen: '▼ 1. UNIDAD (1 sobre)' },
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Promoción 3x1', label: 'Promoción (3 sobres)', precio: 1, factor: 3, resumen: '▼ 2. PROMOCIÓN (3 sobres)' },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete completo (80 sobres)', precio: 21, factor: 80, resumen: '▼ 3. PAQUETE COMPLETO (80 sobres)' }
+        ]
+    },
+    OREGANO: {
+        unidadBase: 'sobres',
+        slots: [
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 sobre)', precio: 0.3, factor: 1, resumen: '▼ 1. UNIDAD (1 sobre)' },
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Promoción', label: 'Promoción (2 sobres)', precio: 0.5, factor: 2, resumen: '▼ 2. PROMOCIÓN (2 sobres)' },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Caja', label: 'Caja completo (40 sobres)', precio: 9, factor: 40, resumen: '▼ 3. CAJA COMPLETO (40 sobres)' }
+        ]
+    }
+};
+
 function obtenerRol() {
     const raw = (
         localStorage.getItem('usuario_rol') ||
@@ -309,49 +352,6 @@ const CAMPOS_FORM_PRES = {
     2: { campo: 'Doc', precio: 'p-precio-doc', costo: 'p-costo-doc', stock: 'p-stock-doc', sum: 'sum-pres-2', lblPrecio: 'lbl-precio-2', lblCosto: 'lbl-costo-2', lblStock: 'lbl-stock-2' },
     3: { campo: 'Paq', precio: 'p-precio-paq', costo: 'p-costo-paq', stock: 'p-stock-paq', sum: 'sum-pres-3', lblPrecio: 'lbl-precio-3', lblCosto: 'lbl-costo-3', lblStock: 'lbl-stock-3' },
     4: { campo: 'Caja', precio: 'p-precio-caja', costo: 'p-costo-caja', stock: 'p-stock-caja', sum: 'sum-pres-4', lblPrecio: 'lbl-precio-4', lblCosto: 'lbl-costo-4', lblStock: 'lbl-stock-4' }
-};
-
-const REGLAS_PRESENTACION = {
-    PH: {
-        unidadBase: 'rollos sueltos',
-        slots: [
-            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 rollo)', precio: 1, factor: 1, resumen: '▼ 1. UNIDAD (1 rollo)' },
-            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Pareja', label: 'Pareja (2 rollos)', precio: 1.5, factor: 2, resumen: '▼ 2. PAREJA (2 rollos)' },
-            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Bloque', label: 'Bloque (5 pares / 10 rollos)', precio: 6.3, factor: 10, resumen: '▼ 3. BLOQUE (5 pares / 10 rollos)' },
-            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Paquete', label: 'Paquete (10 pares / 20 rollos)', precio: 12.5, factor: 20, resumen: '▼ 4. PAQUETE (20 rollos)' }
-        ]
-    },
-    PHX4: {
-        unidadBase: 'paquetes',
-        slots: [
-            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete', precio: 4.5, factor: 1, resumen: '▼ PAQUETE' },
-            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Plancha', label: 'Plancha (6 paquetes)', precio: 27, factor: 6, resumen: '▼ PLANCHA (6 paquetes)' }
-        ]
-    },
-    PILA: {
-        unidadBase: 'pilas sueltas',
-        slots: [
-            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 pila)', precio: 1, factor: 1, resumen: '▼ 1. UNIDAD (1 pila)' },
-            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Par', label: 'Par (2 pilas)', precio: 2, factor: 2, resumen: '▼ 2. PAR (2 pilas)' },
-            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Caja / Blíster', label: 'Caja / Blíster (20 pilas)', precio: 16, factor: 20, resumen: '▼ 3. CAJA / BLÍSTER (20 pilas)' }
-        ]
-    },
-    GUSTA: {
-        unidadBase: 'sobres',
-        slots: [
-            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 sobre)', precio: 0.4, factor: 1, resumen: '▼ 1. UNIDAD (1 sobre)' },
-            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Promoción 3x1', label: 'Promoción (3 sobres)', precio: 1, factor: 3, resumen: '▼ 2. PROMOCIÓN (3 sobres)' },
-            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete completo (80 sobres)', precio: 21, factor: 80, resumen: '▼ 3. PAQUETE COMPLETO (80 sobres)' }
-        ]
-    },
-    OREGANO: {
-        unidadBase: 'sobres',
-        slots: [
-            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 sobre)', precio: 0.3, factor: 1, resumen: '▼ 1. UNIDAD (1 sobre)' },
-            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Promoción', label: 'Promoción (2 sobres)', precio: 0.5, factor: 2, resumen: '▼ 2. PROMOCIÓN (2 sobres)' },
-            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Caja', label: 'Caja completo (40 sobres)', precio: 9, factor: 40, resumen: '▼ 3. CAJA COMPLETO (40 sobres)' }
-        ]
-    }
 };
 
 function reglaPresentacionProducto(prodOrCat) {
