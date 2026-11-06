@@ -12,6 +12,10 @@ function obtenerRol() {
     return raw;
 }
 
+function obtenerFechaCajaLocal(fecha = new Date()) {
+    return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
+}
+
 // Configuración de Supabase
 const SUPABASE_URL = 'https://nxiviidirmzqbcldegus.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_Qf-bMKqDet0Xgh6PHExtsA_s3g0jXzn';
@@ -61,7 +65,10 @@ if (typeof window.supabase !== 'undefined') {
 }
 
 const rol = obtenerRol();
-let montoInicialCaja = (rol === 'vendedor') ? parseFloat(localStorage.getItem('caja_inicial') || '50.00') : 0.00;
+const fechaAperturaCajaHoy = obtenerFechaCajaLocal();
+let montoInicialCaja = rol === 'vendedor' && localStorage.getItem('caja_apertura_fecha') === fechaAperturaCajaHoy
+    ? (parseFloat(localStorage.getItem('caja_inicial')) || 0)
+    : 0;
 
 // Asignar clase del rol al body inmediatamente para evitar parpadeo
 const rolUsuario = localStorage.getItem('usuario_rol');
@@ -161,6 +168,7 @@ function aplicarMenuPorRol() {
 
     const elMontoInicial = document.getElementById('monto-inicial');
     if (elMontoInicial) elMontoInicial.textContent = montoInicialCaja.toFixed(2);
+    actualizarEstadoVisualCaja();
 
     // Administrador: ventas, inventario, almacén, caja, kárdex, reportes, cierre/arqueo
     // Vendedor: ventas, compras directas, inventario, caja, kárdex, registro ventas, cierre/arqueo
@@ -1740,6 +1748,15 @@ function actualizarCarritoUI() {
 }
 
 function abrirModalPago() {
+    if (requiereAperturaCajaHoy()) {
+        alert('Debe registrar la apertura de caja de hoy antes de iniciar las ventas.');
+        window.location.href = 'caja.html';
+        return;
+    }
+    if (cajaEstaCerradaHoy()) {
+        alert('La caja está cerrada por hoy. No se pueden registrar más ventas.');
+        return;
+    }
     document.getElementById('modal-monto').textContent = 'S/ ' + totalPagarActual.toFixed(2);
     document.getElementById('monto-recibido').value = '';
     document.getElementById('monto-vuelto').textContent = '0.00';
@@ -1779,6 +1796,16 @@ function calcularVueltoMixto() {
 }
 
 function confirmarCobro() {
+    if (requiereAperturaCajaHoy()) {
+        alert('Debe registrar la apertura de caja de hoy antes de iniciar las ventas.');
+        window.location.href = 'caja.html';
+        return;
+    }
+    if (cajaEstaCerradaHoy()) {
+        alert('La caja está cerrada por hoy. No se pueden registrar más ventas.');
+        return;
+    }
+
     let montoEfectivo = 0;
     let montoYape = 0;
 
@@ -2035,28 +2062,93 @@ function imprimirTicketActual() {
     }, 500);
 }
 
-function renderizarVistaCaja() {
-    const fechaHoyStr = new Date().toLocaleDateString('es-PE');
-    let totalYapeHoy = 0;
-    let totalEfectivoHoy = 0;
+function cajaEstaCerradaHoy() {
+    return localStorage.getItem('caja_estado') === 'CERRADA' &&
+        localStorage.getItem('caja_estado_fecha') === obtenerFechaCajaLocal();
+}
 
-    kardex.forEach(k => {
-        if (k.ticketId && k.fecha && k.fecha.includes(fechaHoyStr)) {
-            if (k.metodo === 'Yape' || k.tipo === 'Yape') {
-                totalYapeHoy += parseFloat(k.total || k.cantidad) || 0;
-            } else if (k.metodo === 'Efectivo' || k.tipo === 'Efectivo') {
-                totalEfectivoHoy += parseFloat(k.total || k.cantidad) || 0;
-            } else if (k.metodo && k.metodo.includes('Mixto')) {
-                totalEfectivoHoy += parseFloat(k.montoEfectivo || 0) || 0;
-                totalYapeHoy += parseFloat(k.montoYape || 0) || 0;
-            }
+function requiereAperturaCajaHoy() {
+    return rol === 'vendedor' && localStorage.getItem('caja_apertura_fecha') !== obtenerFechaCajaLocal();
+}
+
+function actualizarEstadoVisualCaja() {
+    const estado = document.getElementById('estado-caja');
+    if (!estado) return;
+    const cerrada = cajaEstaCerradaHoy();
+    const pendienteApertura = !cerrada && requiereAperturaCajaHoy();
+    estado.textContent = cerrada ? 'CERRADA' : (pendienteApertura ? 'PENDIENTE APERTURA' : 'ABIERTA');
+    estado.style.color = cerrada ? '#f87171' : (pendienteApertura ? '#fbbf24' : '#4ade80');
+    const resumenApertura = document.getElementById('resumen-apertura-caja');
+    const resumenCierre = document.getElementById('resumen-cierre-caja');
+    const montoCierre = document.getElementById('monto-cierre');
+    if (resumenApertura) resumenApertura.style.display = cerrada ? 'none' : '';
+    if (resumenCierre) resumenCierre.style.display = cerrada ? '' : 'none';
+    if (cerrada && montoCierre) {
+        montoCierre.textContent = (parseFloat(localStorage.getItem('caja_monto_cierre')) || 0).toFixed(2);
+    }
+}
+
+function obtenerResumenCajaHoy() {
+    const fechaHoyStr = new Date().toLocaleDateString('es-PE');
+    let totalYapeHoy = 0, totalEfectivoHoy = 0, totalGastosHoy = 0;
+    const ventasDelDia = kardex.filter(k =>
+        k.ticketId && k.fecha && k.fecha.includes(fechaHoyStr) && !k.ticketId.startsWith('CMD-')
+    );
+
+    ventasDelDia.forEach(k => {
+        if (k.metodo === 'Yape' || k.tipo === 'Yape') {
+            totalYapeHoy += parseFloat(k.total || k.cantidad) || 0;
+        } else if (k.metodo === 'Efectivo' || k.tipo === 'Efectivo') {
+            totalEfectivoHoy += parseFloat(k.total || k.cantidad) || 0;
+        } else if (k.metodo && k.metodo.includes('Mixto')) {
+            totalEfectivoHoy += parseFloat(k.montoEfectivo || 0) || 0;
+            totalYapeHoy += parseFloat(k.montoYape || 0) || 0;
         }
     });
 
-    let totalGastosHoy = 0;
-    gastosDelDia.forEach(g => {
-        if (g.fecha && g.fecha.includes(fechaHoyStr)) totalGastosHoy += parseFloat(g.monto) || 0;
+    const gastosDelDiaHoy = gastosDelDia.filter(g => g.fecha && g.fecha.includes(fechaHoyStr));
+    gastosDelDiaHoy.forEach(g => {
+        totalGastosHoy += parseFloat(g.monto) || 0;
     });
+    return { ventasDelDia, gastosDelDiaHoy, totalYapeHoy, totalEfectivoHoy, totalGastosHoy };
+}
+
+function registrarEstadoCierreCaja(fecha = new Date()) {
+    const fechaCaja = obtenerFechaCajaLocal(fecha);
+    if (localStorage.getItem('caja_estado') === 'CERRADA' &&
+        localStorage.getItem('caja_estado_fecha') === fechaCaja) return false;
+
+    const resumen = obtenerResumenCajaHoy();
+    const efectivoFinal = Number((montoInicialCaja + resumen.totalEfectivoHoy - resumen.totalGastosHoy).toFixed(2));
+    localStorage.setItem('caja_estado', 'CERRADA');
+    localStorage.setItem('caja_estado_fecha', fechaCaja);
+    localStorage.setItem('caja_monto_cierre', efectivoFinal.toFixed(2));
+    localStorage.setItem('caja_hora_cierre', fecha.toISOString());
+    actualizarEstadoVisualCaja();
+    return true;
+}
+
+function verificarCierreAutomaticoCaja() {
+    const ahora = new Date();
+    if (ahora.getHours() >= 19 && !cajaEstaCerradaHoy()) {
+        registrarEstadoCierreCaja(ahora);
+    }
+    actualizarEstadoVisualCaja();
+}
+
+function programarCierreAutomaticoCaja() {
+    verificarCierreAutomaticoCaja();
+    const ahora = new Date();
+    const cierreHoy = new Date(ahora);
+    cierreHoy.setHours(19, 0, 0, 0);
+    if (ahora < cierreHoy) {
+        window.setTimeout(verificarCierreAutomaticoCaja, cierreHoy.getTime() - ahora.getTime());
+    }
+    window.setInterval(verificarCierreAutomaticoCaja, 60 * 1000);
+}
+
+function renderizarVistaCaja() {
+    const { totalYapeHoy, totalEfectivoHoy, totalGastosHoy } = obtenerResumenCajaHoy();
 
     document.getElementById('caja-card-inicio').textContent = 'S/ ' + montoInicialCaja.toFixed(2);
     document.getElementById('caja-card-yape').textContent = 'S/ ' + totalYapeHoy.toFixed(2);
@@ -2116,6 +2208,16 @@ function seleccionarComandaCobrar(comandaId) {
 
 function registrarGastoDia(e) {
     e.preventDefault();
+    if (requiereAperturaCajaHoy()) {
+        alert('Debe registrar la apertura de caja de hoy antes de registrar salidas.');
+        window.location.href = 'caja.html';
+        return;
+    }
+    if (cajaEstaCerradaHoy()) {
+        alert('La caja está cerrada por hoy. No se pueden registrar más salidas.');
+        return;
+    }
+
     const ahora = new Date();
     const comandaIdSel = document.getElementById('gasto-comanda-select').value;
     const tipoGasto = document.getElementById('gasto-tipo').value;
@@ -2153,20 +2255,7 @@ function registrarGastoDia(e) {
 }
 
 function imprimirArqueoTurno() {
-    const fechaHoyStr = new Date().toLocaleDateString('es-PE');
-    let totalYapeHoy = 0, totalEfectivoHoy = 0, totalGastosHoy = 0;
-
-    const ventasDelDia = kardex.filter(k => k.ticketId && k.fecha && k.fecha.includes(fechaHoyStr) && !k.ticketId.startsWith('CMD-'));
-
-    ventasDelDia.forEach(k => {
-        if (k.metodo === 'Yape' || k.tipo === 'Yape') totalYapeHoy += parseFloat(k.total || k.cantidad) || 0;
-        if (k.metodo === 'Efectivo' || k.tipo === 'Efectivo') totalEfectivoHoy += parseFloat(k.total || k.cantidad) || 0;
-    });
-
-    const gastosDelDiaHoy = gastosDelDia.filter(g => g.fecha && g.fecha.includes(fechaHoyStr));
-    gastosDelDiaHoy.forEach(g => {
-        totalGastosHoy += parseFloat(g.monto) || 0;
-    });
+    const { ventasDelDia, gastosDelDiaHoy, totalYapeHoy, totalEfectivoHoy, totalGastosHoy } = obtenerResumenCajaHoy();
 
     const efectivoFinalCajon = (montoInicialCaja + totalEfectivoHoy) - totalGastosHoy;
     const cierreId = 'CIERRE-' + Math.floor(100 + Math.random() * 900);
@@ -2939,6 +3028,7 @@ async function inicializarSistema() {
     // Cargar datos desde localStorage primero (async porque puede consultar Supabase)
     await cargarDatosDesdeLocalStorage();
 
+    programarCierreAutomaticoCaja();
     aplicarMenuPorRol();
     if (typeof aplicarRestriccionesPorRol === 'function') aplicarRestriccionesPorRol();
     // NO llamar a cambiarTab aquí para evitar recursividad
@@ -3107,7 +3197,12 @@ function cerrarSesion() {
 }
 
 function cerrarCaja() {
+    if (cajaEstaCerradaHoy()) {
+        alert('La caja ya está cerrada por hoy.');
+        return;
+    }
     if (confirm("¿Cerrar caja y finalizar turno?")) {
+        registrarEstadoCierreCaja();
         if (typeof imprimirArqueoTurno === 'function') imprimirArqueoTurno();
     }
 }
