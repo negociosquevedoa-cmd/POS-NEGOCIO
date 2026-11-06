@@ -2893,8 +2893,6 @@ function renderizarProductosPorLista(listaProductos) {
         const reglaCat = reglaPresentacionProducto(prod);
         const comerciales = listaPresentacionesComerciales(prod);
 
-        const costoVal = pres.costoUnid.toFixed(2);
-
         const coloresPrecio = ['#38bdf8', '#fbbf24', '#c084fc', '#f87171'];
         let preciosHTML = comerciales.map((p, idx) => {
             const sep = idx ? '<br>' : '';
@@ -2903,10 +2901,23 @@ function renderizarProductosPorLista(listaProductos) {
 
         let costosHTML = '';
         if (rolActual !== 'vendedor' && rolActual !== 'inventario_consulta') {
-            costosHTML = `<span class="price-badge" style="color:#4ade80;">Costo: S/ ${costoVal}</span>`;
-            if (pres.costoPaq > 0) {
-                costosHTML += ` <span class="price-badge" style="color:#4ade80;">Costo Pqte: S/ ${pres.costoPaq.toFixed(2)}</span>`;
-            }
+            const presentacionesCosto = reglaCat
+                ? reglaCat.slots.map(slot => ({
+                    campo: slot.campo,
+                    label: slot.label
+                }))
+                : [
+                    { campo: 'Unid', label: labels.unid },
+                    { campo: 'Doc', label: labels.doc },
+                    { campo: 'Paq', label: labels.paq },
+                    { campo: 'Caja', label: labels.caja },
+                    { campo: 'Tira', label: labels.tira },
+                    { campo: 'Docena', label: labels.docena }
+                ];
+            costosHTML = presentacionesCosto
+                .filter(p => pres['costo' + p.campo] > 0)
+                .map(p => `<span class="price-badge" style="color:#4ade80;">Costo ${p.label}: S/ ${pres['costo' + p.campo].toFixed(2)}</span>`)
+                .join('<br>');
         } else if (rolActual === 'vendedor') {
             costosHTML = `<span style="color: #64748b; font-style: italic;">Oculto</span>`;
         }
