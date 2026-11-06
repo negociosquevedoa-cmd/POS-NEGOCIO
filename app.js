@@ -881,12 +881,9 @@ function detalleCambiosInventario(anterior, siguiente) {
     const regla = reglaPresentacionProducto(siguiente);
     const presentaciones = regla
         ? regla.slots.map(slot => ({ key: slot.campo, label: slot.label }))
-        : [
-            { key: 'Unid', label: 'Unid' },
-            { key: 'Doc', label: 'Doc' },
-            { key: 'Paq', label: 'Paq' },
-            { key: 'Caja', label: 'Caja' }
-        ];
+        : Object.values(CAMPOS_FORM_PRES)
+            .filter(meta => meta.campo !== 'Tira' && meta.campo !== 'Docena')
+            .map(meta => ({ key: meta.campo, label: meta.campo }));
     const cambios = [];
     presentaciones.forEach((u) => {
         const pOld = oldP['precio' + u.key];
@@ -923,8 +920,12 @@ function leerCampoNumero(id) {
     return aNumeroProd(el ? el.value : 0, 0);
 }
 
-function leerPresentacionesFormulario() {
-    return Object.values(CAMPOS_FORM_PRES).reduce((presentaciones, meta) => {
+function leerPresentacionesFormulario(categoria) {
+    const regla = reglaPresentacionProducto(categoria);
+    const camposActivos = regla
+        ? regla.slots.map(slot => CAMPOS_FORM_PRES[slot.id]).filter(Boolean)
+        : Object.values(CAMPOS_FORM_PRES);
+    return camposActivos.reduce((presentaciones, meta) => {
         presentaciones['costo' + meta.campo] = leerCampoNumero(meta.costo);
         presentaciones['precio' + meta.campo] = leerCampoNumero(meta.precio);
         presentaciones['stock' + meta.campo] = leerCampoNumero(meta.stock);
@@ -942,10 +943,9 @@ function guardarProductoLocal(e) {
     const prodAnterior = editId
         ? productos.find(p => String(p.id) === String(editId))
         : null;
-    const presentacionesForm = leerPresentacionesFormulario();
-
     const imagenNueva = (document.getElementById('imagen-base64') || {}).value;
     const categoriaProducto = document.getElementById('p-categoria').value;
+    const presentacionesForm = leerPresentacionesFormulario(categoriaProducto);
     const esPHX4 = categoriaProducto.trim().toUpperCase() === 'PHX4';
     const paquetesPlancha = esPHX4
         ? (Number(document.getElementById('p-paquetes-plancha')?.value) === 8 ? 8 : 6)
@@ -2660,30 +2660,14 @@ function editarProducto(id) {
     const inputCodigo = document.getElementById('p-codigo');
     if (inputCodigo) inputCodigo.value = prod.codigo || '';
 
-    setCampoForm('p-costo-unid', pres.costoUnid, 0);
-    setCampoForm('p-precio-unid', pres.precioUnid, 0);
-    setCampoForm('p-stock-unid', pres.stockUnid, 0);
-
-    setCampoForm('p-costo-doc', pres.costoDoc, 0);
-    setCampoForm('p-precio-doc', pres.precioDoc, 0);
-    setCampoForm('p-stock-doc', pres.stockDoc, 0);
-
-    setCampoForm('p-costo-paq', pres.costoPaq, 0);
-    setCampoForm('p-precio-paq', pres.precioPaq, 0);
-    setCampoForm('p-stock-paq', pres.stockPaq, 0);
+    Object.values(CAMPOS_FORM_PRES).forEach(meta => {
+        setCampoForm(meta.costo, pres['costo' + meta.campo], 0);
+        setCampoForm(meta.precio, pres['precio' + meta.campo], 0);
+        setCampoForm(meta.stock, pres['stock' + meta.campo], 0);
+    });
     if (String(prod.categoria || '').trim().toUpperCase() === 'PHX4') {
         setCampoForm('p-stock-paq', pres.stockUnid, 0);
     }
-
-    setCampoForm('p-costo-caja', pres.costoCaja, 0);
-    setCampoForm('p-precio-caja', pres.precioCaja, 0);
-    setCampoForm('p-stock-caja', pres.stockCaja, 0);
-    setCampoForm('p-costo-tira', pres.costoTira, 0);
-    setCampoForm('p-precio-tira', pres.precioTira, 0);
-    setCampoForm('p-stock-tira', pres.stockTira, 0);
-    setCampoForm('p-costo-docena', pres.costoDocena, 0);
-    setCampoForm('p-precio-docena', pres.precioDocena, 0);
-    setCampoForm('p-stock-docena', pres.stockDocena, 0);
 
     const reglaEdicion = reglaPresentacionProducto(prod);
     if (reglaEdicion) {
@@ -3727,24 +3711,13 @@ async function syncProductoToSupabase(producto) {
                 nombre: producto.nombre,
                 categoria: producto.categoria,
                 codigo: producto.codigo,
-                costo_unid: producto.costoUnid || 0,
-                precio_unid: producto.precioUnid || 0,
-                stock_unid: producto.stockUnid || 0,
-                costo_doc: producto.costoDoc || 0,
-                precio_doc: producto.precioDoc || 0,
-                stock_doc: producto.stockDoc || 0,
-                costo_paq: producto.costoPaq || 0,
-                precio_paq: producto.precioPaq || 0,
-                stock_paq: producto.stockPaq || 0,
-                costo_caja: producto.costoCaja || 0,
-                precio_caja: producto.precioCaja || 0,
-                stock_caja: producto.stockCaja || 0,
-                costo_tira: producto.costoTira || 0,
-                precio_tira: producto.precioTira || 0,
-                stock_tira: producto.stockTira || 0,
-                costo_docena: producto.costoDocena || 0,
-                precio_docena: producto.precioDocena || 0,
-                stock_docena: producto.stockDocena || 0,
+                ...Object.values(CAMPOS_FORM_PRES).reduce((campos, meta) => {
+                    const sufijo = meta.campo.toLowerCase();
+                    campos[`costo_${sufijo}`] = producto['costo' + meta.campo] || 0;
+                    campos[`precio_${sufijo}`] = producto['precio' + meta.campo] || 0;
+                    campos[`stock_${sufijo}`] = producto['stock' + meta.campo] || 0;
+                    return campos;
+                }, {}),
                 imagen: producto.imagen || 'https://via.placeholder.com/80',
                 unidades_paq: producto.unidadesPaq || producto.unidades_paq || 0,
                 unidades_caja: producto.unidadesCaja || producto.unidades_caja || 0,
@@ -3989,24 +3962,13 @@ async function loadProductosFromSupabase() {
                 nombre: p.nombre,
                 categoria: p.categoria,
                 codigo: p.codigo,
-                costoUnid: p.costo_unid,
-                precioUnid: p.precio_unid,
-                stockUnid: p.stock_unid,
-                costoDoc: p.costo_doc,
-                precioDoc: p.precio_doc,
-                stockDoc: p.stock_doc,
-                costoPaq: p.costo_paq,
-                precioPaq: p.precio_paq,
-                stockPaq: p.stock_paq,
-                costoCaja: p.costo_caja,
-                precioCaja: p.precio_caja,
-                stockCaja: p.stock_caja,
-                costoTira: p.costo_tira,
-                precioTira: p.precio_tira,
-                stockTira: p.stock_tira,
-                costoDocena: p.costo_docena,
-                precioDocena: p.precio_docena,
-                stockDocena: p.stock_docena,
+                ...Object.values(CAMPOS_FORM_PRES).reduce((presentaciones, meta) => {
+                    const sufijo = meta.campo.toLowerCase();
+                    presentaciones['costo' + meta.campo] = p[`costo_${sufijo}`];
+                    presentaciones['precio' + meta.campo] = p[`precio_${sufijo}`];
+                    presentaciones['stock' + meta.campo] = p[`stock_${sufijo}`];
+                    return presentaciones;
+                }, {}),
                 imagen: p.imagen,
                 unidadesPaq: p.unidades_paq || p.unidades_paquete,
                 unidadesCaja: p.unidades_caja || p.unidades_caja_box,
