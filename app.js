@@ -1371,11 +1371,10 @@ function imprimirTicketComandaVendedor(comandaId) {
 
     const tbody = document.getElementById('t-items');
     tbody.innerHTML = cmd.items.map(it => filaItemTicket({
+        ...it,
         desc: it.nombre,
         presentacion: it.tipoPres,
         cant: it.cantidad,
-        precioUnitario: it.precioUnitario ?? it.precioEstimado,
-        total: it.total ?? ((Number(it.precioEstimado) || 0) * (Number(it.cantidad) || 0))
     })).join('');
     document.getElementById('modal-ticket').style.display = 'flex';
 }
@@ -2528,20 +2527,17 @@ function renderizarReportes() {
 }
 
 function precioUnitarioTicket(item) {
-    const precioGuardado = Number(item.precioUnitario ?? item.precio);
-    if (Number.isFinite(precioGuardado) && precioGuardado > 0) return precioGuardado;
-
-    const cantidad = Number(item.cant ?? item.cantidad);
-    const total = Number(item.total);
-    return Number.isFinite(cantidad) && cantidad > 0 && Number.isFinite(total) && total > 0
-        ? total / cantidad
-        : 0;
+    const precio = Number(
+        item.precio_unitario || item.precio || item.precioVenta ||
+        item.precioUnitario || item.precioEstimado || 0
+    );
+    return Number.isFinite(precio) ? precio : 0;
 }
 
 function filaItemTicket(item) {
     const cantidad = Number(item.cant ?? item.cantidad) || 0;
-    const total = Number(item.total) || 0;
     const precioUnitario = precioUnitarioTicket(item);
+    const total = precioUnitario * cantidad;
     const presentacion = item.presentacion || item.etiquetaPres || '';
     const descripcion = presentacion && !String(item.desc || '').includes(presentacion)
         ? `${item.desc} (${presentacion})`
