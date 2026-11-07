@@ -1501,6 +1501,7 @@ function agregarProductoPorCodigo(prod, codigo) {
             tipoPres: tipoPres,
             nombre: prod.nombre,
             precio: precioPres,
+            precio_unitario_aplicado: precioPres,
             cantidad: 1,
             stockMax: reglaCodigo ? Math.floor(Math.max(0, (pres.stockUnid || 0) - reservadasCodigo) / factorCodigo) : stockDisponible,
             factorUnidades: reglaCodigo ? factorCodigo : 1,
@@ -1549,6 +1550,7 @@ function agregarAlCarrito(id) {
                 tipoPres: 'monto',
                 nombre: prod.nombre,
                 precio: pres.precioUnid,
+                precio_unitario_aplicado: pres.precioUnid,
                 cantidad: kgCalculados,
                 montoTotal: montoIngresado,
                 stockMax: pres.stockUnid
@@ -1602,6 +1604,7 @@ function agregarAlCarrito(id) {
             tipoPres: tipoPres,
             nombre: prod.nombre,
             precio: precioPres,
+            precio_unitario_aplicado: precioPres,
             cantidad: 1,
             stockMax: reglaVenta ? Math.floor(Math.max(0, sueltos - otras) / factorVenta) : prod.stockUnid,
             factorUnidades: factorVenta,
@@ -1716,6 +1719,34 @@ function eliminarDelCarrito(key) {
     actualizarCarritoUI();
 }
 
+function precioUnitarioAplicado(item) {
+    const precio = Number(item.precio_unitario_aplicado ?? item.precio);
+    return Number.isFinite(precio) ? precio : 0;
+}
+
+function subtotalItemCarrito(item) {
+    if (item.tipoPres === 'monto' && item.precio_personalizado === undefined) {
+        return Number(item.montoTotal) || 0;
+    }
+    return precioUnitarioAplicado(item) * (Number(item.cantidad) || 0);
+}
+
+function modificarPrecioCarrito(key, valor) {
+    if (rolUsuario !== 'admin') return;
+
+    const item = carrito.find(i => i.key === key);
+    const precio = Number(valor);
+    if (!item || !Number.isFinite(precio) || precio < 0) {
+        alert('Ingrese un precio válido para el producto.');
+        actualizarCarritoUI();
+        return;
+    }
+
+    item.precio_personalizado = precio;
+    item.precio_unitario_aplicado = precio;
+    actualizarCarritoUI();
+}
+
 function actualizarCarritoUI() {
     const contenedor = document.getElementById('contenedor-carrito');
     const montoTotal = document.getElementById('monto-total');
@@ -1740,24 +1771,33 @@ function actualizarCarritoUI() {
 
         if (item.tipoPres === 'monto') {
             // Para venta por monto, usar el monto total directamente
-            subtotal = item.montoTotal;
-            displayInfo = `💰 S/ ${item.montoTotal.toFixed(2)} (${item.cantidad.toFixed(2)} KG)`;
+            subtotal = subtotalItemCarrito(item);
+            displayInfo = `💰 S/ ${subtotal.toFixed(2)} (${item.cantidad.toFixed(2)} KG)`;
         } else {
-            subtotal = item.precio * item.cantidad;
+            const precio = precioUnitarioAplicado(item);
+            subtotal = subtotalItemCarrito(item);
             const unidadesTxt = item.factorUnidades > 1
                 ? ` · ${item.cantidad * item.factorUnidades} unid`
                 : '';
             const presTxt = item.etiquetaPres ? `${item.etiquetaPres} · ` : '';
-            displayInfo = `${presTxt}S/ ${item.precio.toFixed(2)} x ${item.cantidad}${unidadesTxt}`;
+            displayInfo = `${presTxt}S/ ${precio.toFixed(2)} x ${item.cantidad}${unidadesTxt}`;
         }
 
         total += subtotal;
+        const editorPrecio = rolUsuario === 'admin'
+            ? `<label style="display:block; margin-top:4px; font-size:11px;">Precio unitario S/
+                <input type="number" min="0" step="0.01" value="${precioUnitarioAplicado(item).toFixed(2)}"
+                    aria-label="Precio unitario de ${item.nombre}"
+                    onchange="modificarPrecioCarrito('${item.key}', this.value)"
+                    style="width:76px; margin-left:4px;"></label>`
+            : '';
 
         contenedor.innerHTML += `
             <div class="cart-item">
                 <div class="cart-item-info">
                     <div class="cart-item-title">${item.nombre}</div>
                     <div class="cart-item-sub">${displayInfo} = <strong>S/ ${subtotal.toFixed(2)}</strong></div>
+                    ${editorPrecio}
                 </div>
                 <div class="cart-controls">
                     <button class="btn-qty" onclick="cambiarCantidad('${item.key}', -1)">-</button>
@@ -1823,6 +1863,27 @@ function calcularVueltoMixto() {
     document.getElementById('vuelto-mixto').textContent = vuelto > 0 ? vuelto.toFixed(2) : '0.00';
 }
 
+function preciosOficialesProducto(prod, tipoPres) {
+    const pres = extraerPresentacionesProducto(prod);
+    const tipo = String(tipoPres || '').toLowerCase();
+    const camposPorTipo = {
+        monto: 'Unid',
+        unid: 'Unid',
+        doc: 'Doc',
+        promocion: 'Doc',
+        paq: 'Paq',
+        caja: 'Caja',
+        tira: 'Tira',
+        docena: 'Docena'
+    };
+    const campo = camposPorTipo[tipo] || 'Unid';
+
+    return {
+        precio: Number(pres[`precio${campo}`]) || 0,
+        costo: Number(pres[`costo${campo}`]) || 0
+    };
+}
+
 function confirmarCobro() {
     if (requiereAperturaCajaHoy()) {
         alert('Debe registrar la apertura de caja de hoy antes de iniciar las ventas.');
@@ -1862,16 +1923,26 @@ function confirmarCobro() {
             (producto && item.tipoPres !== 'monto'
                 ? etiquetaDePresentacion(producto, item.tipoPres)
                 : (item.tipoPres === 'monto' ? 'KG' : item.tipoPres));
-        const total = item.tipoPres === 'monto'
+        const precioAplicado = precioUnitarioAplicado(item);
+        const total = item.tipoPres === 'monto' && item.precio_personalizado === undefined
             ? Number(item.montoTotal) || 0
-            : (Number(item.precio) || 0) * (Number(item.cantidad) || 0);
+            : precioAplicado * (Number(item.cantidad) || 0);
+        const preciosOficiales = producto
+            ? preciosOficialesProducto(producto, item.tipoPres)
+            : { precio: Number(item.precio) || 0, costo: 0 };
 
         return {
             desc: item.nombre,
             presentacion,
             tipoPres: item.tipoPres,
             cant: item.cantidad,
-            precioUnitario: (Number(item.precio) || 0).toFixed(2),
+            precioUnitario: precioAplicado.toFixed(2),
+            precio_unitario_aplicado: precioAplicado,
+            precio_personalizado: item.precio_personalizado ?? null,
+            precio_catalogo: preciosOficiales.precio,
+            costo_catalogo: preciosOficiales.costo,
+            valor_precio_catalogo: preciosOficiales.precio * (Number(item.cantidad) || 0),
+            valor_costo_catalogo: preciosOficiales.costo * (Number(item.cantidad) || 0),
             total: total.toFixed(2)
         };
     });
@@ -1883,7 +1954,7 @@ function confirmarCobro() {
         metodoPagoTexto = `Mixto (Efectivo: S/ ${montoEfectivo.toFixed(2)}, Yape: S/ ${montoYape.toFixed(2)})`;
     }
 
-    kardex.unshift({
+    const movimientoTicket = {
         ticketId: ticketId,
         fecha: fechaActual,
         producto: carrito.map(i => `${i.nombre} x${i.cantidad}`).join(', '),
@@ -1895,7 +1966,9 @@ function confirmarCobro() {
         montoEfectivo: montoEfectivo.toFixed(2),
         montoYape: montoYape.toFixed(2),
         items: itemsTicket
-    });
+    };
+    kardex.unshift(movimientoTicket);
+    syncKardexToSupabase(movimientoTicket);
 
     carrito.forEach(item => {
         detalles.push(`${item.nombre} x${item.cantidad}`);
@@ -1942,7 +2015,7 @@ function confirmarCobro() {
                     fecha: fechaActual,
                     producto: item.nombre,
                     tipo: item.tipoPres === 'monto' ? 'Venta por Monto' : 'Venta a Granel',
-                    cantidad: `-${cantidadADescontar.toFixed(2)} KG/Unid (S/ ${subtotal.toFixed(2)})`,
+                    cantidad: `-${cantidadADescontar.toFixed(2)} KG/Unid (S/ ${subtotalItemCarrito(item).toFixed(2)})`,
                     usuario: `${rol} (${metodoPagoSeleccionado})`
                 });
             } else {
