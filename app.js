@@ -400,6 +400,51 @@ function factorDePresentacion(prod, tipoPres) {
     return slot ? slot.factor : 1;
 }
 
+function factorStockBasePorPresentacion(prod, item) {
+    const tipoPres = item && item.tipoPres;
+    if (tipoPres === 'monto') return 1;
+    const presentacion = String((item && (
+        item.presentacion ||
+        item.unidad_medida ||
+        item.etiquetaPres ||
+        (tipoPres ? etiquetaDePresentacion(prod, tipoPres) : '')
+    )) || tipoPres || '').trim();
+    const normalizada = presentacion.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const regla = reglaPresentacionProducto(prod);
+    const normalizarTexto = texto => String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+    if (regla) {
+        const slot = regla.slots.find(s =>
+            [s.tipo, s.campo, s.label, s.nombreCorto].some(valor => {
+                const nombre = normalizarTexto(valor);
+                return normalizada === nombre || normalizada.startsWith(`${nombre} (`);
+            })
+        );
+        if (slot) return slot.factor;
+    }
+
+    if (esPresentacionSaco(prod)) {
+        const kgEnPresentacion = normalizada.match(/(\d+(?:[.,]\d+)?)\s*kg/);
+        if (kgEnPresentacion) return Number(kgEnPresentacion[1].replace(',', '.'));
+        if (normalizada.includes('1/2') && normalizada.includes('saco')) {
+            return Number(prod.kgPaq || prod.kg_paq) || 25;
+        }
+        if (normalizada.includes('saco')) {
+            return Number(prod.kgCaja || prod.kg_caja) || 50;
+        }
+    }
+
+    if (normalizada.includes('paq')) {
+        return Number(prod.kgPaq || prod.kg_paq || prod.unidadesPaq || prod.unidades_paq) || 1;
+    }
+    if (normalizada.includes('caja') || normalizada.includes('plancha')) {
+        return Number(prod.kgCaja || prod.kg_caja || prod.unidadesCaja || prod.unidades_caja) || 1;
+    }
+
+    const factorGuardado = Number(item && item.factorUnidades);
+    return Number.isFinite(factorGuardado) && factorGuardado > 0 ? factorGuardado : 1;
+}
+
 function etiquetaDePresentacion(prod, tipoPres) {
     const slot = slotPorTipo(prod, tipoPres);
     if (slot) return slot.label;
@@ -1296,9 +1341,10 @@ async function confirmarCostosComanda() {
             total: it.total
         });
 
-        const prod = productos.find(p => p.nombre.toLowerCase() === it.nombre.toLowerCase());
+        const prod = productos.find(p => String(p.id) === String(it.id)) ||
+            productos.find(p => p.nombre.toLowerCase() === it.nombre.toLowerCase());
         if (prod) {
-            const cantidadIngresada = Number(it.cantidad) || 0;
+            const cantidadIngresada = (Number(it.cantidad) || 0) * factorStockBasePorPresentacion(prod, it);
             prod.stockUnid = (parseFloat(prod.stockUnid) || 0) + cantidadIngresada;
             if (!await incrementarStockProductoEnSupabase(prod.id, cantidadIngresada, prod.nombre)) {
                 stockSupabaseActualizado = false;
@@ -1312,7 +1358,7 @@ async function confirmarCostosComanda() {
             fecha: fechaActual,
             producto: `${it.nombre} (${it.tipoPres})`,
             tipo: 'Compra Proveedor',
-            cantidad: `+${it.cantidad}`,
+            cantidad: `+${it.cantidad} ${it.presentacion || it.unidad_medida || it.tipoPres}`,
             usuario: `${comandaActualAprobar.comandaId} (${estadoPago} S/ ${costoInput.toFixed(2)})`
         };
         kardex.unshift(movimientoCompra);
@@ -1995,7 +2041,7 @@ function confirmarCobro() {
             const pres = extraerPresentacionesProducto(prod);
 
             if (reglaVenta) {
-                const factor = item.factorUnidades || factorDePresentacion(prod, item.tipoPres);
+                const factor = factorStockBasePorPresentacion(prod, item);
                 const cantidadADescontar = (parseFloat(item.cantidad) || 0) * factor;
                 const stockDisponible = parseFloat(prod.stockUnid) || 0;
                 const etiqueta = item.etiquetaPres || etiquetaDePresentacion(prod, item.tipoPres);
@@ -2015,7 +2061,7 @@ function confirmarCobro() {
                 });
             } else if (esAGranel) {
                 // Descuento directo al stock de KG/Unidades
-                const cantidadADescontar = item.cantidad;
+                const cantidadADescontar = (parseFloat(item.cantidad) || 0) * factorStockBasePorPresentacion(prod, item);
                 const stockDisponible = pres.stockUnid || 0;
 
                 if (cantidadADescontar > stockDisponible) {
@@ -2034,7 +2080,7 @@ function confirmarCobro() {
                 });
             } else {
                 // Para otros productos: conversión automática de stock
-                let cantidadADescontar = item.cantidad;
+                let cantidadADescontar = (parseFloat(item.cantidad) || 0) * factorStockBasePorPresentacion(prod, item);
                 let stockDisponible = pres.stockUnid || 0;
 
                 // Si el stock de unidades/KG es insuficiente, intentar convertir de presentaciones mayores
