@@ -1272,16 +1272,17 @@ function abrirModalCostosComanda(comandaId) {
 }
 function cerrarModalCostos() { document.getElementById('modal-costos-comanda').style.display = 'none'; }
 
-function confirmarCostosComanda() {
+async function confirmarCostosComanda() {
     if (!comandaActualAprobar) return;
     const estadoPago = document.getElementById('select-estado-comanda').value;
     comandaActualAprobar.estado = estadoPago;
 
     const fechaActual = new Date().toLocaleString('es-PE');
     let totalComanda = 0;
+    let stockSupabaseActualizado = true;
     const itemsTicketComanda = [];
 
-    comandaActualAprobar.items.forEach((it, idx) => {
+    for (const [idx, it] of comandaActualAprobar.items.entries()) {
         const costoInput = parseFloat(document.getElementById(`costo-item-${idx}`).value) || 0;
         const totalItem = costoInput * (Number(it.cantidad) || 0);
         totalComanda += totalItem;
@@ -1297,19 +1298,28 @@ function confirmarCostosComanda() {
 
         const prod = productos.find(p => p.nombre.toLowerCase() === it.nombre.toLowerCase());
         if (prod) {
-            prod.stockUnid = (parseFloat(prod.stockUnid) || 0) + it.cantidad;
+            const cantidadIngresada = Number(it.cantidad) || 0;
+            prod.stockUnid = (parseFloat(prod.stockUnid) || 0) + cantidadIngresada;
+            if (!await incrementarStockProductoEnSupabase(prod.id, cantidadIngresada, prod.nombre)) {
+                stockSupabaseActualizado = false;
+            }
+        } else {
+            console.error(`No se encontró el producto "${it.nombre}" para actualizar su stock.`);
+            stockSupabaseActualizado = false;
         }
 
-        kardex.unshift({
+        const movimientoCompra = {
             fecha: fechaActual,
             producto: `${it.nombre} (${it.tipoPres})`,
             tipo: 'Compra Proveedor',
             cantidad: `+${it.cantidad}`,
             usuario: `${comandaActualAprobar.comandaId} (${estadoPago} S/ ${costoInput.toFixed(2)})`
-        });
-    });
+        };
+        kardex.unshift(movimientoCompra);
+        await syncKardexToSupabase(movimientoCompra);
+    }
 
-    kardex.unshift({
+    const movimientoPago = {
         ticketId: comandaActualAprobar.comandaId,
         fecha: fechaActual,
         producto: `Pago Comanda ${comandaActualAprobar.comandaId}`,
@@ -1319,7 +1329,9 @@ function confirmarCostosComanda() {
         metodo: `Comanda [${estadoPago}]`,
         total: totalComanda.toFixed(2),
         items: itemsTicketComanda
-    });
+    };
+    kardex.unshift(movimientoPago);
+    await syncKardexToSupabase(movimientoPago);
 
     const comandaHistorial = historialComandasRealizadas.find(item => item.comandaId === comandaActualAprobar.comandaId);
     if (comandaHistorial) {
@@ -1335,7 +1347,9 @@ function confirmarCostosComanda() {
     localStorage.setItem('lista_productos', JSON.stringify(productos));
     localStorage.setItem('lista_kardex', JSON.stringify(kardex));
 
-    alert("Comanda procesada e inventario actualizado correctamente.");
+    alert(stockSupabaseActualizado
+        ? "Comanda procesada e inventario actualizado correctamente."
+        : "Comanda procesada localmente, pero no se pudo actualizar todo el stock en Supabase. Revise la consola y los productos pendientes de sincronización.");
     cerrarModalCostos();
     renderizarProductos();
     renderizarReportes();
@@ -3811,6 +3825,60 @@ async function syncProductoToSupabase(producto) {
     }
 }
 
+async function incrementarStockProductoEnSupabase(productoId, cantidad, nombreProducto) {
+    const incremento = Number(cantidad);
+    if (!Number.isFinite(incremento) || incremento <= 0) {
+        console.error(`No se puede incrementar el stock de ${nombreProducto}: cantidad inválida.`);
+        return false;
+    }
+
+    const incrementoPendiente = {
+        productoId,
+        cantidad: incremento,
+        nombreProducto
+    };
+
+    if (!supabaseClient || !isOnline) {
+        syncQueue.push({ type: 'incremento_stock_producto', data: incrementoPendiente });
+        return false;
+    }
+
+    try {
+        const { data: productoActual, error: errorLectura } = await supabaseClient
+            .from('productos')
+            .select('stock_unid')
+            .eq('id', productoId)
+            .single();
+
+        if (errorLectura) {
+            console.error(`Error al consultar el stock de ${nombreProducto}:`, errorLectura);
+            syncQueue.push({ type: 'incremento_stock_producto', data: incrementoPendiente });
+            return false;
+        }
+
+        const stockActual = Number(productoActual.stock_unid) || 0;
+        const { data, error } = await supabaseClient
+            .from('productos')
+            .update({ stock_unid: stockActual + incremento })
+            .eq('id', productoId)
+            .select('id')
+            .single();
+
+        if (error || !data) {
+            console.error(`Error al actualizar el stock de ${nombreProducto}:`, error || 'Producto no encontrado');
+            syncQueue.push({ type: 'incremento_stock_producto', data: incrementoPendiente });
+            return false;
+        }
+
+        console.log(`✅ Stock de ${nombreProducto} actualizado en Supabase: +${incremento}`);
+        return true;
+    } catch (error) {
+        console.error(`Error de red al actualizar el stock de ${nombreProducto}:`, error);
+        syncQueue.push({ type: 'incremento_stock_producto', data: incrementoPendiente });
+        return false;
+    }
+}
+
 // Sincronizar un movimiento de Kárdex con Supabase
 async function syncKardexToSupabase(movimiento) {
     if (!supabaseClient || !isOnline) {
@@ -3963,6 +4031,13 @@ async function procesarColaSincronizacion() {
         switch (item.type) {
             case 'producto':
                 await syncProductoToSupabase(item.data);
+                break;
+            case 'incremento_stock_producto':
+                await incrementarStockProductoEnSupabase(
+                    item.data.productoId,
+                    item.data.cantidad,
+                    item.data.nombreProducto
+                );
                 break;
             case 'kardex':
                 await syncKardexToSupabase(item.data);
