@@ -3193,6 +3193,7 @@ let ultimoTicketId = null;
 async function inicializarSistema() {
     // Cargar datos desde localStorage primero (async porque puede consultar Supabase)
     await cargarDatosDesdeLocalStorage();
+    await loadVentasFromSupabase();
 
     programarCierreAutomaticoCaja();
     aplicarMenuPorRol();
@@ -3220,7 +3221,11 @@ async function inicializarSistema() {
     }
 }
 
-window.onload = inicializarSistema;
+if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', inicializarSistema, { once: true });
+} else {
+    inicializarSistema();
+}
 document.addEventListener('keydown', function(event) {
     // Detectar la combinacion de teclas Ctrl + 4
     if (event.ctrlKey && event.key === '4') {
@@ -4125,6 +4130,71 @@ function refrescarVistasAlmacen() {
     if (typeof renderizarAlmacen === 'function') renderizarAlmacen();
 }
 
+async function loadVentasFromSupabase() {
+    if (!supabaseClient && typeof window.supabase !== 'undefined') {
+        initSupabase();
+    }
+    if (!supabaseClient || !isOnline) {
+        console.log('⚠️ No se pueden cargar ventas: offline o Supabase no inicializado');
+        return;
+    }
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('ventas')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error al cargar ventas:', error);
+            return;
+        }
+
+        const ventasSupabase = (data || []).map(venta => ({
+            ticketId: venta.ticket_id,
+            fecha: venta.fecha,
+            producto: Array.isArray(venta.items)
+                ? venta.items.map(item => `${item.desc || item.nombre || 'Producto'} x${item.cant ?? item.cantidad ?? 0}`).join(', ')
+                : `Venta ${venta.ticket_id}`,
+            tipo: venta.metodo_pago,
+            cantidad: venta.total,
+            usuario: venta.vendedor || venta.usuario,
+            metodo: venta.metodo_pago,
+            total: venta.total,
+            montoEfectivo: venta.monto_efectivo || 0,
+            montoYape: venta.monto_yape || 0,
+            items: venta.items || []
+        }));
+        const ventasPorTicket = new Map(ventasSupabase.map(venta => [venta.ticketId, venta]));
+        const ticketsActualizados = new Set();
+        const kardexActualizado = kardex.map(movimiento => {
+            const venta = ventasPorTicket.get(movimiento.ticketId);
+            if (!venta) return movimiento;
+            ticketsActualizados.add(venta.ticketId);
+            return { ...movimiento, ...venta };
+        });
+
+        kardex = [
+            ...ventasSupabase.filter(venta => !ticketsActualizados.has(venta.ticketId)),
+            ...kardexActualizado
+        ];
+
+        try {
+            localStorage.setItem('lista_kardex', JSON.stringify(kardex));
+        } catch (error) {
+            console.error('Error al guardar las ventas descargadas en el almacenamiento local:', error);
+        }
+
+        console.log(`✔️ ${ventasSupabase.length} ventas cargadas de Supabase`);
+        renderizarKardex();
+        renderizarRegistroVentas();
+        renderizarHistorialDiarioConsolidado();
+        renderizarReportes();
+    } catch (error) {
+        console.error('Error de red al cargar ventas:', error);
+    }
+}
+
 // Cargar productos desde Supabase
 async function loadProductosFromSupabase() {
     if (!supabaseClient && typeof window.supabase !== 'undefined') {
@@ -4382,6 +4452,7 @@ window.syncAlmacenToSupabase = syncAlmacenToSupabase;
 window.syncSalidaAlmacenToSupabase = syncSalidaAlmacenToSupabase;
 window.procesarColaSincronizacion = procesarColaSincronizacion;
 window.loadProductosFromSupabase = loadProductosFromSupabase;
+window.loadVentasFromSupabase = loadVentasFromSupabase;
 window.loadAlmacenFromSupabase = loadAlmacenFromSupabase;
 window.loadSalidasAlmacenFromSupabase = loadSalidasAlmacenFromSupabase;
 window.refrescarVistasProductos = refrescarVistasProductos;
