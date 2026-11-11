@@ -410,6 +410,7 @@ function factorStockBasePorPresentacion(prod, item) {
         (tipoPres ? etiquetaDePresentacion(prod, tipoPres) : '')
     )) || tipoPres || '').trim();
     const normalizada = presentacion.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const categoria = String((prod && prod.categoria) || '').trim().toUpperCase();
     const regla = reglaPresentacionProducto(prod);
     const normalizarTexto = texto => String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
@@ -424,6 +425,10 @@ function factorStockBasePorPresentacion(prod, item) {
     }
 
     if (esPresentacionSaco(prod)) {
+        if (categoria.includes('MENESTRAS') &&
+            (normalizada.includes('1/4') || String(tipoPres || '').trim().toLowerCase() === 'paq')) {
+            return 0.25;
+        }
         const kgEnPresentacion = normalizada.match(/(\d+(?:[.,]\d+)?)\s*kg/);
         if (kgEnPresentacion) return Number(kgEnPresentacion[1].replace(',', '.'));
         if (normalizada.includes('1/4') && normalizada.includes('saco')) {
@@ -655,7 +660,7 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
         if (document.getElementById('lbl-precio-2')) document.getElementById('lbl-precio-2').textContent = 'Precio Venta 10 KG (S/)';
         if (document.getElementById('lbl-stock-2')) document.getElementById('lbl-stock-2').textContent = 'Stock Inicial 10 KG';
 
-        const presentacionSaco = esMenestras ? '1/4 Saco' : '1/2 Saco';
+        const presentacionSaco = esMenestras ? '1/4' : '1/2 Saco';
         if (document.getElementById('sum-pres-3')) document.getElementById('sum-pres-3').textContent = `▼ 3. VENTAS ${presentacionSaco.toUpperCase()}`;
         if (document.getElementById('lbl-costo-3')) document.getElementById('lbl-costo-3').textContent = `Precio Costo ${presentacionSaco} (S/)`;
         if (document.getElementById('lbl-precio-3')) document.getElementById('lbl-precio-3').textContent = `Precio Venta ${presentacionSaco} (S/)`;
@@ -2068,6 +2073,9 @@ function confirmarCobro() {
                 // Descuento directo al stock de KG/Unidades
                 const cantidadADescontar = (parseFloat(item.cantidad) || 0) * factorStockBasePorPresentacion(prod, item);
                 const stockDisponible = pres.stockUnid || 0;
+                const esMenestras = String(prod.categoria || '').trim().toUpperCase().includes('MENESTRAS');
+                const presentacionVenta = item.etiquetaPres || etiquetaDePresentacion(prod, item.tipoPres);
+                const esVentaCuartoMenestras = esMenestras && String(presentacionVenta).includes('1/4');
 
                 if (cantidadADescontar > stockDisponible) {
                     alert(`❌ Stock insuficiente. Solo quedan ${stockDisponible.toFixed(2)} KG/Unid disponible(s) de ${prod.nombre}.`);
@@ -2080,7 +2088,9 @@ function confirmarCobro() {
                     fecha: fechaActual,
                     producto: item.nombre,
                     tipo: item.tipoPres === 'monto' ? 'Venta por Monto' : 'Venta a Granel',
-                    cantidad: `-${cantidadADescontar.toFixed(2)} KG/Unid (S/ ${subtotalItemCarrito(item).toFixed(2)})`,
+                    cantidad: esVentaCuartoMenestras
+                        ? `-${cantidadADescontar.toFixed(2)} KG (${item.cantidad} ${presentacionVenta})`
+                        : `-${cantidadADescontar.toFixed(2)} KG/Unid (S/ ${subtotalItemCarrito(item).toFixed(2)})`,
                     usuario: `${rol} (${metodoPagoSeleccionado})`
                 });
             } else {
