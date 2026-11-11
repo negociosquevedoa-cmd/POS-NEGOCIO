@@ -3874,28 +3874,41 @@ function checkOnlineStatus() {
 // SINCRONIZACIÓN: LOCAL -> SUPABASE
 // ============================================
 
-function productoParaSupabase(producto) {
-    // Columnas de stock que existen en Supabase
-    const stockColumnsValidas = ['unid', 'doc', 'paq', 'caja'];
+// Whitelist de columnas reales en la tabla productos de Supabase
+const COLUMNAS_SUPABASE_VALIDAS = [
+    'id',
+    'nombre',
+    'categoria',
+    'codigo',
+    'imagen',
+    'costo_unid', 'precio_unid', 'stock_unid',
+    'costo_doc', 'precio_doc', 'stock_doc',
+    'costo_paq', 'precio_paq', 'stock_paq',
+    'costo_caja', 'precio_caja', 'stock_caja',
+    'unidades_paq', 'unidades_caja',
+    'kg_paq', 'kg_caja',
+    'unidades_paquete', 'unidades_caja_box',
+    'kg_paquete', 'kg_caja_box',
+    'updated_at'
+];
 
-    const camposPresentaciones = Object.values(CAMPOS_FORM_PRES).reduce((campos, meta) => {
-        const sufijo = meta.campo.toLowerCase();
-        // Siempre incluir costo y precio
-        campos[`costo_${sufijo}`] = producto['costo' + meta.campo] || 0;
-        campos[`precio_${sufijo}`] = producto['precio' + meta.campo] || 0;
-        // Solo incluir stock si el sufijo está en las columnas válidas de Supabase
-        if (stockColumnsValidas.includes(sufijo)) {
-            campos[`stock_${sufijo}`] = producto['stock' + meta.campo] || 0;
+// Función sanitizadora para filtrar payload antes de enviar a Supabase
+function sanitizarPayloadParaSupabase(payload) {
+    return Object.keys(payload).reduce((payloadFiltrado, key) => {
+        // Solo incluir campos que están en la whitelist
+        if (COLUMNAS_SUPABASE_VALIDAS.includes(key)) {
+            payloadFiltrado[key] = payload[key];
         }
-        return campos;
+        return payloadFiltrado;
     }, {});
+}
 
-    return {
+function productoParaSupabase(producto) {
+    const payload = {
         id: producto.id,
         nombre: producto.nombre,
         categoria: producto.categoria,
         codigo: producto.codigo,
-        ...camposPresentaciones,
         imagen: producto.imagen || 'https://via.placeholder.com/80',
         unidades_paq: producto.unidadesPaq || producto.unidades_paq || 0,
         unidades_caja: producto.unidadesCaja || producto.unidades_caja || 0,
@@ -3905,9 +3918,19 @@ function productoParaSupabase(producto) {
         unidades_caja_box: producto.unidadesCaja || 0,
         kg_paquete: producto.kgPaq || 0,
         kg_caja_box: producto.kgCaja || 0,
-        // NOTA: rollosPlancha es una propiedad local temporal, no se envía a Supabase
         updated_at: new Date().toISOString()
     };
+
+    // Agregar campos de presentaciones básicas (unid, doc, paq, caja)
+    const presentacionesBasicas = ['unid', 'doc', 'paq', 'caja'];
+    presentacionesBasicas.forEach(sufijo => {
+        payload[`costo_${sufijo}`] = producto[`costo${sufijo.charAt(0).toUpperCase() + sufijo.slice(1)}`] || 0;
+        payload[`precio_${sufijo}`] = producto[`precio${sufijo.charAt(0).toUpperCase() + sufijo.slice(1)}`] || 0;
+        payload[`stock_${sufijo}`] = producto[`stock${sufijo.charAt(0).toUpperCase() + sufijo.slice(1)}`] || 0;
+    });
+
+    // Sanitizar el payload para eliminar cualquier campo no válido
+    return sanitizarPayloadParaSupabase(payload);
 }
 
 // Sincronizar un producto con Supabase
@@ -4275,36 +4298,42 @@ async function loadProductosFromSupabase() {
         }
 
         if (data && data.length > 0) {
-            const productosSupabase = data.map(p => ({
-                id: p.id,
-                nombre: p.nombre,
-                categoria: p.categoria,
-                codigo: p.codigo,
-                ...Object.values(CAMPOS_FORM_PRES).reduce((presentaciones, meta) => {
-                    const sufijo = meta.campo.toLowerCase();
-                    presentaciones['costo' + meta.campo] = p[`costo_${sufijo}`];
-                    presentaciones['precio' + meta.campo] = p[`precio_${sufijo}`];
-                    presentaciones['stock' + meta.campo] = p[`stock_${sufijo}`];
-                    return presentaciones;
-                }, {}),
-                imagen: p.imagen,
-                unidadesPaq: p.unidades_paq || p.unidades_paquete,
-                unidadesCaja: p.unidades_caja || p.unidades_caja_box,
-                paquetesPlancha: String(p.categoria || '').trim().toUpperCase() === 'PHX4'
-                    ? (p.unidades_caja || p.unidades_caja_box || 6)
-                    : 0,
-                kgPaq: p.kg_paq || p.kg_paquete,
-                kgCaja: p.kg_caja || p.kg_caja_box,
-                unidades_paq: p.unidades_paq || p.unidades_paquete,
-                unidades_caja: p.unidades_caja || p.unidades_caja_box,
-                kg_paq: p.kg_paq || p.kg_paquete,
-                kg_caja: p.kg_caja || p.kg_caja_box,
-                // NOTA: rollosPlancha es una propiedad local temporal, no existe en Supabase
-                // Se usa unidades_caja para PHX4 como valor por defecto
-                rollosPlancha: String(p.categoria || '').trim().toUpperCase() === 'PHX4'
-                    ? (p.unidades_caja || p.unidades_caja_box || 24)
-                    : 24
-            }));
+            const productosSupabase = data.map(p => {
+                // Solo leer presentaciones básicas que existen en Supabase
+                const presentacionesBasicas = ['unid', 'doc', 'paq', 'caja'];
+                const presentaciones = presentacionesBasicas.reduce((pres, sufijo) => {
+                    const campo = sufijo.charAt(0).toUpperCase() + sufijo.slice(1);
+                    pres[`costo${campo}`] = p[`costo_${sufijo}`] || 0;
+                    pres[`precio${campo}`] = p[`precio_${sufijo}`] || 0;
+                    pres[`stock${campo}`] = p[`stock_${sufijo}`] || 0;
+                    return pres;
+                }, {});
+
+                return {
+                    id: p.id,
+                    nombre: p.nombre,
+                    categoria: p.categoria,
+                    codigo: p.codigo,
+                    ...presentaciones,
+                    imagen: p.imagen,
+                    unidadesPaq: p.unidades_paq || p.unidades_paquete,
+                    unidadesCaja: p.unidades_caja || p.unidades_caja_box,
+                    paquetesPlancha: String(p.categoria || '').trim().toUpperCase() === 'PHX4'
+                        ? (p.unidades_caja || p.unidades_caja_box || 6)
+                        : 0,
+                    kgPaq: p.kg_paq || p.kg_paquete,
+                    kgCaja: p.kg_caja || p.kg_caja_box,
+                    unidades_paq: p.unidades_paq || p.unidades_paquete,
+                    unidades_caja: p.unidades_caja || p.unidades_caja_box,
+                    kg_paq: p.kg_paq || p.kg_paquete,
+                    kg_caja: p.kg_caja || p.kg_caja_box,
+                    // NOTA: rollosPlancha es una propiedad local temporal, no existe en Supabase
+                    // Se usa unidades_caja para PHX4 como valor por defecto
+                    rollosPlancha: String(p.categoria || '').trim().toUpperCase() === 'PHX4'
+                        ? (p.unidades_caja || p.unidades_caja_box || 24)
+                        : 24
+                };
+            });
 
             localStorage.setItem('lista_productos', JSON.stringify(productosSupabase));
             productos = productosSupabase;
