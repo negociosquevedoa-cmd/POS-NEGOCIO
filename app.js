@@ -1040,13 +1040,20 @@ async function guardarProductoLocal(e) {
         }
 
         try {
-            const { error } = await supabaseClient
+            const { data, error } = await supabaseClient
                 .from('productos')
                 .update(productoParaSupabase(productoData))
                 .eq('id', productoId)
-                .select('id')
+                .select('*')
                 .single();
             if (error) throw error;
+
+            // Actualizar el producto local con los datos retornados de Supabase
+            if (data) {
+                productos[index] = data;
+                // Guardar en localStorage
+                localStorage.setItem('lista_productos', JSON.stringify(productos));
+            }
         } catch (error) {
             console.error('Error al actualizar producto en Supabase:', error);
             alert('Supabase no pudo actualizar el producto. No se guardaron los cambios ni el movimiento en el Kárdex.');
@@ -1058,7 +1065,6 @@ async function guardarProductoLocal(e) {
             ? cambiosDetalle.join(' | ')
             : 'Actualización de parámetros';
 
-        productos[index] = productoData;
         kardex.unshift({
             fecha: fechaActual,
             producto: productoData.nombre,
@@ -1066,6 +1072,9 @@ async function guardarProductoLocal(e) {
             cantidad: textoCantidad,
             usuario: `${rol} (Edición de parámetros)`
         });
+
+        // Refrescar la UI después de actualizar
+        renderizarProductos();
     } else {
         productos.push(productoData);
         kardex.unshift({
@@ -3887,6 +3896,7 @@ function productoParaSupabase(producto) {
         unidades_caja_box: producto.unidadesCaja || 0,
         kg_paquete: producto.kgPaq || 0,
         kg_caja_box: producto.kgCaja || 0,
+        rollos_plancha: producto.rollosPlancha || 24, // Campo específico para PHX4
         updated_at: new Date().toISOString()
     };
 }
@@ -4279,7 +4289,8 @@ async function loadProductosFromSupabase() {
                 unidades_paq: p.unidades_paq || p.unidades_paquete,
                 unidades_caja: p.unidades_caja || p.unidades_caja_box,
                 kg_paq: p.kg_paq || p.kg_paquete,
-                kg_caja: p.kg_caja || p.kg_caja_box
+                kg_caja: p.kg_caja || p.kg_caja_box,
+                rollosPlancha: p.rollos_plancha || 24 // Campo específico para PHX4
             }));
 
             localStorage.setItem('lista_productos', JSON.stringify(productosSupabase));
