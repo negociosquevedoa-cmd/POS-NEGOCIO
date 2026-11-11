@@ -988,7 +988,7 @@ function leerPresentacionesFormulario(categoria) {
     }, {});
 }
 
-function guardarProductoLocal(e) {
+async function guardarProductoLocal(e) {
     if (e) e.preventDefault();
     if (obtenerRol() === 'inventario_consulta') return;
     recargarListaProductos();
@@ -1028,22 +1028,44 @@ function guardarProductoLocal(e) {
 
     const fechaActual = new Date().toLocaleString('es-PE');
     if (editId) {
+        const productoId = productoData.id;
         const index = productos.findIndex(p => String(p.id) === String(editId));
-        if (index !== -1) {
-            const cambiosDetalle = detalleCambiosInventario(productos[index], productoData);
-            const textoCantidad = cambiosDetalle.length > 0
-                ? cambiosDetalle.join(' | ')
-                : 'Actualización de parámetros';
-
-            productos[index] = productoData;
-            kardex.unshift({
-                fecha: fechaActual,
-                producto: productoData.nombre,
-                tipo: 'Modificación de Producto',
-                cantidad: textoCantidad,
-                usuario: `${rol} (Edición de parámetros)`
-            });
+        if (index === -1) {
+            alert('No se encontró el producto que intentas editar. No se guardaron los cambios.');
+            return;
         }
+        if (!supabaseClient || !checkOnlineStatus()) {
+            alert('No se pudo conectar con Supabase. No se guardaron los cambios ni el movimiento en el Kárdex.');
+            return;
+        }
+
+        try {
+            const { error } = await supabaseClient
+                .from('productos')
+                .update(productoParaSupabase(productoData))
+                .eq('id', productoId)
+                .select('id')
+                .single();
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error al actualizar producto en Supabase:', error);
+            alert('Supabase no pudo actualizar el producto. No se guardaron los cambios ni el movimiento en el Kárdex.');
+            return;
+        }
+
+        const cambiosDetalle = detalleCambiosInventario(productos[index], productoData);
+        const textoCantidad = cambiosDetalle.length > 0
+            ? cambiosDetalle.join(' | ')
+            : 'Actualización de parámetros';
+
+        productos[index] = productoData;
+        kardex.unshift({
+            fecha: fechaActual,
+            producto: productoData.nombre,
+            tipo: 'Modificación de Producto',
+            cantidad: textoCantidad,
+            usuario: `${rol} (Edición de parámetros)`
+        });
     } else {
         productos.push(productoData);
         kardex.unshift({
@@ -1053,13 +1075,11 @@ function guardarProductoLocal(e) {
             cantidad: `Stock: ${productoData.stockUnid}`,
             usuario: rol
         });
+        syncProductoToSupabase(productoData);
     }
 
     localStorage.setItem('lista_productos', JSON.stringify(productos));
     localStorage.setItem('lista_kardex', JSON.stringify(kardex));
-
-    // Sincronizar con Supabase
-    syncProductoToSupabase(productoData);
 
     renderizarProductos();
     cancelarEdicion();
@@ -3845,6 +3865,32 @@ function checkOnlineStatus() {
 // SINCRONIZACIÓN: LOCAL -> SUPABASE
 // ============================================
 
+function productoParaSupabase(producto) {
+    return {
+        id: producto.id,
+        nombre: producto.nombre,
+        categoria: producto.categoria,
+        codigo: producto.codigo,
+        ...Object.values(CAMPOS_FORM_PRES).reduce((campos, meta) => {
+            const sufijo = meta.campo.toLowerCase();
+            campos[`costo_${sufijo}`] = producto['costo' + meta.campo] || 0;
+            campos[`precio_${sufijo}`] = producto['precio' + meta.campo] || 0;
+            campos[`stock_${sufijo}`] = producto['stock' + meta.campo] || 0;
+            return campos;
+        }, {}),
+        imagen: producto.imagen || 'https://via.placeholder.com/80',
+        unidades_paq: producto.unidadesPaq || producto.unidades_paq || 0,
+        unidades_caja: producto.unidadesCaja || producto.unidades_caja || 0,
+        kg_paq: producto.kgPaq || producto.kg_paq || 0,
+        kg_caja: producto.kgCaja || producto.kg_caja || 0,
+        unidades_paquete: producto.unidadesPaq || 0,
+        unidades_caja_box: producto.unidadesCaja || 0,
+        kg_paquete: producto.kgPaq || 0,
+        kg_caja_box: producto.kgCaja || 0,
+        updated_at: new Date().toISOString()
+    };
+}
+
 // Sincronizar un producto con Supabase
 async function syncProductoToSupabase(producto) {
     if (!supabaseClient || !isOnline) {
@@ -3855,29 +3901,7 @@ async function syncProductoToSupabase(producto) {
     try {
         const { data, error } = await supabaseClient
             .from('productos')
-            .upsert({
-                id: producto.id,
-                nombre: producto.nombre,
-                categoria: producto.categoria,
-                codigo: producto.codigo,
-                ...Object.values(CAMPOS_FORM_PRES).reduce((campos, meta) => {
-                    const sufijo = meta.campo.toLowerCase();
-                    campos[`costo_${sufijo}`] = producto['costo' + meta.campo] || 0;
-                    campos[`precio_${sufijo}`] = producto['precio' + meta.campo] || 0;
-                    campos[`stock_${sufijo}`] = producto['stock' + meta.campo] || 0;
-                    return campos;
-                }, {}),
-                imagen: producto.imagen || 'https://via.placeholder.com/80',
-                unidades_paq: producto.unidadesPaq || producto.unidades_paq || 0,
-                unidades_caja: producto.unidadesCaja || producto.unidades_caja || 0,
-                kg_paq: producto.kgPaq || producto.kg_paq || 0,
-                kg_caja: producto.kgCaja || producto.kg_caja || 0,
-                unidades_paquete: producto.unidadesPaq || 0,
-                unidades_caja_box: producto.unidadesCaja || 0,
-                kg_paquete: producto.kgPaq || 0,
-                kg_caja_box: producto.kgCaja || 0,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'id' });
+            .upsert(productoParaSupabase(producto), { onConflict: 'id' });
 
         if (error) {
             console.error('Error al sincronizar producto:', error);
