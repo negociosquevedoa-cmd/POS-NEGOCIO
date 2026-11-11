@@ -426,6 +426,9 @@ function factorStockBasePorPresentacion(prod, item) {
     if (esPresentacionSaco(prod)) {
         const kgEnPresentacion = normalizada.match(/(\d+(?:[.,]\d+)?)\s*kg/);
         if (kgEnPresentacion) return Number(kgEnPresentacion[1].replace(',', '.'));
+        if (normalizada.includes('1/4') && normalizada.includes('saco')) {
+            return (Number(prod.kgPaq || prod.kg_paq) / 2) || (Number(prod.kgCaja || prod.kg_caja) / 4) || 12.5;
+        }
         if (normalizada.includes('1/2') && normalizada.includes('saco')) {
             return Number(prod.kgPaq || prod.kg_paq) || 25;
         }
@@ -601,6 +604,7 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
 
     const catVal = pCategoria ? pCategoria.value.trim().toUpperCase() : '';
     const nomVal = pNombre ? pNombre.value.trim().toUpperCase() : '';
+    const esMenestras = catVal.includes('MENESTRAS');
     const selectorPlancha = document.getElementById('p-paquetes-plancha');
     const esPHX4 = catVal === 'PHX4';
     const regla = reglaPresentacionProducto(esPHX4
@@ -651,10 +655,11 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
         if (document.getElementById('lbl-precio-2')) document.getElementById('lbl-precio-2').textContent = 'Precio Venta 10 KG (S/)';
         if (document.getElementById('lbl-stock-2')) document.getElementById('lbl-stock-2').textContent = 'Stock Inicial 10 KG';
 
-        if (document.getElementById('sum-pres-3')) document.getElementById('sum-pres-3').textContent = '▼ 3. VENTAS 1/2 SACO';
-        if (document.getElementById('lbl-costo-3')) document.getElementById('lbl-costo-3').textContent = 'Precio Costo 1/2 Saco (S/)';
-        if (document.getElementById('lbl-precio-3')) document.getElementById('lbl-precio-3').textContent = 'Precio Venta 1/2 Saco (S/)';
-        if (document.getElementById('lbl-stock-3')) document.getElementById('lbl-stock-3').textContent = 'Stock Inicial 1/2 Saco';
+        const presentacionSaco = esMenestras ? '1/4 Saco' : '1/2 Saco';
+        if (document.getElementById('sum-pres-3')) document.getElementById('sum-pres-3').textContent = `▼ 3. VENTAS ${presentacionSaco.toUpperCase()}`;
+        if (document.getElementById('lbl-costo-3')) document.getElementById('lbl-costo-3').textContent = `Precio Costo ${presentacionSaco} (S/)`;
+        if (document.getElementById('lbl-precio-3')) document.getElementById('lbl-precio-3').textContent = `Precio Venta ${presentacionSaco} (S/)`;
+        if (document.getElementById('lbl-stock-3')) document.getElementById('lbl-stock-3').textContent = `Stock Inicial ${presentacionSaco}`;
 
         if (document.getElementById('sum-pres-4')) document.getElementById('sum-pres-4').textContent = '▼ 4. VENTAS SACO';
         if (document.getElementById('lbl-costo-4')) document.getElementById('lbl-costo-4').textContent = 'Precio Costo Saco (S/)';
@@ -885,7 +890,7 @@ function etiquetasPresentaciones(prod) {
     const esFideo = catVal.includes('FIDEO') || nomVal.includes('FIDEO');
 
     if (esPresentacionSaco(prod)) {
-        return { unid: 'KG', doc: '10 KG', paq: '1/2 Saco', caja: 'Saco' };
+        return { unid: 'KG', doc: '10 KG', paq: catVal.includes('MENESTRAS') ? '1/4 Saco' : '1/2 Saco', caja: 'Saco' };
     } else if (esFideo) {
         return { unid: 'Unid', doc: 'KG', paq: 'Pqte', caja: 'Caja' };
     } else {
