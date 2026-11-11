@@ -1047,7 +1047,12 @@ async function guardarProductoLocal(e) {
                 .select('*')
                 .single();
             if (error) throw error;
-
+            // Eliminar claves de stock temporales de la UI que no existen en Supabase
+delete payload.stock_docena;
+delete payload.stock_tira;
+delete payload.stock_paquete;
+delete payload.stock_cuarto;
+delete payload.rollos_plancha;
             // Actualizar el producto local con los datos retornados de Supabase
             if (data) {
                 productos[index] = data;
