@@ -3875,18 +3875,27 @@ function checkOnlineStatus() {
 // ============================================
 
 function productoParaSupabase(producto) {
+    // Columnas de stock que existen en Supabase
+    const stockColumnsValidas = ['unid', 'doc', 'paq', 'caja'];
+
+    const camposPresentaciones = Object.values(CAMPOS_FORM_PRES).reduce((campos, meta) => {
+        const sufijo = meta.campo.toLowerCase();
+        // Siempre incluir costo y precio
+        campos[`costo_${sufijo}`] = producto['costo' + meta.campo] || 0;
+        campos[`precio_${sufijo}`] = producto['precio' + meta.campo] || 0;
+        // Solo incluir stock si el sufijo está en las columnas válidas de Supabase
+        if (stockColumnsValidas.includes(sufijo)) {
+            campos[`stock_${sufijo}`] = producto['stock' + meta.campo] || 0;
+        }
+        return campos;
+    }, {});
+
     return {
         id: producto.id,
         nombre: producto.nombre,
         categoria: producto.categoria,
         codigo: producto.codigo,
-        ...Object.values(CAMPOS_FORM_PRES).reduce((campos, meta) => {
-            const sufijo = meta.campo.toLowerCase();
-            campos[`costo_${sufijo}`] = producto['costo' + meta.campo] || 0;
-            campos[`precio_${sufijo}`] = producto['precio' + meta.campo] || 0;
-            campos[`stock_${sufijo}`] = producto['stock' + meta.campo] || 0;
-            return campos;
-        }, {}),
+        ...camposPresentaciones,
         imagen: producto.imagen || 'https://via.placeholder.com/80',
         unidades_paq: producto.unidadesPaq || producto.unidades_paq || 0,
         unidades_caja: producto.unidadesCaja || producto.unidades_caja || 0,
