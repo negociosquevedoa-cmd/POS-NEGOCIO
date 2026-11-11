@@ -3896,7 +3896,7 @@ function productoParaSupabase(producto) {
         unidades_caja_box: producto.unidadesCaja || 0,
         kg_paquete: producto.kgPaq || 0,
         kg_caja_box: producto.kgCaja || 0,
-        rollos_plancha: producto.rollosPlancha || 24, // Campo específico para PHX4
+        // NOTA: rollosPlancha es una propiedad local temporal, no se envía a Supabase
         updated_at: new Date().toISOString()
     };
 }
@@ -4290,7 +4290,11 @@ async function loadProductosFromSupabase() {
                 unidades_caja: p.unidades_caja || p.unidades_caja_box,
                 kg_paq: p.kg_paq || p.kg_paquete,
                 kg_caja: p.kg_caja || p.kg_caja_box,
-                rollosPlancha: p.rollos_plancha || 24 // Campo específico para PHX4
+                // NOTA: rollosPlancha es una propiedad local temporal, no existe en Supabase
+                // Se usa unidades_caja para PHX4 como valor por defecto
+                rollosPlancha: String(p.categoria || '').trim().toUpperCase() === 'PHX4'
+                    ? (p.unidades_caja || p.unidades_caja_box || 24)
+                    : 24
             }));
 
             localStorage.setItem('lista_productos', JSON.stringify(productosSupabase));
