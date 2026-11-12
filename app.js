@@ -1315,6 +1315,22 @@ async function enviarSolicitudCompra() {
         };
         kardex.unshift(movimientoSolicitud);
         await syncKardexToSupabase(movimientoSolicitud);
+        await syncVentaToSupabase({
+            ticketId: nuevaComanda.comandaId,
+            fecha: fechaActual,
+            items: nuevaComanda.items.map(item => ({
+                desc: `${item.nombre} (${item.tipoPres})`,
+                presentacion: item.tipoPres,
+                cant: item.cantidad,
+                precioUnitario: Number(item.precioEstimado || 0).toFixed(2),
+                total: (Number(item.precioEstimado || 0) * (Number(item.cantidad) || 0)).toFixed(2)
+            })),
+            total: montoTotalComanda,
+            metodoPago: 'Comanda [POR PAGAR]',
+            usuario: nuevaComanda.usuario,
+            vendedor: nuevaComanda.usuario,
+            estado: 'POR PAGAR'
+        });
 
         localStorage.setItem('lista_comandas', JSON.stringify(comandas));
         localStorage.setItem('historial_comandas_realizadas', JSON.stringify(historialComandasRealizadas));
@@ -1452,6 +1468,15 @@ async function confirmarCostosComanda() {
             total: totalComanda.toFixed(2),
             items: itemsTicketComanda
         };
+        await syncComandaVentaToSupabase({
+            ticketId: comandaId,
+            fecha: fechaActual,
+            items: itemsTicketComanda,
+            total: totalComanda,
+            estadoPago,
+            vendedorOriginal: comandaActualAprobar.usuario,
+            pagador: 'Admin'
+        });
         const indiceMovimientoComanda = kardex.findIndex(movimiento => movimiento.ticketId === comandaId);
         if (indiceMovimientoComanda >= 0) {
             kardex[indiceMovimientoComanda] = { ...kardex[indiceMovimientoComanda], ...movimientoPago };
@@ -2665,12 +2690,52 @@ function renderizarKardex() {
     });
 }
 
+function registroVentaTienePagador(registro) {
+    const responsable = `${registro.usuario || ''} ${registro.vendedor || ''}`;
+    return /\((Admin|Vendedor) Pagó\)/i.test(responsable);
+}
+
+function fechaRegistroVenta(registro) {
+    const fecha = registro.createdAt || registro.created_at || registro.fecha;
+    if (typeof fecha === 'string') {
+        const fechaLocal = fecha.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:,\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+        if (fechaLocal) {
+            return new Date(
+                Number(fechaLocal[3]),
+                Number(fechaLocal[2]) - 1,
+                Number(fechaLocal[1]),
+                Number(fechaLocal[4] || 0),
+                Number(fechaLocal[5] || 0),
+                Number(fechaLocal[6] || 0)
+            ).getTime();
+        }
+    }
+    const timestamp = Date.parse(fecha);
+    return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function deduplicarVentasPorTicket(registros) {
+    const ventasPorTicket = new Map();
+    registros.forEach(registro => {
+        if (!registro.ticketId) return;
+        const existente = ventasPorTicket.get(registro.ticketId);
+        if (!existente ||
+            (registroVentaTienePagador(registro) && !registroVentaTienePagador(existente)) ||
+            (registroVentaTienePagador(registro) === registroVentaTienePagador(existente) &&
+                fechaRegistroVenta(registro) > fechaRegistroVenta(existente))) {
+            ventasPorTicket.set(registro.ticketId, registro);
+        }
+    });
+    return Array.from(ventasPorTicket.values());
+}
+
 function renderizarRegistroVentas() {
     const tablaVentas = document.getElementById('tabla-ventas-registradas');
     if (!tablaVentas) return;
     tablaVentas.innerHTML = '';
 
-    const ventasFiltradas = kardex.filter(k => k.ticketId && k.usuario && k.usuario.includes(rol));
+    const ventasFiltradas = deduplicarVentasPorTicket(kardex)
+        .filter(k => k.usuario && k.usuario.includes(rol));
 
     if (ventasFiltradas.length === 0) {
         tablaVentas.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #64748b;">No hay ventas registradas</td></tr>';
@@ -2705,7 +2770,7 @@ function renderizarReportes() {
     const tablaRep = document.getElementById('tabla-reportes-ventas');
     if(!tablaRep) return;
 
-    const ticketsFiltro = kardex.filter(item => item.ticketId);
+    const ticketsFiltro = deduplicarVentasPorTicket(kardex);
 
     ticketsFiltro.forEach(k => {
         if(k.metodo === 'Efectivo' || k.tipo === 'Efectivo') totEf += parseFloat(k.total || k.cantidad) || 0;
@@ -2773,7 +2838,7 @@ function filaItemTicket(item) {
 }
 
 function verTicketComprobante(ticketId) {
-    const k = kardex.find(item => item.ticketId === ticketId);
+    const k = deduplicarVentasPorTicket(kardex).find(item => item.ticketId === ticketId);
     if (!k) return;
     document.getElementById('t-id').textContent = k.ticketId;
     document.getElementById('t-fecha').textContent = k.fecha;
@@ -4131,7 +4196,7 @@ async function syncVentaToSupabase(venta) {
                 monto_yape: venta.montoYape || 0,
                 usuario: venta.usuario,
                 vendedor: venta.vendedor || null,
-                estado: 'completado'
+                estado: venta.estado || 'completado'
             });
 
         if (error) {
@@ -4143,6 +4208,49 @@ async function syncVentaToSupabase(venta) {
     } catch (error) {
         console.error('Error de red al sincronizar venta:', error);
         syncQueue.push({ type: 'venta', data: venta });
+    }
+}
+
+async function syncComandaVentaToSupabase(comanda) {
+    const actualizacion = {
+        fecha: comanda.fecha,
+        total: Number(comanda.total) || 0,
+        items: comanda.items,
+        metodo_pago: `Comanda [${comanda.estadoPago}]`,
+        estado: comanda.estadoPago,
+        usuario: comanda.vendedorOriginal,
+        vendedor: `${comanda.vendedorOriginal} (${comanda.pagador} Pagó)`
+    };
+
+    if (!supabaseClient || !isOnline) {
+        syncQueue.push({ type: 'venta_comanda_update', data: { ...comanda } });
+        return;
+    }
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('ventas')
+            .update(actualizacion)
+            .eq('ticket_id', comanda.ticketId)
+            .select('ticket_id');
+
+        if (error) {
+            console.error(`Error al actualizar la venta de la comanda ${comanda.ticketId}:`, error);
+            syncQueue.push({ type: 'venta_comanda_update', data: { ...comanda } });
+        } else if (!data || data.length === 0) {
+            const solicitudPendiente = syncQueue.some(item =>
+                item.type === 'venta' && item.data.ticketId === comanda.ticketId
+            );
+            console.error(`No se encontró el registro de venta de la comanda ${comanda.ticketId} para actualizar.`);
+            if (solicitudPendiente) {
+                syncQueue.push({ type: 'venta_comanda_update', data: { ...comanda } });
+            }
+        } else {
+            console.log(`✅ Venta de comanda actualizada: ${comanda.ticketId}`);
+        }
+    } catch (error) {
+        console.error(`Error de red al actualizar la venta de la comanda ${comanda.ticketId}:`, error);
+        syncQueue.push({ type: 'venta_comanda_update', data: { ...comanda } });
     }
 }
 
@@ -4241,6 +4349,9 @@ async function procesarColaSincronizacion() {
             case 'venta':
                 await syncVentaToSupabase(item.data);
                 break;
+            case 'venta_comanda_update':
+                await syncComandaVentaToSupabase(item.data);
+                break;
             case 'almacen':
                 await syncAlmacenToSupabase(item.data);
                 break;
@@ -4304,13 +4415,18 @@ async function loadVentasFromSupabase() {
             tipo: venta.metodo_pago,
             cantidad: venta.total,
             usuario: venta.vendedor || venta.usuario,
+            vendedor: venta.vendedor,
             metodo: venta.metodo_pago,
+            estado: venta.estado,
             total: venta.total,
             montoEfectivo: venta.monto_efectivo || 0,
             montoYape: venta.monto_yape || 0,
-            items: venta.items || []
+            items: venta.items || [],
+            createdAt: venta.created_at
         }));
-        const ventasPorTicket = new Map(ventasSupabase.map(venta => [venta.ticketId, venta]));
+        const ventasPorTicket = new Map(
+            deduplicarVentasPorTicket(ventasSupabase).map(venta => [venta.ticketId, venta])
+        );
         const ticketsActualizados = new Set();
         const kardexActualizado = kardex.map(movimiento => {
             const venta = ventasPorTicket.get(movimiento.ticketId);
