@@ -681,6 +681,8 @@ body.rol-vendedor .campo-costo-admin {
                             <option value="SHAMPOO">SHAMPOO</option>
                             <option value="ENJUAGUE">ENJUAGUE</option>
                             <option value="Bebidas">Bebidas</option>
+                            <option value="AGUA">AGUA</option>
+                            <option value="GASEOSA">GASEOSA</option>
                             <option value="Detergente">Detergente</option>
                             <option value="Galletas">Galletas</option>
                             <option value="Golosinas">Golosinas</option>
@@ -720,6 +722,10 @@ body.rol-vendedor .campo-costo-admin {
         <div class="form-group">
             <label id="lbl-stock-1">Stock Inicial Unid</label>
             <input type="number" step="0.1" id="p-stock-unid" class="form-control" placeholder="100" value="0" required>
+        </div>
+        <div class="form-group" id="bloque-precio-helado" style="display: none;">
+            <label for="p-precio-helado">Precio Venta Helado (S/)</label>
+            <input type="number" step="0.01" id="p-precio-helado" class="form-control" value="0">
         </div>
     </div>
 </details>

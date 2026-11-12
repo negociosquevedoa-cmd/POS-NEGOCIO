@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS productos (
     codigo TEXT DEFAULT 'Sin código',
     costo_unid NUMERIC DEFAULT 0,
     precio_unid NUMERIC DEFAULT 0,
+    precio_helado NUMERIC DEFAULT 0,
     stock_unid NUMERIC DEFAULT 0,
     costo_doc NUMERIC DEFAULT 0,
     precio_doc NUMERIC DEFAULT 0,

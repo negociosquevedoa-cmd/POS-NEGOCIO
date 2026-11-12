@@ -1,0 +1,2 @@
+ALTER TABLE productos
+    ADD COLUMN IF NOT EXISTS precio_helado NUMERIC DEFAULT 0;

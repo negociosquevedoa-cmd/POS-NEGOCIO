@@ -459,7 +459,13 @@ function etiquetaDePresentacion(prod, tipoPres) {
     const slot = slotPorTipo(prod, tipoPres);
     if (slot) return slot.label;
     const labels = etiquetasPresentaciones(prod);
-    const mapa = { unid: labels.unid, doc: labels.doc, paq: labels.paq, caja: labels.caja };
+    const mapa = {
+        unid: labels.unid,
+        unidad_helada: 'Unidad Helada',
+        doc: labels.doc,
+        paq: labels.paq,
+        caja: labels.caja
+    };
     return mapa[String(tipoPres || '').toLowerCase()] || tipoPres || '';
 }
 
@@ -494,6 +500,14 @@ function unidadesReservadasCarrito(prodId, exceptoKey) {
         if (item.tipoPres === 'monto') return acc + (parseFloat(item.cantidad) || 0);
         const factor = item.factorUnidades || 1;
         return acc + (parseFloat(item.cantidad) || 0) * factor;
+    }, 0);
+}
+
+function unidadesIndividualesReservadasCarrito(prodId, exceptoKey) {
+    return carrito.reduce((acc, item) => {
+        if (String(item.id) !== String(prodId) || item.key === exceptoKey) return acc;
+        if (item.tipoPres !== 'unid' && item.tipoPres !== 'unidad_helada') return acc;
+        return acc + (parseFloat(item.cantidad) || 0);
     }, 0);
 }
 
@@ -614,6 +628,7 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
     const esMenestras = catVal.includes('MENESTRAS');
     const selectorPlancha = document.getElementById('p-paquetes-plancha');
     const esPHX4 = catVal === 'PHX4';
+    const bloquePrecioHelado = document.getElementById('bloque-precio-helado');
     const regla = reglaPresentacionProducto(esPHX4
         ? { categoria: catVal, paquetesPlancha: Number(selectorPlancha?.value) || 6 }
         : catVal);
@@ -621,6 +636,9 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
     const bloqueConv = document.getElementById('bloque-conversiones');
     const bloquePlancha = document.getElementById('bloque-plancha-phx4');
 
+    if (bloquePrecioHelado) {
+        bloquePrecioHelado.style.display = ['BEBIDAS', 'AGUA', 'GASEOSA'].includes(catVal) ? '' : 'none';
+    }
     if (bloquePlancha) bloquePlancha.style.display = esPHX4 ? '' : 'none';
 
     if (regla) {
@@ -1013,6 +1031,7 @@ async function guardarProductoLocal(e) {
         nombre: document.getElementById('p-nombre').value,
         categoria: categoriaProducto,
         codigo: document.getElementById('p-codigo').value || 'Sin código',
+        precio_helado: leerCampoNumero('p-precio-helado'),
         ...presentacionesForm,
         imagen: imagenNueva || (prodAnterior && prodAnterior.imagen) || 'https://via.placeholder.com/80',
         unidadesPaq: leerCampoNumero('p-unidades-paq'),
@@ -1740,7 +1759,9 @@ function agregarAlCarrito(id) {
     const cantidadEnCarrito = item ? item.cantidad : 0;
     const reglaVenta = reglaPresentacionProducto(prod);
     const factorVenta = reglaVenta ? factorDePresentacion(prod, tipoPres) : 1;
-    const etiquetaVenta = reglaVenta ? etiquetaDePresentacion(prod, tipoPres) : '';
+    const etiquetaVenta = reglaVenta || tipoPres === 'unidad_helada'
+        ? etiquetaDePresentacion(prod, tipoPres)
+        : '';
 
     if (reglaVenta) {
         const reservadas = unidadesReservadasCarrito(id, null);
@@ -1748,6 +1769,13 @@ function agregarAlCarrito(id) {
         if (reservadas + factorVenta > sueltos) {
             const quedan = Math.max(0, sueltos - reservadas);
             alert(`❌ Stock insuficiente. Quedan ${quedan} ${reglaVenta.unidadBase} y esta presentación descuenta ${factorVenta}.`);
+            return;
+        }
+    } else if (tipoPres === 'unid' || tipoPres === 'unidad_helada') {
+        const sueltos = parseFloat(prod.stockUnid) || 0;
+        const reservadas = unidadesIndividualesReservadasCarrito(id, null);
+        if (reservadas + 1 > sueltos) {
+            alert(`❌ Stock insuficiente. Solo quedan ${Math.max(0, sueltos - reservadas)} unidades de ${prod.nombre}.`);
             return;
         }
     } else if (cantidadEnCarrito + 1 > prod.stockUnid) {
@@ -1763,10 +1791,17 @@ function agregarAlCarrito(id) {
             const otras = unidadesReservadasCarrito(id, item.key);
             const sueltos = parseFloat(prod.stockUnid) || 0;
             item.stockMax = Math.floor(Math.max(0, sueltos - otras) / factorVenta);
+        } else if (tipoPres === 'unid' || tipoPres === 'unidad_helada') {
+            const sueltos = parseFloat(prod.stockUnid) || 0;
+            const otras = unidadesIndividualesReservadasCarrito(id, item.key);
+            item.stockMax = Math.max(0, sueltos - otras);
         }
     } else {
         const otras = reglaVenta ? unidadesReservadasCarrito(id, null) : 0;
         const sueltos = parseFloat(prod.stockUnid) || 0;
+        const otrasUnidadesIndividuales = tipoPres === 'unid' || tipoPres === 'unidad_helada'
+            ? unidadesIndividualesReservadasCarrito(id, null)
+            : 0;
         carrito.push({
             key: itemKey,
             id: prod.id,
@@ -1775,7 +1810,11 @@ function agregarAlCarrito(id) {
             precio: precioPres,
             precio_unitario_aplicado: precioPres,
             cantidad: 1,
-            stockMax: reglaVenta ? Math.floor(Math.max(0, sueltos - otras) / factorVenta) : prod.stockUnid,
+            stockMax: reglaVenta
+                ? Math.floor(Math.max(0, sueltos - otras) / factorVenta)
+                : (tipoPres === 'unid' || tipoPres === 'unidad_helada'
+                    ? Math.max(0, sueltos - otrasUnidadesIndividuales)
+                    : prod.stockUnid),
             factorUnidades: factorVenta,
             etiquetaPres: etiquetaVenta
         });
@@ -1822,6 +1861,10 @@ function cambiarCantidad(key, delta) {
                 const otras = unidadesReservadasCarrito(item.id, item.key);
                 const sueltos = parseFloat(prodItem.stockUnid) || 0;
                 item.stockMax = Math.floor(Math.max(0, sueltos - otras) / factor);
+            } else if (prodItem && (item.tipoPres === 'unid' || item.tipoPres === 'unidad_helada')) {
+                const sueltos = parseFloat(prodItem.stockUnid) || 0;
+                const otras = unidadesIndividualesReservadasCarrito(item.id, item.key);
+                item.stockMax = Math.max(0, sueltos - otras);
             }
             const nuevaCant = Math.round((item.cantidad + delta) * 100) / 100;
             if (nuevaCant > item.stockMax) {
@@ -1867,6 +1910,10 @@ function modificarCantidadDirecta(key, valor) {
                 const otras = unidadesReservadasCarrito(item.id, item.key);
                 const sueltos = parseFloat(prodItem.stockUnid) || 0;
                 item.stockMax = Math.floor(Math.max(0, sueltos - otras) / factor);
+            } else if (prodItem && (item.tipoPres === 'unid' || item.tipoPres === 'unidad_helada')) {
+                const sueltos = parseFloat(prodItem.stockUnid) || 0;
+                const otras = unidadesIndividualesReservadasCarrito(item.id, item.key);
+                item.stockMax = Math.max(0, sueltos - otras);
             }
             if (!isNaN(num) && num > 0) {
                 if (num > item.stockMax) {
@@ -2033,6 +2080,12 @@ function calcularVueltoMixto() {
 }
 
 function preciosOficialesProducto(prod, tipoPres) {
+    if (String(tipoPres || '').toLowerCase() === 'unidad_helada') {
+        return {
+            precio: Number(prod.precio_helado) || 0,
+            costo: Number(extraerPresentacionesProducto(prod).costoUnid) || 0
+        };
+    }
     const pres = extraerPresentacionesProducto(prod);
     const tipo = String(tipoPres || '').toLowerCase();
     const camposPorTipo = {
@@ -2283,7 +2336,7 @@ function confirmarCobro() {
                     fecha: fechaActual,
                     producto: item.nombre,
                     tipo: 'Venta',
-                    cantidad: `-${cantidadADescontar.toFixed(2)}`,
+                    cantidad: `-${cantidadADescontar.toFixed(2)}${item.tipoPres === 'unidad_helada' ? ' (Unidad Helada)' : ''}`,
                     usuario: `${rol} (${metodoPagoSeleccionado})`
                 });
             }
@@ -2942,6 +2995,7 @@ function editarProducto(id) {
 
     const inputCodigo = document.getElementById('p-codigo');
     if (inputCodigo) inputCodigo.value = prod.codigo || '';
+    setCampoForm('p-precio-helado', prod.precio_helado || 0);
 
     Object.values(CAMPOS_FORM_PRES).forEach(meta => {
         setCampoForm(meta.costo, pres['costo' + meta.campo], 0);
@@ -3165,6 +3219,9 @@ function renderizarProductosPorLista(listaProductos) {
             const sep = idx ? '<br>' : '';
             return `${sep}<span class="price-badge" style="color:${coloresPrecio[idx] || '#38bdf8'};">${p.label}: S/ ${Number(p.precio).toFixed(2)}</span>`;
         }).join('');
+        if (Number(prod.precio_helado) > 0) {
+            preciosHTML += `${preciosHTML ? '<br>' : ''}<span class="price-badge" style="color:#67e8f9;">Helada: S/ ${Number(prod.precio_helado).toFixed(2)}</span>`;
+        }
 
         let costosHTML = '';
         if (rolActual !== 'vendedor' && rolActual !== 'inventario_consulta') {
@@ -3294,6 +3351,9 @@ function renderizarProductosPorLista(listaProductos) {
         const esAGranel = esProductoAGranel(prod);
 
         let optsHTML = comerciales.map(p => `<option value="${p.tipo}|${p.precio}">${p.label} (S/ ${Number(p.precio).toFixed(2)})</option>`).join('');
+        if (Number(prod.precio_helado) > 0) {
+            optsHTML += `<option value="unidad_helada|${Number(prod.precio_helado)}">Unidad Helada (S/ ${Number(prod.precio_helado).toFixed(2)})</option>`;
+        }
 
         // Agregar opción de venta por monto para productos a granel
         if (esAGranel && pres.precioUnid > 0) {
@@ -3991,6 +4051,7 @@ const COLUMNAS_SUPABASE_VALIDAS = [
     'categoria',
     'codigo',
     'imagen',
+    'precio_helado',
     'costo_unid', 'precio_unid', 'stock_unid',
     'costo_doc', 'precio_doc', 'stock_doc',
     'costo_paq', 'precio_paq', 'stock_paq',
@@ -4020,6 +4081,7 @@ function productoParaSupabase(producto) {
         categoria: producto.categoria,
         codigo: producto.codigo,
         imagen: producto.imagen || 'https://via.placeholder.com/80',
+        precio_helado: Number(producto.precio_helado) || 0,
         unidades_paq: producto.unidadesPaq || producto.unidades_paq || 0,
         unidades_caja: producto.unidadesCaja || producto.unidades_caja || 0,
         kg_paq: producto.kgPaq || producto.kg_paq || 0,

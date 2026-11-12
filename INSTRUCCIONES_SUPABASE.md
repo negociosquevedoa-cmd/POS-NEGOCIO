@@ -136,6 +136,7 @@ setupRealtimeSubscriptions();
   codigo: TEXT,
   costo_unid: NUMERIC,
   precio_unid: NUMERIC,
+  precio_helado: NUMERIC,
   stock_unid: NUMERIC,
   costo_doc: NUMERIC,
   precio_doc: NUMERIC,
