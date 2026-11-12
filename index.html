@@ -683,6 +683,7 @@ body.rol-vendedor .campo-costo-admin {
                             <option value="Bebidas">Bebidas</option>
                             <option value="AGUA">AGUA</option>
                             <option value="GASEOSA">GASEOSA</option>
+                            <option value="LECHE">LECHE</option>
                             <option value="Detergente">Detergente</option>
                             <option value="Galletas">Galletas</option>
                             <option value="Golosinas">Golosinas</option>
@@ -824,8 +825,8 @@ body.rol-vendedor .campo-costo-admin {
                     <label>Conversiones de presentación (opcional)</label>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="p-unidades-paq">Unidades por paquete</label>
-                            <input type="number" step="0.01" min="0" id="p-unidades-paq" class="form-control" placeholder="Ej. 12">
+                            <label for="p-unidades-paq" id="lbl-unidades-paq">Unidades por paquete</label>
+                            <input type="number" step="0.01" min="0" id="p-unidades-paq" class="form-control" placeholder="Ej. 12" oninput="actualizarNombresPresentaciones()">
                         </div>
                         <div class="form-group">
                             <label for="p-unidades-caja">Unidades por caja</label>

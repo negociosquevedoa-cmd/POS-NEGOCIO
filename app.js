@@ -1,11 +1,10 @@
 const REGLAS_PRESENTACION = {
     PH: {
-        unidadBase: 'rollos sueltos',
+        unidadBase: 'parejas',
         slots: [
-            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 rollo)', precio: 1, factor: 1, resumen: '▼ 1. UNIDAD (1 rollo)' },
-            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Pareja', label: 'Pareja (2 rollos)', precio: 1.5, factor: 2, resumen: '▼ 2. PAREJA (2 rollos)' },
-            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Bloque', label: 'Bloque (5 pares / 10 rollos)', precio: 6.3, factor: 10, resumen: '▼ 3. BLOQUE (5 pares / 10 rollos)' },
-            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Paquete', label: 'Paquete (10 pares / 20 rollos)', precio: 12.5, factor: 20, resumen: '▼ 4. PAQUETE (20 rollos)' }
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Pareja', label: 'Pareja', precio: 0, factor: 1, resumen: '▼ 1. PAREJA', stockLabel: 'Stock Parejas' },
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: '1/2 Paquete', label: '1/2 Paquete', precio: 0, factor: 0.5, resumen: '▼ 2. 1/2 PAQUETE', stockable: false },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete', precio: 0, factor: 1, resumen: '▼ 3. PAQUETE', stockLabel: 'Stock Paquetes', stockable: true }
         ]
     },
     PHX4: {
@@ -386,7 +385,20 @@ function reglaPresentacionProducto(prodOrCat) {
                 : slot)
         };
     }
-    if (c === 'PH') return REGLAS_PRESENTACION.PH;
+    if (c === 'PH') {
+        const parejasPorPaquete = Number(prodOrCat && typeof prodOrCat === 'object'
+            ? (prodOrCat.unidadesPaq ?? prodOrCat.unidades_paq)
+            : 0);
+        const factorPaquete = Number.isFinite(parejasPorPaquete) && parejasPorPaquete > 0
+            ? parejasPorPaquete
+            : 1;
+        return {
+            ...REGLAS_PRESENTACION.PH,
+            slots: REGLAS_PRESENTACION.PH.slots.map(slot => slot.id === 2
+                ? { ...slot, factor: factorPaquete / 2 }
+                : slot)
+        };
+    }
     return REGLAS_PRESENTACION[c] || null;
 }
 
@@ -400,6 +412,43 @@ function slotPorTipo(prod, tipoPres) {
 function factorDePresentacion(prod, tipoPres) {
     const slot = slotPorTipo(prod, tipoPres);
     return slot ? slot.factor : 1;
+}
+
+function esProductoPH(prod) {
+    return String((prod && prod.categoria) || '').trim().toUpperCase() === 'PH';
+}
+
+function parejasPorPaquete(prod) {
+    return aNumeroProd(prod && (prod.unidadesPaq ?? prod.unidades_paq));
+}
+
+function calcularStockMaximoPH(prod, tipoPres, exceptoKey) {
+    const parejasPorCaja = parejasPorPaquete(prod);
+    if (parejasPorCaja < 1) return 0;
+
+    let paquetesReservados = 0;
+    let parejasReservadas = 0;
+    carrito.forEach(item => {
+        if (String(item.id) !== String(prod.id) || item.key === exceptoKey) return;
+        if (item.tipoPres === 'paq') {
+            paquetesReservados += aNumeroProd(item.cantidad);
+        } else {
+            parejasReservadas += aNumeroProd(item.cantidad) * factorDePresentacion(prod, item.tipoPres);
+        }
+    });
+
+    const paquetesDisponibles = Math.max(0, aNumeroProd(prod.stockPaq) - paquetesReservados);
+    if (tipoPres === 'paq') {
+        const paquetesParaParejasReservadas = Math.ceil(
+            Math.max(0, parejasReservadas - aNumeroProd(prod.stockUnid)) / parejasPorCaja
+        );
+        return Math.max(0, Math.floor(paquetesDisponibles - paquetesParaParejasReservadas));
+    }
+
+    const factorVenta = factorDePresentacion(prod, tipoPres);
+    if (factorVenta <= 0) return 0;
+    const parejasDisponibles = aNumeroProd(prod.stockUnid) + paquetesDisponibles * parejasPorCaja - parejasReservadas;
+    return Math.max(0, Math.floor((parejasDisponibles + Number.EPSILON) / factorVenta));
 }
 
 function factorStockBasePorPresentacion(prod, item) {
@@ -542,6 +591,16 @@ function normalizarPresentacionesCategoria(data) {
         data.stockCaja = 0;
         return data;
     }
+    if (String(data.categoria || '').trim().toUpperCase() === 'PH') {
+        ['Doc', 'Caja', 'Tira', 'Docena'].forEach(campo => {
+            data['precio' + campo] = campo === 'Doc' ? data['precio' + campo] : 0;
+            data['costo' + campo] = campo === 'Doc' ? data['costo' + campo] : 0;
+            data['stock' + campo] = 0;
+        });
+        data.stockPaq = aNumeroProd(data.stockPaq);
+        data.stockUnid = aNumeroProd(data.stockUnid);
+        return data;
+    }
     const camposRegla = new Set(regla.slots.map(slot => slot.campo));
     ['Unid', 'Doc', 'Paq', 'Caja', 'Tira', 'Docena'].forEach(campo => {
         if (camposRegla.has(campo)) return;
@@ -571,17 +630,18 @@ function aplicarFormularioCategoriaEspecial(regla, aplicarPrecios) {
         if (bloque) bloque.style.display = slot ? '' : 'none';
         const inputPrecio = document.getElementById(meta.precio);
         const inputStock = document.getElementById(meta.stock);
+        const tieneStock = Boolean(slot && slot.stockable !== false && (slot.factor === 1 || slot.stockable === true));
         if (inputPrecio) inputPrecio.required = Boolean(slot);
-        if (inputStock) inputStock.required = Boolean(slot && slot.factor === 1);
+        if (inputStock) inputStock.required = tieneStock;
         if (!slot) return;
 
         textoCampo(meta.sum, slot.resumen);
         textoCampo(meta.lblCosto, `Precio Costo ${slot.nombreCorto} (S/)`);
         textoCampo(meta.lblPrecio, `Precio Venta ${slot.nombreCorto} (S/)`);
-        textoCampo(meta.lblStock, slot.factor === 1 ? `Stock (${regla.unidadBase})` : `Stock ${slot.nombreCorto}`);
+        textoCampo(meta.lblStock, slot.stockLabel || (tieneStock ? `Stock (${regla.unidadBase})` : `Stock ${slot.nombreCorto}`));
 
         const grupoStock = inputStock ? inputStock.closest('.form-group') : null;
-        if (grupoStock) grupoStock.style.display = slot.factor === 1 ? '' : 'none';
+        if (grupoStock) grupoStock.style.display = tieneStock ? '' : 'none';
 
         if (aplicarPrecios) {
             if (inputPrecio) inputPrecio.value = slot.precio;
@@ -628,18 +688,36 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
     const esMenestras = catVal.includes('MENESTRAS');
     const selectorPlancha = document.getElementById('p-paquetes-plancha');
     const esPHX4 = catVal === 'PHX4';
+    const esPH = catVal === 'PH';
+    const esLeche = catVal === 'LECHE';
     const bloquePrecioHelado = document.getElementById('bloque-precio-helado');
     const regla = reglaPresentacionProducto(esPHX4
         ? { categoria: catVal, paquetesPlancha: Number(selectorPlancha?.value) || 6 }
-        : catVal);
+        : (esPH
+            ? { categoria: catVal, unidadesPaq: leerCampoNumero('p-unidades-paq') }
+            : catVal));
     const nota = document.getElementById('nota-stock-categoria');
     const bloqueConv = document.getElementById('bloque-conversiones');
     const bloquePlancha = document.getElementById('bloque-plancha-phx4');
+    const inputUnidadesPaq = document.getElementById('p-unidades-paq');
+    const labelUnidadesPaq = document.getElementById('lbl-unidades-paq');
 
     if (bloquePrecioHelado) {
         bloquePrecioHelado.style.display = ['BEBIDAS', 'AGUA', 'GASEOSA'].includes(catVal) ? '' : 'none';
     }
     if (bloquePlancha) bloquePlancha.style.display = esPHX4 ? '' : 'none';
+    if (labelUnidadesPaq) labelUnidadesPaq.textContent = esPH ? 'Parejas por Paquete' : 'Unidades por paquete';
+    if (inputUnidadesPaq) {
+        inputUnidadesPaq.min = esPH ? '1' : '0';
+        inputUnidadesPaq.step = esPH ? '1' : '0.01';
+        inputUnidadesPaq.required = esPH;
+        inputUnidadesPaq.placeholder = esPH ? 'Ej. 12 o 20' : 'Ej. 12';
+    }
+    ['p-unidades-caja', 'p-kg-paq', 'p-kg-caja'].forEach(id => {
+        const input = document.getElementById(id);
+        const grupo = input && input.closest('.form-group');
+        if (grupo) grupo.style.display = esPH ? 'none' : '';
+    });
 
     if (regla) {
         aplicarFormularioCategoriaEspecial(regla, aplicarPrecios === true);
@@ -652,10 +730,16 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
             nota.style.display = 'block';
             nota.textContent = `El stock se controla en ${regla.unidadBase}. ${descuentos}.`;
         }
-        if (bloqueConv) bloqueConv.style.display = 'none';
+        if (bloqueConv) bloqueConv.style.display = esPH ? '' : 'none';
         if (esPHX4 && nota) {
             const factorPlancha = regla.slots.find(slot => slot.tipo === 'caja').factor;
             nota.textContent = `El stock se controla en paquetes. Cada plancha descuenta ${factorPlancha} paquetes. El precio de Plancha se calcula con el precio de Paquete, pero puedes editarlo.`;
+        }
+        if (esPH && nota) {
+            const parejasPorPaquete = leerCampoNumero('p-unidades-paq');
+            nota.textContent = parejasPorPaquete > 0
+                ? `El stock se controla en parejas y paquetes. Cada paquete contiene ${parejasPorPaquete} parejas; vender por pareja o medio paquete abre paquetes automáticamente si hace falta.`
+                : 'Ingresa cuántas parejas trae cada paquete para habilitar la conversión automática de stock.';
         }
     } else {
         if (nota) nota.style.display = 'none';
@@ -731,6 +815,24 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
         if (document.getElementById('lbl-precio-4')) document.getElementById('lbl-precio-4').textContent = 'Precio Venta Caja (S/)';
         if (document.getElementById('lbl-stock-4')) document.getElementById('lbl-stock-4').textContent = 'Stock Inicial Caja';
     }
+    }
+    if (esLeche) {
+        textoCampo('sum-pres-1', '▼ 1. VENTAS POR UNIDAD / LATA');
+        textoCampo('lbl-costo-1', 'Precio Costo Unidad / Lata (S/)');
+        textoCampo('lbl-precio-1', 'Precio Venta Unidad / Lata (S/)');
+        textoCampo('lbl-stock-1', 'Stock Inicial Unidad / Lata');
+        textoCampo('sum-pres-2', '▼ 2. VENTAS SIXPACK');
+        textoCampo('lbl-costo-2', 'Precio Costo Sixpack (S/)');
+        textoCampo('lbl-precio-2', 'Precio Venta Sixpack (S/)');
+        textoCampo('lbl-stock-2', 'Stock Inicial Sixpack');
+        textoCampo('sum-pres-3', '▼ 3. VENTAS POR PLANCHA');
+        textoCampo('lbl-costo-3', 'Precio Costo Plancha (S/)');
+        textoCampo('lbl-precio-3', 'Precio Venta Plancha (S/)');
+        textoCampo('lbl-stock-3', 'Stock Inicial Plancha');
+        textoCampo('sum-pres-4', '▼ 4. VENTAS POR CAJA');
+        textoCampo('lbl-costo-4', 'Precio Costo Caja (S/)');
+        textoCampo('lbl-precio-4', 'Precio Venta Caja (S/)');
+        textoCampo('lbl-stock-4', 'Stock Inicial Caja');
     }
     // Control de visibilidad de costos según el rol
     const rolUsuario = obtenerRol();
@@ -911,6 +1013,9 @@ function etiquetasPresentaciones(prod) {
         };
     }
     const catVal = String((prod && prod.categoria) || '').trim().toUpperCase();
+    if (catVal === 'LECHE') {
+        return { unid: 'Unidad / Lata', doc: 'Sixpack', paq: 'Plancha', caja: 'Caja', tira: '', docena: '' };
+    }
     const nomVal = String((prod && prod.nombre) || '').trim().toUpperCase();
     const esFideo = catVal.includes('FIDEO') || nomVal.includes('FIDEO');
 
@@ -1020,6 +1125,14 @@ async function guardarProductoLocal(e) {
         : null;
     const imagenNueva = (document.getElementById('imagen-base64') || {}).value;
     const categoriaProducto = document.getElementById('p-categoria').value;
+    if (categoriaProducto.trim().toUpperCase() === 'PH') {
+        const parejasPorCaja = leerCampoNumero('p-unidades-paq');
+        if (!Number.isInteger(parejasPorCaja) || parejasPorCaja < 1) {
+            alert('Ingresa un número entero mayor que cero en “Parejas por Paquete”.');
+            document.getElementById('p-unidades-paq').focus();
+            return;
+        }
+    }
     const presentacionesForm = leerPresentacionesFormulario(categoriaProducto);
     const esPHX4 = categoriaProducto.trim().toUpperCase() === 'PHX4';
     const paquetesPlancha = esPHX4
@@ -1671,7 +1784,17 @@ function agregarProductoPorCodigo(prod, codigo) {
     const reservadasCodigo = unidadesReservadasCarrito(prod.id, null);
     const topeCodigo = reglaCodigo ? (pres.stockUnid || 0) : stockDisponible;
 
-    if (reservadasCodigo + factorCodigo > topeCodigo && reglaCodigo) {
+    if (esProductoPH(prod)) {
+        if (parejasPorPaquete(prod) < 1) {
+            alert(`Configura “Parejas por Paquete” para ${prod.nombre} antes de vender.`);
+            return;
+        }
+        const stockMax = calcularStockMaximoPH(prod, tipoPres, itemKey);
+        if (cantidadEnCarrito + 1 > stockMax) {
+            alert(`❌ Stock insuficiente de parejas y paquetes para ${prod.nombre}.`);
+            return;
+        }
+    } else if (reservadasCodigo + factorCodigo > topeCodigo && reglaCodigo) {
         alert(`❌ Stock insuficiente. Solo quedan ${Math.max(0, (pres.stockUnid || 0) - reservadasCodigo)} ${reglaCodigo.unidadBase}.`);
         return;
     }
@@ -1682,6 +1805,7 @@ function agregarProductoPorCodigo(prod, codigo) {
 
     if (item) {
         item.cantidad += 1;
+        if (esProductoPH(prod)) item.stockMax = calcularStockMaximoPH(prod, tipoPres, item.key);
     } else {
         carrito.push({
             key: itemKey,
@@ -1691,7 +1815,9 @@ function agregarProductoPorCodigo(prod, codigo) {
             precio: precioPres,
             precio_unitario_aplicado: precioPres,
             cantidad: 1,
-            stockMax: reglaCodigo ? Math.floor(Math.max(0, (pres.stockUnid || 0) - reservadasCodigo) / factorCodigo) : stockDisponible,
+            stockMax: esProductoPH(prod)
+                ? calcularStockMaximoPH(prod, tipoPres, null)
+                : (reglaCodigo ? Math.floor(Math.max(0, (pres.stockUnid || 0) - reservadasCodigo) / factorCodigo) : stockDisponible),
             factorUnidades: reglaCodigo ? factorCodigo : 1,
             etiquetaPres: reglaCodigo ? etiquetaDePresentacion(prod, tipoPres) : ''
         });
@@ -1763,7 +1889,16 @@ function agregarAlCarrito(id) {
         ? etiquetaDePresentacion(prod, tipoPres)
         : '';
 
-    if (reglaVenta) {
+    if (esProductoPH(prod) && parejasPorPaquete(prod) < 1) {
+        alert(`Configura “Parejas por Paquete” para ${prod.nombre} antes de vender.`);
+        return;
+    } else if (esProductoPH(prod)) {
+        const stockMax = calcularStockMaximoPH(prod, tipoPres, itemKey);
+        if (cantidadEnCarrito + 1 > stockMax) {
+            alert(`❌ Stock insuficiente de parejas y paquetes para ${prod.nombre}.`);
+            return;
+        }
+    } else if (reglaVenta) {
         const reservadas = unidadesReservadasCarrito(id, null);
         const sueltos = parseFloat(prod.stockUnid) || 0;
         if (reservadas + factorVenta > sueltos) {
@@ -1785,7 +1920,11 @@ function agregarAlCarrito(id) {
 
     if (item) {
         item.cantidad += 1;
-        if (reglaVenta) {
+        if (esProductoPH(prod)) {
+            item.factorUnidades = factorVenta;
+            item.etiquetaPres = etiquetaVenta;
+            item.stockMax = calcularStockMaximoPH(prod, tipoPres, item.key);
+        } else if (reglaVenta) {
             item.factorUnidades = factorVenta;
             item.etiquetaPres = etiquetaVenta;
             const otras = unidadesReservadasCarrito(id, item.key);
@@ -1810,11 +1949,13 @@ function agregarAlCarrito(id) {
             precio: precioPres,
             precio_unitario_aplicado: precioPres,
             cantidad: 1,
-            stockMax: reglaVenta
-                ? Math.floor(Math.max(0, sueltos - otras) / factorVenta)
-                : (tipoPres === 'unid' || tipoPres === 'unidad_helada'
-                    ? Math.max(0, sueltos - otrasUnidadesIndividuales)
-                    : prod.stockUnid),
+            stockMax: esProductoPH(prod)
+                ? calcularStockMaximoPH(prod, tipoPres, null)
+                : (reglaVenta
+                    ? Math.floor(Math.max(0, sueltos - otras) / factorVenta)
+                    : (tipoPres === 'unid' || tipoPres === 'unidad_helada'
+                        ? Math.max(0, sueltos - otrasUnidadesIndividuales)
+                        : prod.stockUnid)),
             factorUnidades: factorVenta,
             etiquetaPres: etiquetaVenta
         });
@@ -1855,7 +1996,9 @@ function cambiarCantidad(key, delta) {
         } else {
             const prodItem = productos.find(p => String(p.id) === String(item.id));
             const reglaItem = prodItem && reglaPresentacionProducto(prodItem);
-            if (reglaItem) {
+            if (prodItem && esProductoPH(prodItem)) {
+                item.stockMax = calcularStockMaximoPH(prodItem, item.tipoPres, item.key);
+            } else if (reglaItem) {
                 const factor = item.factorUnidades || factorDePresentacion(prodItem, item.tipoPres);
                 item.factorUnidades = factor;
                 const otras = unidadesReservadasCarrito(item.id, item.key);
@@ -1904,7 +2047,9 @@ function modificarCantidadDirecta(key, valor) {
         } else {
             const prodItem = productos.find(p => String(p.id) === String(item.id));
             const reglaItem = prodItem && reglaPresentacionProducto(prodItem);
-            if (reglaItem) {
+            if (prodItem && esProductoPH(prodItem)) {
+                item.stockMax = calcularStockMaximoPH(prodItem, item.tipoPres, item.key);
+            } else if (reglaItem) {
                 const factor = item.factorUnidades || factorDePresentacion(prodItem, item.tipoPres);
                 item.factorUnidades = factor;
                 const otras = unidadesReservadasCarrito(item.id, item.key);
@@ -1992,8 +2137,9 @@ function actualizarCarritoUI() {
         } else {
             const precio = precioUnitarioAplicado(item);
             subtotal = subtotalItemCarrito(item);
+            const prodItem = productos.find(prod => String(prod.id) === String(item.id));
             const unidadesTxt = item.factorUnidades > 1
-                ? ` · ${item.cantidad * item.factorUnidades} unid`
+                ? ` · ${item.cantidad * item.factorUnidades} ${prodItem && esProductoPH(prodItem) ? 'parejas' : 'unid'}`
                 : '';
             const presTxt = item.etiquetaPres ? `${item.etiquetaPres} · ` : '';
             displayInfo = `${presTxt}S/ ${precio.toFixed(2)} x ${item.cantidad}${unidadesTxt}`;
@@ -2106,6 +2252,46 @@ function preciosOficialesProducto(prod, tipoPres) {
     };
 }
 
+function validarStockPHEnCarrito() {
+    const resumenPorProducto = new Map();
+    for (const item of carrito) {
+        const prod = productos.find(p => String(p.id) === String(item.id));
+        if (!prod || !esProductoPH(prod)) continue;
+
+        const parejasPorCaja = parejasPorPaquete(prod);
+        if (parejasPorCaja < 1) {
+            alert(`Configura “Parejas por Paquete” para ${prod.nombre} antes de vender.`);
+            return false;
+        }
+
+        const resumen = resumenPorProducto.get(String(prod.id)) || {
+            prod,
+            paquetes: 0,
+            parejas: 0
+        };
+        if (item.tipoPres === 'paq') {
+            resumen.paquetes += aNumeroProd(item.cantidad);
+        } else {
+            resumen.parejas += aNumeroProd(item.cantidad) * factorDePresentacion(prod, item.tipoPres);
+        }
+        resumenPorProducto.set(String(prod.id), resumen);
+    }
+
+    for (const { prod, paquetes, parejas } of resumenPorProducto.values()) {
+        const stockPaquetes = aNumeroProd(prod.stockPaq);
+        if (paquetes > stockPaquetes) {
+            alert(`❌ Stock insuficiente de paquetes de ${prod.nombre}. Solo quedan ${stockPaquetes}.`);
+            return false;
+        }
+        const parejasDisponibles = aNumeroProd(prod.stockUnid) + (stockPaquetes - paquetes) * parejasPorPaquete(prod);
+        if (parejas > parejasDisponibles) {
+            alert(`❌ Stock insuficiente de parejas y paquetes de ${prod.nombre}.`);
+            return false;
+        }
+    }
+    return true;
+}
+
 function confirmarCobro() {
     if (requiereAperturaCajaHoy()) {
         alert('Debe registrar la apertura de caja de hoy antes de iniciar las ventas.');
@@ -2116,6 +2302,7 @@ function confirmarCobro() {
         alert('La caja está cerrada por hoy. No se pueden registrar más ventas.');
         return;
     }
+    if (!validarStockPHEnCarrito()) return;
 
     let montoEfectivo = 0;
     let montoYape = 0;
@@ -2193,6 +2380,21 @@ function confirmarCobro() {
     syncKardexToSupabase(movimientoTicket);
 
     carrito.forEach(item => {
+        if (item.tipoPres !== 'paq') return;
+        const prod = productos.find(p => String(p.id) === String(item.id));
+        if (!prod || !esProductoPH(prod)) return;
+        const cantidadPaquetes = aNumeroProd(item.cantidad);
+        prod.stockPaq = Math.max(0, aNumeroProd(prod.stockPaq) - cantidadPaquetes);
+        kardex.unshift({
+            fecha: fechaActual,
+            producto: item.nombre,
+            tipo: 'Venta',
+            cantidad: `-${cantidadPaquetes} Paquete(s)`,
+            usuario: `${rol} (${metodoPagoSeleccionado})`
+        });
+    });
+
+    carrito.forEach(item => {
         detalles.push(`${item.nombre} x${item.cantidad}`);
 
         const prod = productos.find(p => p.id === item.id);
@@ -2202,7 +2404,35 @@ function confirmarCobro() {
             const esAGranel = esProductoAGranel(prod);
             const pres = extraerPresentacionesProducto(prod);
 
-            if (reglaVenta) {
+            if (esProductoPH(prod)) {
+                if (item.tipoPres === 'paq') return;
+
+                const cantidadParejas = aNumeroProd(item.cantidad) * factorDePresentacion(prod, item.tipoPres);
+                let stockParejas = aNumeroProd(prod.stockUnid);
+                if (cantidadParejas > stockParejas) {
+                    const paquetesPorAbrir = Math.ceil((cantidadParejas - stockParejas) / parejasPorPaquete(prod));
+                    prod.stockPaq = Math.max(0, aNumeroProd(prod.stockPaq) - paquetesPorAbrir);
+                    prod.stockUnid = stockParejas + paquetesPorAbrir * parejasPorPaquete(prod);
+                    stockParejas = prod.stockUnid;
+                    kardex.unshift({
+                        fecha: fechaActual,
+                        producto: item.nombre,
+                        tipo: 'Conversión Stock',
+                        cantidad: `-${paquetesPorAbrir} Paquete(s) → +${paquetesPorAbrir * parejasPorPaquete(prod)} Parejas`,
+                        usuario: rol
+                    });
+                }
+
+                prod.stockUnid = Math.max(0, stockParejas - cantidadParejas);
+                const etiqueta = item.etiquetaPres || etiquetaDePresentacion(prod, item.tipoPres);
+                kardex.unshift({
+                    fecha: fechaActual,
+                    producto: item.nombre,
+                    tipo: 'Venta',
+                    cantidad: `-${cantidadParejas} Parejas (${item.cantidad} ${etiqueta})`,
+                    usuario: `${rol} (${metodoPagoSeleccionado})`
+                });
+            } else if (reglaVenta) {
                 const factor = factorStockBasePorPresentacion(prod, item);
                 const cantidadADescontar = (parseFloat(item.cantidad) || 0) * factor;
                 const stockDisponible = parseFloat(prod.stockUnid) || 0;
@@ -3019,12 +3249,15 @@ function editarProducto(id) {
     setCampoForm('p-unidades-caja', prod.unidadesCaja || 0);
     setCampoForm('p-kg-paq', prod.kgPaq || 0);
     setCampoForm('p-kg-caja', prod.kgCaja || 0);
-
     // Cargar también si existen con nombres alternativos por compatibilidad
     if (!prod.unidadesPaq && prod.unidades_paq) setCampoForm('p-unidades-paq', prod.unidades_paq);
     if (!prod.unidadesCaja && prod.unidades_caja) setCampoForm('p-unidades-caja', prod.unidades_caja);
     if (!prod.kgPaq && prod.kg_paq) setCampoForm('p-kg-paq', prod.kg_paq);
     if (!prod.kgCaja && prod.kg_caja) setCampoForm('p-kg-caja', prod.kg_caja);
+
+    if (String(prod.categoria || '').trim().toUpperCase() === 'PH') {
+        actualizarNombresPresentaciones();
+    }
 
     if (String(prod.categoria || '').trim().toUpperCase() === 'PHX4') {
         const paquetesPlancha = Number(prod.paquetesPlancha ?? prod.unidadesCaja ?? prod.unidades_caja);
@@ -3255,9 +3488,15 @@ function renderizarProductosPorLista(listaProductos) {
 
         let stockHTML = '';
         if (reglaCat) {
-            stockHTML = `<span class="price-badge" style="color:#4ade80;">${reglaCat.unidadBase}: ${pres.stockUnid || 0}</span>`;
-            const eqs = reglaCat.slots.filter(s => s.factor > 1).map(s => `${s.nombreCorto}=${s.factor}`).join(' · ');
-            if (eqs) stockHTML += `<br><span class="price-badge" style="color:#94a3b8; font-size:10px;">Descuenta: ${eqs}</span>`;
+            if (esProductoPH(prod)) {
+                stockHTML = `<span class="price-badge" style="color:#4ade80;">Parejas: ${pres.stockUnid || 0}</span>` +
+                    `<br><span class="price-badge" style="color:#4ade80;">Paquetes: ${pres.stockPaq || 0}</span>` +
+                    `<br><span class="price-badge" style="color:#94a3b8; font-size:10px;">${parejasPorPaquete(prod) || 0} parejas por paquete</span>`;
+            } else {
+                stockHTML = `<span class="price-badge" style="color:#4ade80;">${reglaCat.unidadBase}: ${pres.stockUnid || 0}</span>`;
+                const eqs = reglaCat.slots.filter(s => s.factor > 1).map(s => `${s.nombreCorto}=${s.factor}`).join(' · ');
+                if (eqs) stockHTML += `<br><span class="price-badge" style="color:#94a3b8; font-size:10px;">Descuenta: ${eqs}</span>`;
+            }
         } else {
             stockHTML = `<span class="price-badge" style="color:#4ade80;">${labels.unid}: ${pres.stockUnid || 0}</span>`;
             if (pres.stockDoc > 0) stockHTML += `<br><span class="price-badge" style="color:#4ade80;">${labels.doc}: ${pres.stockDoc}</span>`;
@@ -3641,9 +3880,13 @@ function descargarInventarioWord() {
         let stockHTML = '';
         if (!esInventarioConsulta) {
             if (reglaCat) {
-                stockHTML = `${reglaCat.unidadBase}: ${pres.stockUnid || 0}`;
-                const eqs = reglaCat.slots.filter(s => s.factor > 1).map(s => `${s.nombreCorto}=${s.factor}`).join(' · ');
-                if (eqs) stockHTML += ` (descuenta ${eqs})`;
+                if (esProductoPH(prod)) {
+                    stockHTML = `Parejas: ${pres.stockUnid || 0} | Paquetes: ${pres.stockPaq || 0} (${parejasPorPaquete(prod)} parejas por paquete)`;
+                } else {
+                    stockHTML = `${reglaCat.unidadBase}: ${pres.stockUnid || 0}`;
+                    const eqs = reglaCat.slots.filter(s => s.factor > 1).map(s => `${s.nombreCorto}=${s.factor}`).join(' · ');
+                    if (eqs) stockHTML += ` (descuenta ${eqs})`;
+                }
             } else {
                 const labels = etiquetasPresentaciones(prod);
                 stockHTML = `${labels.unid}: ${pres.stockUnid || 0}`;
