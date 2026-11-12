@@ -81,6 +81,8 @@ let salidasAlmacen = [];
 let carrito = [];
 let carritoCompras = [];
 let comandaActualAprobar = null;
+let isSendingComanda = false;
+let isProcessing = false;
 let metodoPagoSeleccionado = 'Efectivo';
 let totalPagarActual = 0;
 
@@ -1039,20 +1041,21 @@ async function guardarProductoLocal(e) {
             return;
         }
 
+        const payload = { ...productoData };
+        delete payload.stock_docena;
+        delete payload.stock_tira;
+        delete payload.stock_paquete;
+        delete payload.stock_cuarto;
+        delete payload.rollos_plancha;
+
         try {
             const { data, error } = await supabaseClient
                 .from('productos')
-                .update(productoParaSupabase(productoData))
+                .update(productoParaSupabase(payload))
                 .eq('id', productoId)
                 .select('*')
                 .single();
             if (error) throw error;
-            // Eliminar claves de stock temporales de la UI que no existen en Supabase
-delete payload.stock_docena;
-delete payload.stock_tira;
-delete payload.stock_paquete;
-delete payload.stock_cuarto;
-delete payload.rollos_plancha;
             // Actualizar el producto local con los datos retornados de Supabase
             if (data) {
                 productos[index] = data;
@@ -1278,42 +1281,52 @@ function actualizarCarritoComprasUI() {
     btnEnviar.disabled = false;
 }
 
-function enviarSolicitudCompra() {
-    if (carritoCompras.length === 0) return;
-    const fechaActual = new Date().toLocaleString('es-PE');
-    
-    let montoTotalComanda = 0;
-    carritoCompras.forEach(i => {
-        montoTotalComanda += (i.precioEstimado || 0) * i.cantidad;
-    });
+async function enviarSolicitudCompra() {
+    if (isSendingComanda || carritoCompras.length === 0) return;
+    isSendingComanda = true;
+    const botonEnviar = document.getElementById('btn-enviar-compra');
+    if (botonEnviar) botonEnviar.disabled = true;
+    try {
+        const fechaActual = new Date().toLocaleString('es-PE');
 
-    const nuevaComanda = {
-        comandaId: 'CMD-' + Math.floor(1000 + Math.random() * 9000),
-        fecha: fechaActual,
-        usuario: rol,
-        estado: 'POR PAGAR',
-        totalEstimado: montoTotalComanda.toFixed(2),
-        items: JSON.parse(JSON.stringify(carritoCompras))
-    };
-    comandas.unshift(nuevaComanda);
-    historialComandasRealizadas.unshift(nuevaComanda);
+        let montoTotalComanda = 0;
+        carritoCompras.forEach(i => {
+            montoTotalComanda += (i.precioEstimado || 0) * i.cantidad;
+        });
 
-    kardex.unshift({
-        ticketId: nuevaComanda.comandaId,
-        fecha: fechaActual,
-        producto: `Comanda ${nuevaComanda.comandaId}`,
-        tipo: 'Comanda Solicitada',
-        cantidad: `POR PAGAR (S/ ${montoTotalComanda.toFixed(2)})`,
-        usuario: rol
-    });
+        const nuevaComanda = {
+            comandaId: 'CMD-' + Math.floor(1000 + Math.random() * 9000),
+            fecha: fechaActual,
+            usuario: rol,
+            estado: 'POR PAGAR',
+            totalEstimado: montoTotalComanda.toFixed(2),
+            items: JSON.parse(JSON.stringify(carritoCompras))
+        };
+        comandas.unshift(nuevaComanda);
+        historialComandasRealizadas.unshift(nuevaComanda);
 
-    localStorage.setItem('lista_comandas', JSON.stringify(comandas));
-    localStorage.setItem('historial_comandas_realizadas', JSON.stringify(historialComandasRealizadas));
-    localStorage.setItem('lista_kardex', JSON.stringify(kardex));
-    carritoCompras = [];
-    actualizarCarritoComprasUI();
-    alert("Pedido enviado al administrador correctamente.");
-    cambiarTab('ventas');
+        const movimientoSolicitud = {
+            ticketId: nuevaComanda.comandaId,
+            fecha: fechaActual,
+            producto: `Comanda ${nuevaComanda.comandaId}`,
+            tipo: 'Comanda Solicitada',
+            cantidad: `POR PAGAR (S/ ${montoTotalComanda.toFixed(2)})`,
+            usuario: rol
+        };
+        kardex.unshift(movimientoSolicitud);
+        await syncKardexToSupabase(movimientoSolicitud);
+
+        localStorage.setItem('lista_comandas', JSON.stringify(comandas));
+        localStorage.setItem('historial_comandas_realizadas', JSON.stringify(historialComandasRealizadas));
+        localStorage.setItem('lista_kardex', JSON.stringify(kardex));
+        carritoCompras = [];
+        actualizarCarritoComprasUI();
+        alert("Pedido enviado al administrador correctamente.");
+        cambiarTab('ventas');
+    } finally {
+        isSendingComanda = false;
+        if (botonEnviar) botonEnviar.disabled = carritoCompras.length === 0;
+    }
 }
 
 function abrirModalComandasLista() {
@@ -1362,88 +1375,115 @@ function abrirModalCostosComanda(comandaId) {
 function cerrarModalCostos() { document.getElementById('modal-costos-comanda').style.display = 'none'; }
 
 async function confirmarCostosComanda() {
-    if (!comandaActualAprobar) return;
-    const estadoPago = document.getElementById('select-estado-comanda').value;
-    comandaActualAprobar.estado = estadoPago;
+    if (isProcessing || !comandaActualAprobar) return;
+    const comandaId = comandaActualAprobar.comandaId;
+    if (!comandas.some(comanda => comanda.comandaId === comandaId)) return;
 
-    const fechaActual = new Date().toLocaleString('es-PE');
-    let totalComanda = 0;
-    let stockSupabaseActualizado = true;
-    const itemsTicketComanda = [];
+    const comandaHistorial = historialComandasRealizadas.find(item => item.comandaId === comandaId);
+    const ticketYaCancelado = comandaActualAprobar.estado === 'CANCELADO' ||
+        (comandaHistorial && comandaHistorial.estado === 'CANCELADO') ||
+        kardex.some(movimiento =>
+            movimiento.ticketId === comandaId &&
+            (movimiento.tipo === 'Comanda [CANCELADO]' || movimiento.metodo === 'Comanda [CANCELADO]')
+        );
+    if (ticketYaCancelado) {
+        alert(`La comanda ${comandaId} ya está cancelada. No se volvió a actualizar el inventario.`);
+        return;
+    }
 
-    for (const [idx, it] of comandaActualAprobar.items.entries()) {
-        const costoInput = parseFloat(document.getElementById(`costo-item-${idx}`).value) || 0;
-        const totalItem = costoInput * (Number(it.cantidad) || 0);
-        totalComanda += totalItem;
-        it.precioUnitario = costoInput.toFixed(2);
-        it.total = totalItem.toFixed(2);
-        itemsTicketComanda.push({
-            desc: `${it.nombre} (${it.tipoPres})`,
-            presentacion: it.tipoPres,
-            cant: it.cantidad,
-            precioUnitario: it.precioUnitario,
-            total: it.total
-        });
+    isProcessing = true;
+    const botonGuardar = document.querySelector('#modal-costos-comanda button[onclick="confirmarCostosComanda()"]');
+    if (botonGuardar) botonGuardar.disabled = true;
+    try {
+        const estadoPago = document.getElementById('select-estado-comanda').value;
+        comandaActualAprobar.estado = estadoPago;
 
-        const prod = productos.find(p => String(p.id) === String(it.id)) ||
-            productos.find(p => p.nombre.toLowerCase() === it.nombre.toLowerCase());
-        if (prod) {
-            const cantidadIngresada = (Number(it.cantidad) || 0) * factorStockBasePorPresentacion(prod, it);
-            prod.stockUnid = (parseFloat(prod.stockUnid) || 0) + cantidadIngresada;
-            if (!await incrementarStockProductoEnSupabase(prod.id, cantidadIngresada, prod.nombre)) {
+        const fechaActual = new Date().toLocaleString('es-PE');
+        let totalComanda = 0;
+        let stockSupabaseActualizado = true;
+        const itemsTicketComanda = [];
+
+        for (const [idx, it] of comandaActualAprobar.items.entries()) {
+            const costoInput = parseFloat(document.getElementById(`costo-item-${idx}`).value) || 0;
+            const totalItem = costoInput * (Number(it.cantidad) || 0);
+            totalComanda += totalItem;
+            it.precioUnitario = costoInput.toFixed(2);
+            it.total = totalItem.toFixed(2);
+            itemsTicketComanda.push({
+                desc: `${it.nombre} (${it.tipoPres})`,
+                presentacion: it.tipoPres,
+                cant: it.cantidad,
+                precioUnitario: it.precioUnitario,
+                total: it.total
+            });
+
+            const prod = productos.find(p => String(p.id) === String(it.id)) ||
+                productos.find(p => p.nombre.toLowerCase() === it.nombre.toLowerCase());
+            if (prod) {
+                const cantidadIngresada = (Number(it.cantidad) || 0) * factorStockBasePorPresentacion(prod, it);
+                prod.stockUnid = (parseFloat(prod.stockUnid) || 0) + cantidadIngresada;
+                if (!await incrementarStockProductoEnSupabase(prod.id, cantidadIngresada, prod.nombre)) {
+                    stockSupabaseActualizado = false;
+                }
+            } else {
+                console.error(`No se encontró el producto "${it.nombre}" para actualizar su stock.`);
                 stockSupabaseActualizado = false;
             }
-        } else {
-            console.error(`No se encontró el producto "${it.nombre}" para actualizar su stock.`);
-            stockSupabaseActualizado = false;
+
+            const movimientoCompra = {
+                fecha: fechaActual,
+                producto: `${it.nombre} (${it.tipoPres})`,
+                tipo: 'Compra Proveedor',
+                cantidad: `+${it.cantidad} ${it.presentacion || it.unidad_medida || it.tipoPres}`,
+                usuario: `${comandaActualAprobar.comandaId} (${estadoPago} S/ ${costoInput.toFixed(2)})`
+            };
+            kardex.unshift(movimientoCompra);
+            await syncKardexToSupabase(movimientoCompra);
         }
 
-        const movimientoCompra = {
+        const movimientoPago = {
+            ticketId: comandaId,
             fecha: fechaActual,
-            producto: `${it.nombre} (${it.tipoPres})`,
-            tipo: 'Compra Proveedor',
-            cantidad: `+${it.cantidad} ${it.presentacion || it.unidad_medida || it.tipoPres}`,
-            usuario: `${comandaActualAprobar.comandaId} (${estadoPago} S/ ${costoInput.toFixed(2)})`
+            producto: `Pago Comanda ${comandaId}`,
+            tipo: `Comanda [${estadoPago}]`,
+            cantidad: `- S/ ${totalComanda.toFixed(2)}`,
+            usuario: `${comandaActualAprobar.usuario} (Admin Pagó)`,
+            metodo: `Comanda [${estadoPago}]`,
+            total: totalComanda.toFixed(2),
+            items: itemsTicketComanda
         };
-        kardex.unshift(movimientoCompra);
-        await syncKardexToSupabase(movimientoCompra);
+        const indiceMovimientoComanda = kardex.findIndex(movimiento => movimiento.ticketId === comandaId);
+        if (indiceMovimientoComanda >= 0) {
+            kardex[indiceMovimientoComanda] = { ...kardex[indiceMovimientoComanda], ...movimientoPago };
+        } else {
+            kardex.unshift(movimientoPago);
+        }
+        await syncKardexToSupabase(movimientoPago);
+
+        if (comandaHistorial) {
+            comandaHistorial.estado = estadoPago;
+            comandaHistorial.total = totalComanda.toFixed(2);
+            comandaHistorial.items = comandaActualAprobar.items.map(item => ({ ...item }));
+        }
+
+        comandas = comandas.filter(c => c.comandaId !== comandaId);
+
+        localStorage.setItem('lista_comandas', JSON.stringify(comandas));
+        localStorage.setItem('historial_comandas_realizadas', JSON.stringify(historialComandasRealizadas));
+        localStorage.setItem('lista_productos', JSON.stringify(productos));
+        localStorage.setItem('lista_kardex', JSON.stringify(kardex));
+
+        alert(stockSupabaseActualizado
+            ? "Comanda procesada e inventario actualizado correctamente."
+            : "Comanda procesada localmente, pero no se pudo actualizar todo el stock en Supabase. Revise la consola y los productos pendientes de sincronización.");
+        cerrarModalCostos();
+        renderizarProductos();
+        renderizarReportes();
+        renderizarKardex();
+    } finally {
+        isProcessing = false;
+        if (botonGuardar) botonGuardar.disabled = false;
     }
-
-    const movimientoPago = {
-        ticketId: comandaActualAprobar.comandaId,
-        fecha: fechaActual,
-        producto: `Pago Comanda ${comandaActualAprobar.comandaId}`,
-        tipo: `Comanda [${estadoPago}]`,
-        cantidad: `- S/ ${totalComanda.toFixed(2)}`,
-        usuario: `${comandaActualAprobar.usuario} (Admin Pagó)`,
-        metodo: `Comanda [${estadoPago}]`,
-        total: totalComanda.toFixed(2),
-        items: itemsTicketComanda
-    };
-    kardex.unshift(movimientoPago);
-    await syncKardexToSupabase(movimientoPago);
-
-    const comandaHistorial = historialComandasRealizadas.find(item => item.comandaId === comandaActualAprobar.comandaId);
-    if (comandaHistorial) {
-        comandaHistorial.estado = estadoPago;
-        comandaHistorial.total = totalComanda.toFixed(2);
-        comandaHistorial.items = comandaActualAprobar.items.map(item => ({ ...item }));
-    }
-
-    comandas = comandas.filter(c => c.comandaId !== comandaActualAprobar.comandaId);
-
-    localStorage.setItem('lista_comandas', JSON.stringify(comandas));
-    localStorage.setItem('historial_comandas_realizadas', JSON.stringify(historialComandasRealizadas));
-    localStorage.setItem('lista_productos', JSON.stringify(productos));
-    localStorage.setItem('lista_kardex', JSON.stringify(kardex));
-
-    alert(stockSupabaseActualizado
-        ? "Comanda procesada e inventario actualizado correctamente."
-        : "Comanda procesada localmente, pero no se pudo actualizar todo el stock en Supabase. Revise la consola y los productos pendientes de sincronización.");
-    cerrarModalCostos();
-    renderizarProductos();
-    renderizarReportes();
-    renderizarKardex();
 }
 
 function renderizarRegistroComandasVendedor() {
@@ -4024,25 +4064,44 @@ async function syncKardexToSupabase(movimiento) {
     }
 
     try {
-        const { data, error } = await supabaseClient
-            .from('kardex')
-            .insert({
-                ticket_id: movimiento.ticketId || null,
-                fecha: movimiento.fecha,
-                producto: movimiento.producto,
-                tipo: movimiento.tipo,
-                cantidad: movimiento.cantidad,
-                usuario: movimiento.usuario,
-                metodo: movimiento.metodo || null,
-                total: movimiento.total || null,
-                monto_efectivo: movimiento.montoEfectivo || null,
-                monto_yape: movimiento.montoYape || null,
-                items: movimiento.items || null
-            });
+        const movimientoSupabase = {
+            ticket_id: movimiento.ticketId || null,
+            fecha: movimiento.fecha,
+            producto: movimiento.producto,
+            tipo: movimiento.tipo,
+            cantidad: movimiento.cantidad,
+            usuario: movimiento.usuario,
+            metodo: movimiento.metodo || null,
+            total: movimiento.total || null,
+            monto_efectivo: movimiento.montoEfectivo || null,
+            monto_yape: movimiento.montoYape || null,
+            items: movimiento.items || null
+        };
+        const esActualizacionDeComanda = movimiento.ticketId &&
+            /^Comanda \[(CANCELADO|POR PAGAR)\]$/.test(movimiento.tipo);
+        const { data, error } = esActualizacionDeComanda
+            ? await supabaseClient
+                .from('kardex')
+                .update(movimientoSupabase)
+                .eq('ticket_id', movimiento.ticketId)
+                .select('id')
+            : await supabaseClient
+                .from('kardex')
+                .insert(movimientoSupabase);
 
         if (error) {
             console.error('Error al sincronizar kardex:', error);
             syncQueue.push({ type: 'kardex', data: movimiento });
+        } else if (esActualizacionDeComanda && (!data || data.length === 0)) {
+            console.error(`No se encontró el registro inicial del ticket ${movimiento.ticketId} para actualizar su estado.`);
+            const solicitudPendiente = syncQueue.some(item =>
+                item.type === 'kardex' &&
+                item.data.ticketId === movimiento.ticketId &&
+                item.data.tipo === 'Comanda Solicitada'
+            );
+            if (solicitudPendiente) {
+                syncQueue.push({ type: 'kardex', data: movimiento });
+            }
         } else {
             console.log('✅ Kárdex sincronizado');
         }
