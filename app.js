@@ -111,10 +111,20 @@ if (typeof window.supabase !== 'undefined') {
 }
 
 const rol = obtenerRol();
+const usuarioActual = (localStorage.getItem('usuario_rol') || (rol === 'admin' ? 'administrador' : rol)).trim().toLowerCase();
+const esAdministrador = rol === 'admin' || usuarioActual === 'administrador';
 const fechaAperturaCajaHoy = obtenerFechaCajaLocal();
-let montoInicialCaja = rol === 'vendedor' && localStorage.getItem('caja_apertura_fecha') === fechaAperturaCajaHoy
-    ? (parseFloat(localStorage.getItem('caja_inicial')) || 0)
-    : 0;
+const claveSesionCaja = `caja_sesion_${usuarioActual}`;
+function leerSesionCajaLocal() {
+    try {
+        return JSON.parse(localStorage.getItem(claveSesionCaja)) || null;
+    } catch (error) {
+        return null;
+    }
+}
+let sesionCajaActual = leerSesionCajaLocal();
+if (sesionCajaActual?.fecha_operativa !== fechaAperturaCajaHoy) sesionCajaActual = null;
+let montoInicialCaja = Number(sesionCajaActual?.monto_inicial ?? sesionCajaActual?.montoInicial) || 0;
 
 // Asignar clase del rol al body inmediatamente para evitar parpadeo
 const rolUsuario = obtenerRol();
@@ -214,7 +224,7 @@ function aplicarMenuPorRol() {
     document.body.setAttribute('data-rol', rolActual);
 
     const elUsuarioRol = document.getElementById('usuario-rol');
-    if (elUsuarioRol) elUsuarioRol.textContent = esInventarioConsulta ? 'inventario consulta' : (esVendedor ? 'vendedor' : 'administrador');
+    if (elUsuarioRol) elUsuarioRol.textContent = esInventarioConsulta ? 'inventario consulta' : usuarioActual;
 
     const elMontoInicial = document.getElementById('monto-inicial');
     if (elMontoInicial) elMontoInicial.textContent = montoInicialCaja.toFixed(2);
@@ -2191,6 +2201,7 @@ function actualizarCarritoUI() {
 }
 
 function abrirModalPago() {
+    if (!validarHorarioCajaVendedor()) return;
     if (requiereAperturaCajaHoy()) {
         alert('Debe registrar la apertura de caja de hoy antes de iniciar las ventas.');
         window.location.href = 'caja.html';
@@ -2306,6 +2317,7 @@ function validarStockPHEnCarrito() {
 }
 
 function confirmarCobro() {
+    if (!validarHorarioCajaVendedor()) return;
     if (requiereAperturaCajaHoy()) {
         alert('Debe registrar la apertura de caja de hoy antes de iniciar las ventas.');
         window.location.href = 'caja.html';
@@ -2382,7 +2394,8 @@ function confirmarCobro() {
         producto: carrito.map(i => `${i.nombre} x${i.cantidad}`).join(', '),
         tipo: metodoPagoSeleccionado,
         cantidad: totalPagarActual.toFixed(2),
-        usuario: rol,
+        usuario: usuarioActual,
+        vendedor: usuarioActual,
         metodo: metodoPagoTexto,
         total: totalPagarActual.toFixed(2),
         montoEfectivo: montoEfectivo.toFixed(2),
@@ -2598,8 +2611,8 @@ function confirmarCobro() {
         metodoPago: metodoPagoTexto,
         montoEfectivo: montoEfectivo,
         montoYape: montoYape,
-        usuario: rol,
-        vendedor: rol
+        usuario: usuarioActual,
+        vendedor: usuarioActual
     });
 
     // Sincronizar productos actualizados
@@ -2634,12 +2647,185 @@ function imprimirTicketActual() {
 }
 
 function cajaEstaCerradaHoy() {
-    return localStorage.getItem('caja_estado') === 'CERRADA' &&
-        localStorage.getItem('caja_estado_fecha') === obtenerFechaCajaLocal();
+    return sesionCajaActual?.estado === 'CERRADA' &&
+        sesionCajaActual?.fecha_operativa === obtenerFechaCajaLocal();
 }
 
 function requiereAperturaCajaHoy() {
-    return rol === 'vendedor' && localStorage.getItem('caja_apertura_fecha') !== obtenerFechaCajaLocal();
+    return !esAdministrador && (!sesionCajaActual ||
+        sesionCajaActual.estado !== 'ABIERTA' ||
+        sesionCajaActual.fecha_operativa !== obtenerFechaCajaLocal());
+}
+
+function dentroHorarioCajaVendedor(fecha = new Date()) {
+    const hora = fecha.getHours();
+    return hora >= 7 && hora < 20;
+}
+
+function validarHorarioCajaVendedor() {
+    if (esAdministrador || dentroHorarioCajaVendedor()) return true;
+    alert('El horario de caja para vendedores es de 7:00 a. m. a 8:00 p. m.');
+    return false;
+}
+
+function usuarioDeRegistroCaja(registro) {
+    const propietario = registro.vendedor || registro.usuario || '';
+    const usuario = String(propietario).split(' (')[0].trim().toLowerCase();
+    return usuario === 'admin' ? 'administrador' : usuario;
+}
+
+function fechaHoraGasto(gasto) {
+    const fechaHora = gasto.fecha_hora || gasto.fechaHora;
+    if (fechaHora && Number.isFinite(Date.parse(fechaHora))) return Date.parse(fechaHora);
+    return fechaRegistroVenta({ fecha: `${gasto.fecha || ''}, ${gasto.hora || ''}` });
+}
+
+function convertirSesionCajaACierre(sesion) {
+    return {
+        id: `CIERRE-SUPA-${sesion.id}`,
+        sessionId: sesion.id,
+        fecha: sesion.fecha_cierre ? new Date(sesion.fecha_cierre).toLocaleString('es-PE') : sesion.fecha_operativa,
+        usuario: sesion.usuario,
+        montoInicial: Number(sesion.monto_inicial) || 0,
+        efectivo: Number(sesion.total_efectivo) || 0,
+        yape: Number(sesion.total_yape) || 0,
+        gastos: Number(sesion.total_gastos) || 0,
+        efectivoFinal: Number(sesion.monto_final) || 0,
+        ventas: Array.isArray(sesion.ventas) ? sesion.ventas : [],
+        salidas: Array.isArray(sesion.salidas) ? sesion.salidas : []
+    };
+}
+
+async function cargarSesionCajaActual() {
+    if (!supabaseClient || !isOnline) return;
+    try {
+        const { data, error } = await supabaseClient
+            .from('sesiones_caja')
+            .select('*')
+            .eq('usuario', usuarioActual)
+            .eq('fecha_operativa', obtenerFechaCajaLocal())
+            .order('fecha_apertura', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        if (error) throw error;
+        if (data) {
+            const sesionLocal = leerSesionCajaLocal();
+            if (sesionLocal?.estado === 'CERRADA' && data.estado === 'ABIERTA') {
+                sesionCajaActual = { ...sesionLocal, id: data.id };
+                localStorage.setItem(claveSesionCaja, JSON.stringify(sesionCajaActual));
+                await guardarSesionCajaSupabase();
+                return;
+            }
+            sesionCajaActual = data;
+            montoInicialCaja = Number(data.monto_inicial) || 0;
+            localStorage.setItem(claveSesionCaja, JSON.stringify(data));
+        } else {
+            const sesionLocal = leerSesionCajaLocal();
+            if (sesionLocal?.fecha_operativa === obtenerFechaCajaLocal()) {
+                sesionCajaActual = sesionLocal;
+                if (sesionLocal.estado === 'ABIERTA' && !sesionLocal.id) {
+                    await sincronizarAperturaCajaSupabase();
+                } else if (sesionLocal.estado === 'CERRADA' && !sesionLocal.id) {
+                    await guardarSesionCajaSupabase();
+                }
+            } else {
+                sesionCajaActual = null;
+                montoInicialCaja = 0;
+            }
+        }
+    } catch (error) {
+        console.error('No se pudo consultar la sesión de caja del usuario actual:', error);
+    }
+}
+
+async function sincronizarAperturaCajaSupabase() {
+    if (!supabaseClient || !isOnline || !sesionCajaActual || sesionCajaActual.estado !== 'ABIERTA') return;
+    const payload = {
+        ...sesionCajaActual,
+        usuario: usuarioActual,
+        estado: 'ABIERTA',
+        fecha_apertura: sesionCajaActual.fecha_apertura || new Date().toISOString()
+    };
+    try {
+        const { data, error } = await supabaseClient
+            .from('sesiones_caja')
+            .insert(payload)
+            .select('*')
+            .single();
+        if (error) throw error;
+        sesionCajaActual = data;
+        localStorage.setItem(claveSesionCaja, JSON.stringify(data));
+    } catch (error) {
+        console.error('No se pudo sincronizar la apertura pendiente de caja:', error);
+    }
+}
+
+async function guardarSesionCajaSupabase() {
+    if (!supabaseClient || !isOnline || !sesionCajaActual) return;
+    const payload = {
+        usuario: usuarioActual,
+        fecha_operativa: sesionCajaActual.fecha_operativa,
+        fecha_apertura: sesionCajaActual.fecha_apertura || new Date(`${sesionCajaActual.fecha_operativa}T00:00:00`).toISOString(),
+        fecha_cierre: sesionCajaActual.fecha_cierre,
+        estado: 'CERRADA',
+        monto_inicial: montoInicialCaja,
+        total_efectivo: Number(sesionCajaActual.total_efectivo) || 0,
+        total_yape: Number(sesionCajaActual.total_yape) || 0,
+        total_gastos: Number(sesionCajaActual.total_gastos) || 0,
+        monto_final: Number(sesionCajaActual.monto_final) || 0,
+        detalle_monedas: sesionCajaActual.detalle_monedas || {},
+        ventas: sesionCajaActual.ventas || [],
+        salidas: sesionCajaActual.salidas || []
+    };
+    try {
+        let resultado;
+        if (sesionCajaActual.id) {
+            resultado = await supabaseClient
+                .from('sesiones_caja')
+                .update(payload)
+                .eq('id', sesionCajaActual.id)
+                .eq('usuario', usuarioActual)
+                .select('*')
+                .maybeSingle();
+        } else {
+            resultado = await supabaseClient
+                .from('sesiones_caja')
+                .insert(payload)
+                .select('*')
+                .single();
+        }
+        if (resultado.error) throw resultado.error;
+        if (resultado.data) {
+            sesionCajaActual = resultado.data;
+            localStorage.setItem(claveSesionCaja, JSON.stringify(resultado.data));
+        }
+        await cargarHistorialCierresSupabase();
+    } catch (error) {
+        console.error('No se pudo guardar el cierre de caja en Supabase:', error);
+    }
+}
+
+async function cargarHistorialCierresSupabase() {
+    if (!supabaseClient || !isOnline) return;
+    try {
+        let consulta = supabaseClient
+            .from('sesiones_caja')
+            .select('*')
+            .eq('estado', 'CERRADA')
+            .order('fecha_cierre', { ascending: false });
+        if (!esAdministrador) consulta = consulta.eq('usuario', usuarioActual);
+        const { data, error } = await consulta;
+        if (error) throw error;
+        const cierresRemotos = (data || []).map(convertirSesionCajaACierre);
+        const cierresLocales = historialCierresCaja.filter(c =>
+            (esAdministrador || String(c.usuario).toLowerCase() === usuarioActual) &&
+            !cierresRemotos.some(remoto => remoto.sessionId && remoto.sessionId === c.sessionId)
+        );
+        historialCierresCaja = [...cierresRemotos, ...cierresLocales];
+        renderizarHistorialCierres();
+    } catch (error) {
+        console.error('No se pudo cargar el historial de cierres desde Supabase:', error);
+    }
 }
 
 function actualizarEstadoVisualCaja() {
@@ -2655,15 +2841,20 @@ function actualizarEstadoVisualCaja() {
     if (resumenApertura) resumenApertura.style.display = cerrada ? 'none' : '';
     if (resumenCierre) resumenCierre.style.display = cerrada ? '' : 'none';
     if (cerrada && montoCierre) {
-        montoCierre.textContent = (parseFloat(localStorage.getItem('caja_monto_cierre')) || 0).toFixed(2);
+        montoCierre.textContent = (Number(sesionCajaActual?.monto_final) || 0).toFixed(2);
     }
 }
 
-function obtenerResumenCajaHoy() {
+function obtenerResumenCajaHoy(usuarioResumen = usuarioActual, sesionResumen = usuarioResumen === usuarioActual ? sesionCajaActual : null) {
     const fechaHoyStr = new Date().toLocaleDateString('es-PE');
+    const inicioTurno = Date.parse(sesionResumen?.fecha_apertura || sesionResumen?.fechaApertura) ||
+        new Date(`${obtenerFechaCajaLocal()}T00:00:00`).getTime();
+    const finTurno = Date.parse(sesionResumen?.fecha_cierre || sesionResumen?.fechaCierre) || Date.now();
     let totalYapeHoy = 0, totalEfectivoHoy = 0, totalGastosHoy = 0;
     const ventasDelDia = kardex.filter(k =>
-        k.ticketId && k.fecha && k.fecha.includes(fechaHoyStr) && !k.ticketId.startsWith('CMD-')
+        k.ticketId && k.fecha && k.fecha.includes(fechaHoyStr) && !k.ticketId.startsWith('CMD-') &&
+        usuarioDeRegistroCaja(k) === String(usuarioResumen).toLowerCase() &&
+        fechaRegistroVenta(k) >= inicioTurno && fechaRegistroVenta(k) <= finTurno
     );
 
     ventasDelDia.forEach(k => {
@@ -2677,41 +2868,57 @@ function obtenerResumenCajaHoy() {
         }
     });
 
-    const gastosDelDiaHoy = gastosDelDia.filter(g => g.fecha && g.fecha.includes(fechaHoyStr));
+    const gastosDelDiaHoy = gastosDelDia.filter(g =>
+        g.fecha && g.fecha.includes(fechaHoyStr) &&
+        usuarioDeRegistroCaja(g) === String(usuarioResumen).toLowerCase() &&
+        fechaHoraGasto(g) >= inicioTurno && fechaHoraGasto(g) <= finTurno
+    );
     gastosDelDiaHoy.forEach(g => {
         totalGastosHoy += parseFloat(g.monto) || 0;
     });
     return { ventasDelDia, gastosDelDiaHoy, totalYapeHoy, totalEfectivoHoy, totalGastosHoy };
 }
 
-function registrarEstadoCierreCaja(fecha = new Date()) {
+async function registrarEstadoCierreCaja(fecha = new Date()) {
     const fechaCaja = obtenerFechaCajaLocal(fecha);
-    if (localStorage.getItem('caja_estado') === 'CERRADA' &&
-        localStorage.getItem('caja_estado_fecha') === fechaCaja) return false;
+    if (sesionCajaActual?.estado === 'CERRADA' && sesionCajaActual?.fecha_operativa === fechaCaja) return false;
 
     const resumen = obtenerResumenCajaHoy();
     const efectivoFinal = Number((montoInicialCaja + resumen.totalEfectivoHoy - resumen.totalGastosHoy).toFixed(2));
-    localStorage.setItem('caja_estado', 'CERRADA');
-    localStorage.setItem('caja_estado_fecha', fechaCaja);
-    localStorage.setItem('caja_monto_cierre', efectivoFinal.toFixed(2));
-    localStorage.setItem('caja_hora_cierre', fecha.toISOString());
+    sesionCajaActual = {
+        ...(sesionCajaActual || {}),
+        usuario: usuarioActual,
+        fecha_operativa: fechaCaja,
+        fecha_cierre: fecha.toISOString(),
+        estado: 'CERRADA',
+        monto_inicial: montoInicialCaja,
+        total_efectivo: resumen.totalEfectivoHoy,
+        total_yape: resumen.totalYapeHoy,
+        total_gastos: resumen.totalGastosHoy,
+        monto_final: efectivoFinal,
+        ventas: resumen.ventasDelDia,
+        salidas: resumen.gastosDelDiaHoy
+    };
+    localStorage.setItem(claveSesionCaja, JSON.stringify(sesionCajaActual));
+    await guardarSesionCajaSupabase();
     actualizarEstadoVisualCaja();
     return true;
 }
 
-function verificarCierreAutomaticoCaja() {
+async function verificarCierreAutomaticoCaja() {
     const ahora = new Date();
-    if (ahora.getHours() >= 19 && !cajaEstaCerradaHoy()) {
-        registrarEstadoCierreCaja(ahora);
+    if (!esAdministrador && ahora.getHours() >= 20 && !cajaEstaCerradaHoy() && sesionCajaActual?.estado === 'ABIERTA') {
+        await registrarEstadoCierreCaja(ahora);
     }
     actualizarEstadoVisualCaja();
 }
 
 function programarCierreAutomaticoCaja() {
+    if (esAdministrador) return;
     verificarCierreAutomaticoCaja();
     const ahora = new Date();
     const cierreHoy = new Date(ahora);
-    cierreHoy.setHours(19, 0, 0, 0);
+    cierreHoy.setHours(20, 0, 0, 0);
     if (ahora < cierreHoy) {
         window.setTimeout(verificarCierreAutomaticoCaja, cierreHoy.getTime() - ahora.getTime());
     }
@@ -2741,7 +2948,9 @@ function renderizarVistaCaja() {
 
     const tablaGastos = document.getElementById('tabla-gastos-dia');
     if(tablaGastos) {
-        tablaGastos.innerHTML = gastosDelDia.filter(g => g.fecha && g.fecha.includes(fechaHoyStr)).map(g => `
+        tablaGastos.innerHTML = gastosDelDia.filter(g =>
+            g.fecha && g.fecha.includes(fechaHoyStr) && usuarioDeRegistroCaja(g) === usuarioActual
+        ).map(g => `
             <tr>
                 <td>${g.hora}</td>
                 <td><strong style="color:#f87171;">${g.tipo}</strong></td>
@@ -2779,6 +2988,7 @@ function seleccionarComandaCobrar(comandaId) {
 
 function registrarGastoDia(e) {
     e.preventDefault();
+    if (!validarHorarioCajaVendedor()) return;
     if (requiereAperturaCajaHoy()) {
         alert('Debe registrar la apertura de caja de hoy antes de registrar salidas.');
         window.location.href = 'caja.html';
@@ -2797,10 +3007,11 @@ function registrarGastoDia(e) {
         id: Date.now(),
         fecha: ahora.toLocaleDateString('es-PE'),
         hora: ahora.toLocaleTimeString('es-PE'),
+        fecha_hora: ahora.toISOString(),
         tipo: tipoGasto,
         detalle: document.getElementById('gasto-detalle').value,
         monto: parseFloat(document.getElementById('gasto-monto').value).toFixed(2),
-        usuario: rol
+        usuario: usuarioActual
     });
 
     if (tipoGasto === 'Pago de comanda' && comandaIdSel) {
@@ -2834,8 +3045,9 @@ function imprimirArqueoTurno() {
 
     const nuevoCierre = {
         id: cierreId,
+        sessionId: sesionCajaActual?.id,
         fecha: fechaHoraActual,
-        usuario: rol,
+        usuario: usuarioActual,
         montoInicial: montoInicialCaja,
         efectivo: totalEfectivoHoy,
         yape: totalYapeHoy,
@@ -2909,7 +3121,10 @@ function mostrarTicketCierre(cierre) {
 function renderizarHistorialCierres() {
     const tabla = document.getElementById('tabla-historial-cierres');
     if (!tabla) return;
-    tabla.innerHTML = historialCierresCaja.map(c => `
+    const cierresVisibles = historialCierresCaja.filter(c =>
+        esAdministrador || String(c.usuario).toLowerCase() === usuarioActual
+    );
+    tabla.innerHTML = cierresVisibles.map(c => `
         <tr>
             <td><strong style="color:#38bdf8;">${c.id}</strong></td>
             <td>${c.fecha}</td>
@@ -2921,7 +3136,7 @@ function renderizarHistorialCierres() {
 }
 
 function verCierreGuardado(cierreId) {
-    const cierre = historialCierresCaja.find(c => c.id === cierreId);
+    const cierre = historialCierresCaja.find(c => String(c.id) === String(cierreId));
     if (cierre) mostrarTicketCierre(cierre);
 }
 
@@ -2930,7 +3145,7 @@ function renderizarHistorialDiarioConsolidado() {
     if (!tabla) return;
     let diasMap = {};
     kardex.forEach(k => {
-        if(k.ticketId && k.fecha) {
+        if(k.ticketId && k.fecha && usuarioDeRegistroCaja(k) === usuarioActual) {
             let f = k.fecha.split(',')[0];
             if(!diasMap[f]) diasMap[f] = { fecha: f, inicio: montoInicialCaja, yape: 0, efectivo: 0, gastos: 0 };
             if(k.metodo === 'Yape' || k.tipo === 'Yape') diasMap[f].yape += parseFloat(k.total || k.cantidad) || 0;
@@ -2938,7 +3153,7 @@ function renderizarHistorialDiarioConsolidado() {
         }
     });
     gastosDelDia.forEach(g => {
-        if(g.fecha) {
+        if(g.fecha && usuarioDeRegistroCaja(g) === usuarioActual) {
             if(!diasMap[g.fecha]) diasMap[g.fecha] = { fecha: g.fecha, inicio: montoInicialCaja, yape: 0, efectivo: 0, gastos: 0 };
             diasMap[g.fecha].gastos += parseFloat(g.monto) || 0;
         }
@@ -3663,6 +3878,8 @@ let ultimoTicketId = null;
 async function inicializarSistema() {
     // Cargar datos desde localStorage primero (async porque puede consultar Supabase)
     await cargarDatosDesdeLocalStorage();
+    await cargarSesionCajaActual();
+    await cargarHistorialCierresSupabase();
     await loadVentasFromSupabase();
 
     programarCierreAutomaticoCaja();
@@ -3837,14 +4054,18 @@ function cerrarSesion() {
     window.location.href = "login.html"; 
 }
 
-function cerrarCaja() {
+async function cerrarCaja() {
+    if (!esAdministrador && !sesionCajaActual) {
+        alert('Debe registrar la apertura de caja de hoy antes de cerrar el turno.');
+        return;
+    }
     if (cajaEstaCerradaHoy()) {
         alert('La caja ya está cerrada por hoy.');
         return;
     }
     if (confirm("¿Cerrar caja y finalizar turno?")) {
-        registrarEstadoCierreCaja();
-        if (typeof imprimirArqueoTurno === 'function') imprimirArqueoTurno();
+        const cerrado = await registrarEstadoCierreCaja();
+        if (cerrado && typeof imprimirArqueoTurno === 'function') imprimirArqueoTurno();
     }
 }
 
