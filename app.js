@@ -2755,11 +2755,18 @@ async function cargarSesionCajaActual() {
 
 async function sincronizarAperturaCajaSupabase() {
     if (!supabaseClient || !isOnline || !sesionCajaActual || sesionCajaActual.estado !== 'ABIERTA') return;
+    const usuarioId = sesionCajaActual.usuario_id || localStorage.getItem('usuario_id');
     const payload = {
-        ...sesionCajaActual,
-        usuario: usuarioActual,
+        ...(usuarioId ? { usuario_id: usuarioId } : {}),
+        rol_activo: usuarioActual,
         estado: 'ABIERTA',
-        fecha_apertura: sesionCajaActual.fecha_apertura || new Date().toISOString()
+        detalle_monedas: sesionCajaActual.detalle_monedas || {},
+        usuario: usuarioActual,
+        fecha_operativa: sesionCajaActual.fecha_operativa,
+        fecha_apertura: sesionCajaActual.fecha_apertura || new Date().toISOString(),
+        fecha_cierre: null,
+        monto_inicial: Number(sesionCajaActual.monto_inicial) || 0,
+        monto_final: Number(sesionCajaActual.monto_final) || 0
     };
     try {
         const { data, error } = await supabaseClient
@@ -2783,20 +2790,18 @@ async function sincronizarAperturaCajaSupabase() {
 
 async function guardarSesionCajaSupabase() {
     if (!supabaseClient || !isOnline || !sesionCajaActual) return;
+    const usuarioId = sesionCajaActual.usuario_id || localStorage.getItem('usuario_id');
     const payload = {
+        ...(usuarioId ? { usuario_id: usuarioId } : {}),
+        rol_activo: usuarioActual,
+        estado: 'CERRADA',
+        detalle_monedas: sesionCajaActual.detalle_monedas || {},
         usuario: usuarioActual,
         fecha_operativa: sesionCajaActual.fecha_operativa,
         fecha_apertura: sesionCajaActual.fecha_apertura || new Date(`${sesionCajaActual.fecha_operativa}T00:00:00`).toISOString(),
         fecha_cierre: sesionCajaActual.fecha_cierre,
-        estado: 'CERRADA',
         monto_inicial: montoInicialCaja,
-        total_efectivo: Number(sesionCajaActual.total_efectivo) || 0,
-        total_yape: Number(sesionCajaActual.total_yape) || 0,
-        total_gastos: Number(sesionCajaActual.total_gastos) || 0,
-        monto_final: Number(sesionCajaActual.monto_final) || 0,
-        detalle_monedas: sesionCajaActual.detalle_monedas || {},
-        ventas: sesionCajaActual.ventas || [],
-        salidas: sesionCajaActual.salidas || []
+        monto_final: Number(sesionCajaActual.monto_final) || 0
     };
     try {
         let resultado;

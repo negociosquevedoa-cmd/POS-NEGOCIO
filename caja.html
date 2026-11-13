@@ -285,27 +285,26 @@
                 '50': document.getElementById('mon-50').value || 0
             };
 
-            const sesion = {
+            const usuarioId = localStorage.getItem('usuario_id');
+            const payload = {
+                ...(usuarioId ? { usuario_id: usuarioId } : {}),
+                rol_activo: usuarioActual,
+                estado: 'ABIERTA',
+                detalle_monedas: detalleMonedas,
                 usuario: usuarioActual,
                 fecha_operativa: fechaCajaHoy,
                 fecha_apertura: new Date().toISOString(),
                 fecha_cierre: null,
-                estado: 'ABIERTA',
                 monto_inicial: Number(monto),
-                total_efectivo: 0,
-                total_yape: 0,
-                total_gastos: 0,
-                monto_final: 0,
-                detalle_monedas: detalleMonedas,
-                ventas: [],
-                salidas: []
+                monto_final: 0
             };
+            const sesion = { ...payload };
 
             if (supabaseClient && navigator.onLine) {
                 try {
                     const { data, error } = await supabaseClient
                         .from('sesion_actual')
-                        .insert(sesion)
+                        .insert(payload)
                         .select('*')
                         .single();
                     if (error) throw error;
