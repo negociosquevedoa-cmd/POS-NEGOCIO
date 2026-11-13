@@ -211,7 +211,7 @@
             if (supabaseClient && navigator.onLine) {
                 try {
                     const { data, error } = await supabaseClient
-                        .from('sesiones_caja')
+                        .from('sesion_actual')
                         .select('*')
                         .eq('usuario', usuarioActual)
                         .eq('fecha_operativa', fechaCajaHoy)
@@ -304,15 +304,25 @@
             if (supabaseClient && navigator.onLine) {
                 try {
                     const { data, error } = await supabaseClient
-                        .from('sesiones_caja')
+                        .from('sesion_actual')
                         .insert(sesion)
                         .select('*')
                         .single();
                     if (error) throw error;
                     Object.assign(sesion, data);
+                    const { error: errorMovimiento } = await supabaseClient
+                        .from('kardex_caja')
+                        .insert({
+                            fecha: sesion.fecha_apertura,
+                            tipo: 'APERTURA',
+                            monto: sesion.monto_inicial,
+                            descripcion: `Apertura de caja ${sesion.fecha_operativa}`,
+                            usuario: usuarioActual
+                        });
+                    if (errorMovimiento) throw errorMovimiento;
                 } catch (error) {
                     console.error('No se pudo registrar la apertura de caja en Supabase:', error);
-                    alert('No se pudo registrar la apertura en Supabase. Verifique la conexión e intente nuevamente.');
+                    alert('No se pudo registrar la apertura en Supabase. Verifique la conexión e intente nuevamente. ' + error.message);
                     return;
                 }
             }

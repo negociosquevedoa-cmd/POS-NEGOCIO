@@ -2681,18 +2681,20 @@ function fechaHoraGasto(gasto) {
 }
 
 function convertirSesionCajaACierre(sesion) {
+    const montoInicial = Number(sesion.monto_inicial) || 0;
+    const efectivo = Number(sesion.total_efectivo) || 0;
+    const montoFinal = Number(sesion.monto_final) || 0;
     return {
         id: `CIERRE-SUPA-${sesion.id}`,
-        sessionId: sesion.id,
-        fecha: sesion.fecha_cierre ? new Date(sesion.fecha_cierre).toLocaleString('es-PE') : sesion.fecha_operativa,
+        fecha: sesion.fecha ? new Date(sesion.fecha).toLocaleString('es-PE') : '',
         usuario: sesion.usuario,
-        montoInicial: Number(sesion.monto_inicial) || 0,
-        efectivo: Number(sesion.total_efectivo) || 0,
+        montoInicial,
+        efectivo,
         yape: Number(sesion.total_yape) || 0,
-        gastos: Number(sesion.total_gastos) || 0,
-        efectivoFinal: Number(sesion.monto_final) || 0,
-        ventas: Array.isArray(sesion.ventas) ? sesion.ventas : [],
-        salidas: Array.isArray(sesion.salidas) ? sesion.salidas : []
+        gastos: Math.max(0, montoInicial + efectivo - montoFinal),
+        efectivoFinal: montoFinal,
+        ventas: [],
+        salidas: []
     };
 }
 
@@ -2700,7 +2702,7 @@ async function cargarSesionCajaActual() {
     if (!supabaseClient || !isOnline) return;
     try {
         const { data, error } = await supabaseClient
-            .from('sesiones_caja')
+            .from('sesion_actual')
             .select('*')
             .eq('usuario', usuarioActual)
             .eq('fecha_operativa', obtenerFechaCajaLocal())
@@ -2713,12 +2715,25 @@ async function cargarSesionCajaActual() {
             if (sesionLocal?.estado === 'CERRADA' && data.estado === 'ABIERTA') {
                 sesionCajaActual = { ...sesionLocal, id: data.id };
                 localStorage.setItem(claveSesionCaja, JSON.stringify(sesionCajaActual));
+                await registrarMovimientoCajaSupabase(
+                    data.fecha_apertura,
+                    'APERTURA',
+                    Number(data.monto_inicial) || 0,
+                    `Apertura de caja ${data.fecha_operativa}`
+                );
                 await guardarSesionCajaSupabase();
                 return;
             }
             sesionCajaActual = data;
             montoInicialCaja = Number(data.monto_inicial) || 0;
             localStorage.setItem(claveSesionCaja, JSON.stringify(data));
+            await registrarMovimientoCajaSupabase(
+                data.fecha_apertura,
+                'APERTURA',
+                Number(data.monto_inicial) || 0,
+                `Apertura de caja ${data.fecha_operativa}`
+            );
+            if (data.estado === 'CERRADA') await guardarSesionCajaSupabase();
         } else {
             const sesionLocal = leerSesionCajaLocal();
             if (sesionLocal?.fecha_operativa === obtenerFechaCajaLocal()) {
@@ -2748,13 +2763,19 @@ async function sincronizarAperturaCajaSupabase() {
     };
     try {
         const { data, error } = await supabaseClient
-            .from('sesiones_caja')
+            .from('sesion_actual')
             .insert(payload)
             .select('*')
             .single();
         if (error) throw error;
         sesionCajaActual = data;
         localStorage.setItem(claveSesionCaja, JSON.stringify(data));
+        await registrarMovimientoCajaSupabase(
+            data.fecha_apertura,
+            'APERTURA',
+            Number(data.monto_inicial) || 0,
+            `Apertura de caja ${data.fecha_operativa}`
+        );
     } catch (error) {
         console.error('No se pudo sincronizar la apertura pendiente de caja:', error);
     }
@@ -2781,7 +2802,7 @@ async function guardarSesionCajaSupabase() {
         let resultado;
         if (sesionCajaActual.id) {
             resultado = await supabaseClient
-                .from('sesiones_caja')
+                .from('sesion_actual')
                 .update(payload)
                 .eq('id', sesionCajaActual.id)
                 .eq('usuario', usuarioActual)
@@ -2789,7 +2810,7 @@ async function guardarSesionCajaSupabase() {
                 .maybeSingle();
         } else {
             resultado = await supabaseClient
-                .from('sesiones_caja')
+                .from('sesion_actual')
                 .insert(payload)
                 .select('*')
                 .single();
@@ -2799,27 +2820,77 @@ async function guardarSesionCajaSupabase() {
             sesionCajaActual = resultado.data;
             localStorage.setItem(claveSesionCaja, JSON.stringify(resultado.data));
         }
+        if (sesionCajaActual.estado === 'CERRADA') {
+            const fechaCierre = sesionCajaActual.fecha_cierre || new Date().toISOString();
+            const { data: cierresExistentes, error: errorConsultaCierre } = await supabaseClient
+                .from('cierres_caja')
+                .select('id')
+                .eq('usuario', usuarioActual)
+                .eq('fecha', fechaCierre);
+            if (errorConsultaCierre) throw errorConsultaCierre;
+            if (!cierresExistentes || cierresExistentes.length === 0) {
+                const { error: errorCierre } = await supabaseClient
+                    .from('cierres_caja')
+                    .insert({
+                        fecha: fechaCierre,
+                        monto_inicial: montoInicialCaja,
+                        monto_final: Number(sesionCajaActual.monto_final) || 0,
+                        total_ventas: (Number(sesionCajaActual.total_efectivo) || 0) +
+                            (Number(sesionCajaActual.total_yape) || 0),
+                        total_efectivo: Number(sesionCajaActual.total_efectivo) || 0,
+                        total_yape: Number(sesionCajaActual.total_yape) || 0,
+                        monedas_detalle: sesionCajaActual.detalle_monedas || {},
+                        usuario: usuarioActual
+                    });
+                if (errorCierre) throw errorCierre;
+            }
+            await registrarMovimientoCajaSupabase(
+                fechaCierre,
+                'CIERRE',
+                Number(sesionCajaActual.monto_final) || 0,
+                `Cierre de caja ${sesionCajaActual.fecha_operativa}`
+            );
+        }
         await cargarHistorialCierresSupabase();
     } catch (error) {
         console.error('No se pudo guardar el cierre de caja en Supabase:', error);
     }
 }
 
+async function registrarMovimientoCajaSupabase(fecha, tipo, monto, descripcion) {
+    const { data: movimientosExistentes, error: errorConsulta } = await supabaseClient
+        .from('kardex_caja')
+        .select('id')
+        .eq('usuario', usuarioActual)
+        .eq('tipo', tipo)
+        .eq('fecha', fecha);
+    if (errorConsulta) throw errorConsulta;
+    if (movimientosExistentes && movimientosExistentes.length > 0) return;
+    const { error } = await supabaseClient
+        .from('kardex_caja')
+        .insert({ fecha, tipo, monto, descripcion, usuario: usuarioActual });
+    if (error) throw error;
+}
+
 async function cargarHistorialCierresSupabase() {
     if (!supabaseClient || !isOnline) return;
     try {
         let consulta = supabaseClient
-            .from('sesiones_caja')
+            .from('cierres_caja')
             .select('*')
-            .eq('estado', 'CERRADA')
-            .order('fecha_cierre', { ascending: false });
+            .order('fecha', { ascending: false });
         if (!esAdministrador) consulta = consulta.eq('usuario', usuarioActual);
         const { data, error } = await consulta;
         if (error) throw error;
         const cierresRemotos = (data || []).map(convertirSesionCajaACierre);
         const cierresLocales = historialCierresCaja.filter(c =>
             (esAdministrador || String(c.usuario).toLowerCase() === usuarioActual) &&
-            !cierresRemotos.some(remoto => remoto.sessionId && remoto.sessionId === c.sessionId)
+            !cierresRemotos.some(remoto => {
+                if (String(remoto.usuario).toLowerCase() !== String(c.usuario).toLowerCase()) return false;
+                const fechaLocal = fechaRegistroVenta(c);
+                const fechaRemota = fechaRegistroVenta(remoto);
+                return fechaLocal > 0 && fechaRemota > 0 && Math.abs(fechaLocal - fechaRemota) < 1000;
+            })
         );
         historialCierresCaja = [...cierresRemotos, ...cierresLocales];
         renderizarHistorialCierres();
