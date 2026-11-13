@@ -684,6 +684,7 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
     const pNombre = document.getElementById('p-nombre');
 
     const catVal = pCategoria ? pCategoria.value.trim().toUpperCase() : '';
+    const categoriaAceptaPrecioHelado = ['BEBIDAS', 'AGUA', 'GASEOSA'].includes(catVal.replace(/\s+/g, ''));
     const nomVal = pNombre ? pNombre.value.trim().toUpperCase() : '';
     const esMenestras = catVal.includes('MENESTRAS');
     const selectorPlancha = document.getElementById('p-paquetes-plancha');
@@ -703,7 +704,7 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
     const labelUnidadesPaq = document.getElementById('lbl-unidades-paq');
 
     if (bloquePrecioHelado) {
-        bloquePrecioHelado.style.display = ['BEBIDAS', 'AGUA', 'GASEOSA'].includes(catVal) ? '' : 'none';
+        bloquePrecioHelado.style.display = categoriaAceptaPrecioHelado ? '' : 'none';
     }
     if (bloquePlancha) bloquePlancha.style.display = esPHX4 ? '' : 'none';
     if (labelUnidadesPaq) labelUnidadesPaq.textContent = esPH ? 'Parejas por Paquete' : 'Unidades por paquete';
@@ -3229,7 +3230,11 @@ function editarProducto(id) {
 
     const inputCategoria = document.getElementById('p-categoria');
     if (inputCategoria) {
-        let catForm = prod.categoria || '';
+        let catForm = String(prod.categoria || '').trim();
+        const categoriaSinEspacios = catForm.replace(/\s+/g, '').toUpperCase();
+        if (['BEBIDAS', 'AGUA', 'GASEOSA'].includes(categoriaSinEspacios)) {
+            catForm = categoriaSinEspacios === 'BEBIDAS' ? 'Bebidas' : categoriaSinEspacios;
+        }
         if (String(catForm).trim().toUpperCase() === 'GUSTAS') catForm = 'GUSTA';
         inputCategoria.value = catForm;
         actualizarNombresPresentaciones();
