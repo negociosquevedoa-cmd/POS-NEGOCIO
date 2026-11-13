@@ -1173,17 +1173,12 @@ async function guardarProductoLocal(e) {
             return;
         }
 
-        const payload = { ...productoData };
-        delete payload.stock_docena;
-        delete payload.stock_tira;
-        delete payload.stock_paquete;
-        delete payload.stock_cuarto;
-        delete payload.rollos_plancha;
+        const payload = sanitizarPayloadParaSupabase(productoParaSupabase(productoData));
 
         try {
             const { data, error } = await supabaseClient
                 .from('productos')
-                .update(productoParaSupabase(payload))
+                .update(payload)
                 .eq('id', productoId)
                 .select('*')
                 .single();
@@ -1195,8 +1190,9 @@ async function guardarProductoLocal(e) {
                 localStorage.setItem('lista_productos', JSON.stringify(productos));
             }
         } catch (error) {
-            console.error('Error al actualizar producto en Supabase:', error);
-            alert('Supabase no pudo actualizar el producto. No se guardaron los cambios ni el movimiento en el Kárdex.');
+            const motivo = error && error.message ? error.message : String(error);
+            console.error('Error al actualizar producto en Supabase:', motivo, error);
+            alert(`Supabase no pudo actualizar el producto: ${motivo}. No se guardaron los cambios ni el movimiento en el Kárdex.`);
             return;
         }
 
@@ -1216,6 +1212,23 @@ async function guardarProductoLocal(e) {
         // Refrescar la UI después de actualizar
         renderizarProductos();
     } else {
+        if (supabaseClient && checkOnlineStatus()) {
+            const payload = sanitizarPayloadParaSupabase(productoParaSupabase(productoData));
+            try {
+                const { error } = await supabaseClient
+                    .from('productos')
+                    .insert(payload);
+                if (error) throw error;
+            } catch (error) {
+                const motivo = error && error.message ? error.message : String(error);
+                console.error('Error al insertar producto en Supabase:', motivo, error);
+                alert(`Supabase no pudo guardar el producto: ${motivo}. No se guardó el producto ni el movimiento en el Kárdex.`);
+                return;
+            }
+        } else {
+            syncQueue.push({ type: 'producto', data: productoData });
+        }
+
         productos.push(productoData);
         kardex.unshift({
             fecha: fechaActual,
@@ -1224,7 +1237,6 @@ async function guardarProductoLocal(e) {
             cantidad: `Stock: ${productoData.stockUnid}`,
             usuario: rol
         });
-        syncProductoToSupabase(productoData);
     }
 
     localStorage.setItem('lista_productos', JSON.stringify(productos));
@@ -4305,12 +4317,15 @@ const COLUMNAS_SUPABASE_VALIDAS = [
     'kg_paquete', 'kg_caja_box',
     'updated_at'
 ];
+let columnasProductosSupabase = null;
 
 // Función sanitizadora para filtrar payload antes de enviar a Supabase
 function sanitizarPayloadParaSupabase(payload) {
+    const columnasPermitidas = columnasProductosSupabase
+        ? COLUMNAS_SUPABASE_VALIDAS.filter(columna => columnasProductosSupabase.has(columna))
+        : COLUMNAS_SUPABASE_VALIDAS;
     return Object.keys(payload).reduce((payloadFiltrado, key) => {
-        // Solo incluir campos que están en la whitelist
-        if (COLUMNAS_SUPABASE_VALIDAS.includes(key)) {
+        if (columnasPermitidas.includes(key)) {
             payloadFiltrado[key] = payload[key];
         }
         return payloadFiltrado;
@@ -4783,6 +4798,7 @@ async function loadProductosFromSupabase() {
         }
 
         if (data && data.length > 0) {
+            columnasProductosSupabase = new Set(Object.keys(data[0]));
             const productosSupabase = data.map(p => {
                 // Solo leer presentaciones básicas que existen en Supabase
                 const presentacionesBasicas = ['unid', 'doc', 'paq', 'caja'];
