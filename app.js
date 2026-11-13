@@ -1144,7 +1144,7 @@ async function guardarProductoLocal(e) {
         nombre: document.getElementById('p-nombre').value,
         categoria: categoriaProducto,
         codigo: document.getElementById('p-codigo').value || 'Sin código',
-        precio_helado: leerCampoNumero('p-precio-helado'),
+        precio_helado: parseFloat(document.getElementById('p-precio-helado').value) || 0,
         ...presentacionesForm,
         imagen: imagenNueva || (prodAnterior && prodAnterior.imagen) || 'https://via.placeholder.com/80',
         unidadesPaq: leerCampoNumero('p-unidades-paq'),
@@ -4817,6 +4817,7 @@ async function loadProductosFromSupabase() {
                     codigo: p.codigo,
                     ...presentaciones,
                     imagen: p.imagen,
+                    precio_helado: Number(p.precio_helado) || 0,
                     unidadesPaq: p.unidades_paq || p.unidades_paquete,
                     unidadesCaja: p.unidades_caja || p.unidades_caja_box,
                     paquetesPlancha: String(p.categoria || '').trim().toUpperCase() === 'PHX4'
