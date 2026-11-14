@@ -208,26 +208,43 @@
 
         async function verificarEstadoCajaUsuario() {
             let sesion = obtenerSesionLocal();
-            if (supabaseClient && navigator.onLine) {
+            const usuarioId = localStorage.getItem('usuario_id');
+            if (supabaseClient && navigator.onLine && usuarioId) {
                 try {
                     const { data, error } = await supabaseClient
                         .from('sesion_actual')
                         .select('*')
-                        .eq('usuario', usuarioActual)
-                        .eq('fecha_operativa', fechaCajaHoy)
+                        .eq('usuario_id', usuarioId)
+                        .order('id', { ascending: false })
                         .limit(1)
                         .maybeSingle();
                     if (error) throw error;
                     if (data) {
-                        sesion = data;
-                        localStorage.setItem(claveSesionCaja, JSON.stringify(data));
+                        const detalle = data.detalle_monedas || {};
+                        const sesionSupabase = {
+                            id: data.id,
+                            usuario_id: data.usuario_id,
+                            rol_activo: data.rol_activo,
+                            usuario: data.rol_activo,
+                            estado: data.estado ? 'ABIERTA' : 'CERRADA',
+                            detalle_monedas: detalle.desglose || {},
+                            monto_inicial: Number(detalle.monto_inicial) || 0,
+                            monto_final: Number(detalle.monto_final) || 0,
+                            fecha_operativa: detalle.fecha_operativa,
+                            fecha_apertura: detalle.fecha_apertura,
+                            fecha_cierre: detalle.fecha_cierre
+                        };
+                        if (sesionSupabase.fecha_operativa === fechaCajaHoy) {
+                            sesion = sesionSupabase;
+                            localStorage.setItem(claveSesionCaja, JSON.stringify(sesion));
+                        }
                     }
                 } catch (error) {
                     console.error('No se pudo consultar la sesión de caja del usuario:', error);
                 }
             }
 
-            if (sesion && sesion.fecha_operativa === fechaCajaHoy) {
+            if (sesion?.estado === 'ABIERTA' && sesion.fecha_operativa === fechaCajaHoy) {
                 sesionDia = sesion;
                 window.location.replace('index.html');
                 return;
@@ -286,19 +303,31 @@
             };
 
             const usuarioId = localStorage.getItem('usuario_id');
+            if (supabaseClient && navigator.onLine && !usuarioId) {
+                alert('No se encontró el identificador del usuario. Vuelva a iniciar sesión e intente nuevamente.');
+                return;
+            }
+            const fechaApertura = new Date().toISOString();
             const payload = {
-                ...(usuarioId ? { usuario_id: usuarioId } : {}),
+                usuario_id: usuarioId,
                 rol_activo: usuarioActual,
-                estado: 'ABIERTA',
-                detalle_monedas: detalleMonedas,
-                usuario: usuarioActual,
-                fecha_operativa: fechaCajaHoy,
-                fecha_apertura: new Date().toISOString(),
-                fecha_cierre: null,
-                monto_inicial: Number(monto),
-                monto_final: 0
+                estado: true,
+                detalle_monedas: {
+                    monto_inicial: Number(monto),
+                    monto_final: 0,
+                    fecha_operativa: fechaCajaHoy,
+                    fecha_apertura: fechaApertura,
+                    fecha_cierre: null,
+                    desglose: detalleMonedas
+                }
             };
-            const sesion = { ...payload };
+            const sesion = {
+                ...payload.detalle_monedas,
+                ...payload,
+                usuario: usuarioActual,
+                estado: 'ABIERTA',
+                detalle_monedas: detalleMonedas
+            };
 
             if (supabaseClient && navigator.onLine) {
                 try {
@@ -308,7 +337,7 @@
                         .select('*')
                         .single();
                     if (error) throw error;
-                    Object.assign(sesion, data);
+                    sesion.id = data.id;
                     const { error: errorMovimiento } = await supabaseClient
                         .from('kardex_caja')
                         .insert({

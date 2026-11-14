@@ -2698,42 +2698,96 @@ function convertirSesionCajaACierre(sesion) {
     };
 }
 
+function normalizarSesionCajaSupabase(data) {
+    const detalle = data.detalle_monedas || {};
+    return {
+        id: data.id,
+        usuario_id: data.usuario_id,
+        usuario: data.rol_activo,
+        rol_activo: data.rol_activo,
+        estado: data.estado ? 'ABIERTA' : 'CERRADA',
+        detalle_monedas: detalle.desglose || {},
+        monto_inicial: Number(detalle.monto_inicial) || 0,
+        monto_final: Number(detalle.monto_final) || 0,
+        total_efectivo: Number(detalle.total_efectivo) || 0,
+        total_yape: Number(detalle.total_yape) || 0,
+        total_gastos: Number(detalle.total_gastos) || 0,
+        fecha_operativa: detalle.fecha_operativa,
+        fecha_apertura: detalle.fecha_apertura,
+        fecha_cierre: detalle.fecha_cierre
+    };
+}
+
+function crearDetalleSesionCaja(sesion, montoInicial) {
+    return {
+        monto_inicial: Number(montoInicial) || 0,
+        monto_final: Number(sesion.monto_final) || 0,
+        total_efectivo: Number(sesion.total_efectivo) || 0,
+        total_yape: Number(sesion.total_yape) || 0,
+        total_gastos: Number(sesion.total_gastos) || 0,
+        fecha_operativa: sesion.fecha_operativa,
+        fecha_apertura: sesion.fecha_apertura,
+        fecha_cierre: sesion.fecha_cierre || null,
+        desglose: sesion.detalle_monedas || {}
+    };
+}
+
 async function cargarSesionCajaActual() {
     if (!supabaseClient || !isOnline) return;
+    const usuarioId = localStorage.getItem('usuario_id');
+    if (!usuarioId) {
+        console.error('No se pudo consultar la sesión de caja: falta el identificador del usuario.');
+        return;
+    }
     try {
         const { data, error } = await supabaseClient
             .from('sesion_actual')
             .select('*')
-            .eq('usuario', usuarioActual)
-            .eq('fecha_operativa', obtenerFechaCajaLocal())
-            .order('fecha_apertura', { ascending: false })
+            .eq('usuario_id', usuarioId)
+            .order('id', { ascending: false })
             .limit(1)
             .maybeSingle();
         if (error) throw error;
         if (data) {
+            const sesionSupabase = normalizarSesionCajaSupabase(data);
+            if (sesionSupabase.fecha_operativa !== obtenerFechaCajaLocal()) {
+                const sesionLocal = leerSesionCajaLocal();
+                if (sesionLocal?.fecha_operativa === obtenerFechaCajaLocal()) {
+                    sesionCajaActual = sesionLocal;
+                    if (sesionLocal.estado === 'ABIERTA' && !sesionLocal.id) {
+                        await sincronizarAperturaCajaSupabase();
+                    } else if (sesionLocal.estado === 'CERRADA' && !sesionLocal.id) {
+                        await guardarSesionCajaSupabase();
+                    }
+                } else {
+                    sesionCajaActual = null;
+                    montoInicialCaja = 0;
+                }
+                return;
+            }
             const sesionLocal = leerSesionCajaLocal();
-            if (sesionLocal?.estado === 'CERRADA' && data.estado === 'ABIERTA') {
-                sesionCajaActual = { ...sesionLocal, id: data.id };
+            if (sesionLocal?.estado === 'CERRADA' && sesionSupabase.estado === 'ABIERTA') {
+                sesionCajaActual = { ...sesionLocal, id: data.id, usuario_id: data.usuario_id };
                 localStorage.setItem(claveSesionCaja, JSON.stringify(sesionCajaActual));
                 await registrarMovimientoCajaSupabase(
-                    data.fecha_apertura,
+                    sesionSupabase.fecha_apertura,
                     'APERTURA',
-                    Number(data.monto_inicial) || 0,
-                    `Apertura de caja ${data.fecha_operativa}`
+                    sesionSupabase.monto_inicial,
+                    `Apertura de caja ${sesionSupabase.fecha_operativa}`
                 );
                 await guardarSesionCajaSupabase();
                 return;
             }
-            sesionCajaActual = data;
-            montoInicialCaja = Number(data.monto_inicial) || 0;
-            localStorage.setItem(claveSesionCaja, JSON.stringify(data));
+            sesionCajaActual = sesionSupabase;
+            montoInicialCaja = sesionSupabase.monto_inicial;
+            localStorage.setItem(claveSesionCaja, JSON.stringify(sesionSupabase));
             await registrarMovimientoCajaSupabase(
-                data.fecha_apertura,
+                sesionSupabase.fecha_apertura,
                 'APERTURA',
-                Number(data.monto_inicial) || 0,
-                `Apertura de caja ${data.fecha_operativa}`
+                sesionSupabase.monto_inicial,
+                `Apertura de caja ${sesionSupabase.fecha_operativa}`
             );
-            if (data.estado === 'CERRADA') await guardarSesionCajaSupabase();
+            if (sesionSupabase.estado === 'CERRADA') await guardarSesionCajaSupabase();
         } else {
             const sesionLocal = leerSesionCajaLocal();
             if (sesionLocal?.fecha_operativa === obtenerFechaCajaLocal()) {
@@ -2756,17 +2810,20 @@ async function cargarSesionCajaActual() {
 async function sincronizarAperturaCajaSupabase() {
     if (!supabaseClient || !isOnline || !sesionCajaActual || sesionCajaActual.estado !== 'ABIERTA') return;
     const usuarioId = sesionCajaActual.usuario_id || localStorage.getItem('usuario_id');
+    if (!usuarioId) {
+        console.error('No se pudo sincronizar la apertura de caja: falta el identificador del usuario.');
+        return;
+    }
+    const fechaApertura = sesionCajaActual.fecha_apertura || new Date().toISOString();
     const payload = {
-        ...(usuarioId ? { usuario_id: usuarioId } : {}),
+        usuario_id: usuarioId,
         rol_activo: usuarioActual,
-        estado: 'ABIERTA',
-        detalle_monedas: sesionCajaActual.detalle_monedas || {},
-        usuario: usuarioActual,
-        fecha_operativa: sesionCajaActual.fecha_operativa,
-        fecha_apertura: sesionCajaActual.fecha_apertura || new Date().toISOString(),
-        fecha_cierre: null,
-        monto_inicial: Number(sesionCajaActual.monto_inicial) || 0,
-        monto_final: Number(sesionCajaActual.monto_final) || 0
+        estado: true,
+        detalle_monedas: crearDetalleSesionCaja({
+            ...sesionCajaActual,
+            fecha_apertura: fechaApertura,
+            fecha_cierre: null
+        }, sesionCajaActual.monto_inicial)
     };
     try {
         const { data, error } = await supabaseClient
@@ -2775,13 +2832,13 @@ async function sincronizarAperturaCajaSupabase() {
             .select('*')
             .single();
         if (error) throw error;
-        sesionCajaActual = data;
-        localStorage.setItem(claveSesionCaja, JSON.stringify(data));
+        sesionCajaActual = normalizarSesionCajaSupabase(data);
+        localStorage.setItem(claveSesionCaja, JSON.stringify(sesionCajaActual));
         await registrarMovimientoCajaSupabase(
-            data.fecha_apertura,
+            sesionCajaActual.fecha_apertura,
             'APERTURA',
-            Number(data.monto_inicial) || 0,
-            `Apertura de caja ${data.fecha_operativa}`
+            sesionCajaActual.monto_inicial,
+            `Apertura de caja ${sesionCajaActual.fecha_operativa}`
         );
     } catch (error) {
         console.error('No se pudo sincronizar la apertura pendiente de caja:', error);
@@ -2791,17 +2848,20 @@ async function sincronizarAperturaCajaSupabase() {
 async function guardarSesionCajaSupabase() {
     if (!supabaseClient || !isOnline || !sesionCajaActual) return;
     const usuarioId = sesionCajaActual.usuario_id || localStorage.getItem('usuario_id');
+    if (!usuarioId) {
+        console.error('No se pudo guardar el cierre de caja: falta el identificador del usuario.');
+        return;
+    }
     const payload = {
-        ...(usuarioId ? { usuario_id: usuarioId } : {}),
+        usuario_id: usuarioId,
         rol_activo: usuarioActual,
-        estado: 'CERRADA',
-        detalle_monedas: sesionCajaActual.detalle_monedas || {},
-        usuario: usuarioActual,
-        fecha_operativa: sesionCajaActual.fecha_operativa,
-        fecha_apertura: sesionCajaActual.fecha_apertura || new Date(`${sesionCajaActual.fecha_operativa}T00:00:00`).toISOString(),
-        fecha_cierre: sesionCajaActual.fecha_cierre,
-        monto_inicial: montoInicialCaja,
-        monto_final: Number(sesionCajaActual.monto_final) || 0
+        estado: false,
+        detalle_monedas: crearDetalleSesionCaja({
+            ...sesionCajaActual,
+            fecha_apertura: sesionCajaActual.fecha_apertura ||
+                new Date(`${sesionCajaActual.fecha_operativa}T00:00:00`).toISOString(),
+            fecha_cierre: sesionCajaActual.fecha_cierre || new Date().toISOString()
+        }, montoInicialCaja)
     };
     try {
         let resultado;
@@ -2810,7 +2870,7 @@ async function guardarSesionCajaSupabase() {
                 .from('sesion_actual')
                 .update(payload)
                 .eq('id', sesionCajaActual.id)
-                .eq('usuario', usuarioActual)
+                .eq('usuario_id', usuarioId)
                 .select('*')
                 .maybeSingle();
         } else {
@@ -2822,8 +2882,8 @@ async function guardarSesionCajaSupabase() {
         }
         if (resultado.error) throw resultado.error;
         if (resultado.data) {
-            sesionCajaActual = resultado.data;
-            localStorage.setItem(claveSesionCaja, JSON.stringify(resultado.data));
+            sesionCajaActual = normalizarSesionCajaSupabase(resultado.data);
+            localStorage.setItem(claveSesionCaja, JSON.stringify(sesionCajaActual));
         }
         if (sesionCajaActual.estado === 'CERRADA') {
             const fechaCierre = sesionCajaActual.fecha_cierre || new Date().toISOString();
