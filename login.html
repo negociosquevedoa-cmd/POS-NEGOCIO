@@ -75,6 +75,8 @@
             </select>
         </div>
 
+        <input type="hidden" id="usuario-nombre">
+
         <div class="form-group">
             <label>Contraseña</label>
             <input type="password" id="password" placeholder="Ingresa tu contraseña">
@@ -99,8 +101,17 @@
                 'inventario_consulta': 'consulta123'
             };
 
+            // Mapeo de rol a nombre de usuario para usuario_id
+            const nombresUsuarios = {
+                'vendedor': 'vendedor 1',
+                'vendedor2': 'vendedor 2',
+                'administrador': 'administrador',
+                'inventario_consulta': 'consulta'
+            };
+
             if (pass === credenciales[rol]) {
                 localStorage.setItem('usuario_rol', rol);
+                localStorage.setItem('usuario_id', nombresUsuarios[rol] || rol);
                 localStorage.setItem('sesion_activa', 'true');
 
                 if (rol === 'administrador' || rol === 'inventario_consulta') {

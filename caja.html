@@ -211,10 +211,13 @@
             const usuarioId = localStorage.getItem('usuario_id');
             if (supabaseClient && navigator.onLine && usuarioId) {
                 try {
+                    // Filtrar por usuario_id, estado=true, y fecha_operativa dentro de detalle_monedas
                     const { data, error } = await supabaseClient
                         .from('sesion_actual')
                         .select('*')
                         .eq('usuario_id', usuarioId)
+                        .eq('estado', true)
+                        .filter('detalle_monedas->>fecha_operativa', 'eq', fechaCajaHoy)
                         .order('id', { ascending: false })
                         .limit(1)
                         .maybeSingle();
@@ -234,10 +237,8 @@
                             fecha_apertura: detalle.fecha_apertura,
                             fecha_cierre: detalle.fecha_cierre
                         };
-                        if (sesionSupabase.fecha_operativa === fechaCajaHoy) {
-                            sesion = sesionSupabase;
-                            localStorage.setItem(claveSesionCaja, JSON.stringify(sesion));
-                        }
+                        sesion = sesionSupabase;
+                        localStorage.setItem(claveSesionCaja, JSON.stringify(sesion));
                     }
                 } catch (error) {
                     console.error('No se pudo consultar la sesión de caja del usuario:', error);
@@ -338,28 +339,40 @@
                         .single();
                     if (error) throw error;
                     sesion.id = data.id;
-                    const { error: errorMovimiento } = await supabaseClient
-                        .from('kardex_caja')
-                        .insert({
-                            fecha: sesion.fecha_apertura,
-                            tipo: 'APERTURA',
-                            monto: sesion.monto_inicial,
-                            descripcion: `Apertura de caja ${sesion.fecha_operativa}`,
-                            usuario: usuarioActual
-                        });
-                    if (errorMovimiento) throw errorMovimiento;
+                    localStorage.setItem(claveSesionCaja, JSON.stringify(sesion));
+
+                    // Intentar registrar en kardex_caja (no es crítico si falla)
+                    try {
+                        const { error: errorMovimiento } = await supabaseClient
+                            .from('kardex_caja')
+                            .insert({
+                                fecha: sesion.fecha_apertura,
+                                tipo: 'APERTURA',
+                                monto: sesion.monto_inicial,
+                                descripcion: `Apertura de caja ${sesion.fecha_operativa}`,
+                                usuario: usuarioActual
+                            });
+                        if (errorMovimiento) {
+                            console.warn('No se pudo registrar en kardex_caja:', errorMovimiento);
+                        }
+                    } catch (movError) {
+                        console.warn('Error al registrar en kardex_caja:', movError);
+                    }
+
+                    // Redirigir al sistema principal
+                    alert("Apertura registrada con S/ " + monto + ". ¡Listo para vender!");
+                    window.location.href = "index.html";
                 } catch (error) {
                     console.error('No se pudo registrar la apertura de caja en Supabase:', error);
                     alert('No se pudo registrar la apertura en Supabase. Verifique la conexión e intente nuevamente. ' + error.message);
                     return;
                 }
+            } else {
+                // Modo offline: guardar solo localmente
+                localStorage.setItem(claveSesionCaja, JSON.stringify(sesion));
+                alert("Apertura registrada localmente con S/ " + monto + ". ¡Listo para vender!");
+                window.location.href = "index.html";
             }
-
-            localStorage.setItem(claveSesionCaja, JSON.stringify(sesion));
-
-            // Mensaje de confirmación e ingreso al panel de ventas
-            alert("Apertura registrada con S/ " + monto + ". ¡Listo para vender!");
-            window.location.href = "index.html";
         }
 
         calcularTotalMonedas();
