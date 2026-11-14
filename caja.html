@@ -14,6 +14,8 @@
             align-items: center;
             height: 100vh;
             margin: 0;
+            overflow-x: hidden;
+            max-width: 100%;
         }
         .caja-card {
             background-color: #1e293b;
@@ -95,6 +97,43 @@
             margin-top: 10px;
         }
         button:hover { background-color: #15803d; }
+
+        /* Responsive styles */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .caja-card {
+                width: 100%;
+                max-width: 380px;
+                padding: 30px 20px;
+            }
+
+            h2 {
+                font-size: 20px;
+            }
+
+            .monedas-grid {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            .moneda-item input {
+                font-size: 16px;
+                padding: 12px;
+            }
+
+            button {
+                font-size: 16px;
+                padding: 14px;
+                min-height: 48px;
+            }
+
+            .total-calculated {
+                font-size: 20px;
+            }
+        }
     </style>
 </head>
 <body>

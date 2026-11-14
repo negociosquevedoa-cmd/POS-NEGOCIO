@@ -76,6 +76,8 @@ body.rol-vendedor .campo-costo-admin {
             color: #ffffff;
             padding: 20px;
             min-height: 100vh;
+            overflow-x: hidden;
+            max-width: 100%;
         }
 
         /* Navbar Header */
@@ -535,6 +537,168 @@ body.rol-vendedor .campo-costo-admin {
             body.imprimir-inventario #card-inventario-lista th,
             body.imprimir-inventario #card-inventario-lista td { border-color: #999 !important; padding: 6px; }
             @page { margin: 12mm; }
+        }
+
+        /* ============================================
+           RESPONSIVE DESIGN - MOBILE FIRST
+           ============================================ */
+
+        /* General mobile styles */
+        body {
+            overflow-x: hidden;
+            max-width: 100%;
+        }
+
+        /* Header responsive */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            header {
+                flex-direction: column;
+                gap: 15px;
+                padding: 15px;
+            }
+
+            .brand-section h1 {
+                font-size: 18px;
+            }
+
+            .nav-actions {
+                width: 100%;
+                justify-content: center;
+                gap: 8px;
+            }
+
+            .search-input {
+                width: 100%;
+                max-width: 300px;
+                font-size: 16px; /* Evita zoom automático en iOS */
+            }
+
+            .nav-btn {
+                padding: 12px 16px;
+                font-size: 14px;
+                min-width: 80px;
+                flex: 1;
+                text-align: center;
+            }
+        }
+
+        /* Grids responsive */
+        @media (max-width: 768px) {
+            .ventas-grid,
+            .compras-grid,
+            .inventario-grid,
+            .kardex-grid {
+                grid-template-columns: 1fr !important;
+                gap: 15px;
+            }
+
+            .tab-content.active {
+                display: block !important;
+            }
+        }
+
+        /* Tables responsive */
+        @media (max-width: 768px) {
+            table {
+                font-size: 12px;
+            }
+
+            .table-responsive {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            #tabla-inventario,
+            #catalogo-productos,
+            #tabla-carrito,
+            #tabla-reportes-ventas,
+            #tabla-ventas-registradas,
+            #tabla-almacen,
+            #tabla-salidas-almacen {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+
+            th, td {
+                padding: 8px 6px;
+            }
+        }
+
+        /* Form inputs responsive */
+        @media (max-width: 768px) {
+            input,
+            select,
+            textarea {
+                font-size: 16px !important; /* Evita zoom automático en iOS */
+                padding: 12px;
+            }
+
+            .form-group {
+                margin-bottom: 15px;
+            }
+
+            button {
+                font-size: 16px;
+                padding: 14px;
+                min-height: 48px; /* Tamaño táctil mínimo */
+            }
+        }
+
+        /* Product cards responsive */
+        @media (max-width: 768px) {
+            #catalogo-productos {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+                gap: 10px;
+            }
+
+            .prod-card {
+                padding: 10px;
+            }
+
+            .prod-card img {
+                max-width: 80px;
+                max-height: 80px;
+            }
+        }
+
+        /* Modal responsive */
+        @media (max-width: 768px) {
+            .modal-card {
+                width: 95% !important;
+                max-width: 95% !important;
+                margin: 10px auto;
+                padding: 20px;
+            }
+
+            .modal-overlay {
+                padding: 10px;
+            }
+        }
+
+        /* Caja status responsive */
+        @media (max-width: 768px) {
+            #info-caja {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .estado-badge {
+                font-size: 12px;
+            }
+        }
+
+        /* Footer responsive */
+        @media (max-width: 768px) {
+            footer {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
         }
     </style>
 </head>

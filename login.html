@@ -14,6 +14,8 @@
             align-items: center;
             height: 100vh;
             margin: 0;
+            overflow-x: hidden;
+            max-width: 100%;
         }
         .login-card {
             background-color: #1e293b;
@@ -56,6 +58,34 @@
             font-size: 13px;
             margin-top: 10px;
             display: none;
+        }
+
+        /* Responsive styles */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .login-card {
+                width: 100%;
+                max-width: 350px;
+                padding: 30px 20px;
+            }
+
+            h2 {
+                font-size: 20px;
+            }
+
+            button {
+                font-size: 16px;
+                padding: 14px;
+                min-height: 48px;
+            }
+
+            input, select {
+                font-size: 16px;
+                padding: 12px;
+            }
         }
     </style>
 </head>
