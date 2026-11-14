@@ -113,6 +113,8 @@ if (typeof window.supabase !== 'undefined') {
 const rol = obtenerRol();
 const usuarioActual = (localStorage.getItem('usuario_rol') || (rol === 'admin' ? 'administrador' : rol)).trim().toLowerCase();
 const esAdministrador = rol === 'admin' || usuarioActual === 'administrador';
+const esConsulta = usuarioActual === 'inventario_consulta' || usuarioActual === 'consulta';
+const sinRestriccionesCaja = esAdministrador || esConsulta;
 const fechaAperturaCajaHoy = obtenerFechaCajaLocal();
 const claveSesionCaja = `caja_sesion_${usuarioActual}`;
 function leerSesionCajaLocal() {
@@ -2652,7 +2654,7 @@ function cajaEstaCerradaHoy() {
 }
 
 function requiereAperturaCajaHoy() {
-    return !esAdministrador && (!sesionCajaActual ||
+    return !sinRestriccionesCaja && (!sesionCajaActual ||
         sesionCajaActual.estado !== 'ABIERTA' ||
         sesionCajaActual.fecha_operativa !== obtenerFechaCajaLocal());
 }
@@ -2663,7 +2665,7 @@ function dentroHorarioCajaVendedor(fecha = new Date()) {
 }
 
 function validarHorarioCajaVendedor() {
-    if (esAdministrador || dentroHorarioCajaVendedor()) return true;
+    if (sinRestriccionesCaja || dentroHorarioCajaVendedor()) return true;
     alert('El horario de caja para vendedores es de 7:00 a. m. a 8:00 p. m.');
     return false;
 }
@@ -2740,10 +2742,13 @@ async function cargarSesionCajaActual() {
         return;
     }
     try {
+        const fechaHoy = obtenerFechaCajaLocal();
         const { data, error } = await supabaseClient
             .from('sesion_actual')
             .select('*')
             .eq('usuario_id', usuarioId)
+            .eq('estado', true)
+            .filter('detalle_monedas->>fecha_operativa', 'eq', fechaHoy)
             .order('id', { ascending: false })
             .limit(1)
             .maybeSingle();
@@ -3043,7 +3048,7 @@ async function registrarEstadoCierreCaja(fecha = new Date()) {
 
 async function verificarCierreAutomaticoCaja() {
     const ahora = new Date();
-    if (!esAdministrador && ahora.getHours() >= 20 && !cajaEstaCerradaHoy() && sesionCajaActual?.estado === 'ABIERTA') {
+    if (!sinRestriccionesCaja && ahora.getHours() >= 20 && !cajaEstaCerradaHoy() && sesionCajaActual?.estado === 'ABIERTA') {
         await registrarEstadoCierreCaja(ahora);
     }
     actualizarEstadoVisualCaja();
@@ -4191,7 +4196,7 @@ function cerrarSesion() {
 }
 
 async function cerrarCaja() {
-    if (!esAdministrador && !sesionCajaActual) {
+    if (!sinRestriccionesCaja && !sesionCajaActual) {
         alert('Debe registrar la apertura de caja de hoy antes de cerrar el turno.');
         return;
     }
