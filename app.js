@@ -3707,7 +3707,8 @@ function cambiarPaginaCatalogo(pagina) {
     // No recargar desde localStorage, ya tenemos los datos en memoria
     const filtroActual = document.querySelector('#tab-ventas .search-input')?.value || '';
     paginaCatalogo = pagina;
-    filtrarProductosSinReset(filtroActual);
+    // Solo renderizar el catálogo, no todo el inventario
+    renderizarCatalogo(productos);
 }
 
 function filtrarInventario(t) {
@@ -3742,8 +3743,8 @@ function filtrarProductos(t) {
         const categoria = (p.categoria || '').toLowerCase();
         return nombre.includes(filtro) || codigo.includes(filtro) || categoria.includes(filtro);
     });
-    paginaCatalogo = 1; // Resetear a página 1 al filtrar
-    renderizarProductosPorLista(prodsFiltrados);
+    // NO resetear a página al filtrar para mejorar rendimiento
+    renderizarCatalogo(prodsFiltrados);
 
     if (prodsFiltrados.length === 1 && filtro.length > 5) {
         const prodEncontrado = prodsFiltrados[0];
@@ -3800,13 +3801,9 @@ function renderizarProductosPorLista(listaProductos) {
 
     console.log(`📊 Renderizando ${listaProductos.length} productos en la tabla de inventario`);
 
+    // Limpiar solo inventario, no el catálogo
     if (tablaInventario) tablaInventario.innerHTML = '';
-    if (catalogoVentas) catalogoVentas.innerHTML = '';
     if (catalogoCompras) catalogoCompras.innerHTML = '';
-
-    // Eliminar paginación anterior del catálogo si existe
-    const paginacionCat = document.getElementById('paginacion-catalogo');
-    if (paginacionCat) paginacionCat.remove();
 
     const tituloCat = document.getElementById('titulo-catalogo');
     if (tituloCat) tituloCat.textContent = `Catálogo (${listaProductos.length})`;
@@ -3822,10 +3819,7 @@ function renderizarProductosPorLista(listaProductos) {
     let filasHTML = '';
 
     productosPaginaInventario.forEach(prod => {
-        const pres = extraerPresentacionesProducto(prod);
-        const labels = etiquetasPresentaciones(prod);
-        const reglaCat = reglaPresentacionProducto(prod);
-        const comerciales = listaPresentacionesComerciales(prod);
+        const { pres, comerciales, reglaCat, labels } = obtenerPresentacionesConCache(prod);
 
         const coloresPrecio = ['#38bdf8', '#fbbf24', '#c084fc', '#f87171'];
         let preciosHTML = comerciales.map((p, idx) => {
@@ -3944,14 +3938,20 @@ function renderizarProductosPorLista(listaProductos) {
     // Agregar controles de paginación para inventario
     const totalPaginasInv = Math.ceil(listaProductos.length / itemsPorPagina);
     if (tablaInventario && totalPaginasInv > 1) {
+        const rangoPaginasInv = generarRangoPaginas(paginaInventario, totalPaginasInv);
+        const botonesPaginasInv = rangoPaginasInv.map(p => {
+            if (p === '...') {
+                return `<span style="padding: 6px 12px; color: #94a3b8;">...</span>`;
+            }
+            return `<button onclick="cambiarPaginaInventario(${p})" style="padding: 6px 12px; border-radius: 4px; border: 1px solid ${p === paginaInventario ? '#38bdf8' : '#334155'}; background: ${p === paginaInventario ? '#1e3a8a' : '#1e293b'}; color: white; cursor: pointer; font-weight: ${p === paginaInventario ? 'bold' : 'normal'}; min-width: 36px;">${p}</button>`;
+        }).join('');
+
         tablaInventario.innerHTML += `
             <tr>
                 <td colspan="${rolActual === 'inventario_consulta' ? 3 : 6}" style="text-align: center; padding: 15px;">
-                    <div style="display: flex; justify-content: center; gap: 8px; align-items: center;">
+                    <div style="display: flex; justify-content: center; gap: 8px; align-items: center; flex-wrap: wrap;">
                         <button onclick="cambiarPaginaInventario(${paginaInventario - 1})" ${paginaInventario === 1 ? 'disabled' : ''} style="padding: 6px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; cursor: pointer;">Anterior</button>
-                        ${Array.from({length: totalPaginasInv}, (_, i) => i + 1).map(p => `
-                            <button onclick="cambiarPaginaInventario(${p})" style="padding: 6px 12px; border-radius: 4px; border: 1px solid ${p === paginaInventario ? '#38bdf8' : '#334155'}; background: ${p === paginaInventario ? '#1e3a8a' : '#1e293b'}; color: white; cursor: pointer; font-weight: ${p === paginaInventario ? 'bold' : 'normal'};">${p}</button>
-                        `).join('')}
+                        ${botonesPaginasInv}
                         <button onclick="cambiarPaginaInventario(${paginaInventario + 1})" ${paginaInventario === totalPaginasInv ? 'disabled' : ''} style="padding: 6px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; cursor: pointer;">Siguiente</button>
                     </div>
                 </td>
@@ -3959,14 +3959,31 @@ function renderizarProductosPorLista(listaProductos) {
         `;
     }
 
+    // Renderizar catálogo por separado solo si está vacío
+    if (catalogoVentas && catalogoVentas.children.length === 0) {
+        renderizarCatalogo(listaProductos);
+    }
+}
+
+// Función separada para renderizar el catálogo (para evitar redibujar todo)
+function renderizarCatalogo(listaProductos) {
+    const catalogoVentas = document.getElementById('catalogo-productos');
+    if (!catalogoVentas) return;
+
+    // Eliminar paginación anterior del catálogo si existe
+    const paginacionCat = document.getElementById('paginacion-catalogo');
+    if (paginacionCat) paginacionCat.remove();
+
     // Paginación para catálogo de ventas
     const inicioCat = (paginaCatalogo - 1) * itemsPorPagina;
     const finCat = inicioCat + itemsPorPagina;
     const productosPaginaCatalogo = listaProductos.slice(inicioCat, finCat);
 
+    // Usar DocumentFragment para mejor rendimiento
+    const fragment = document.createDocumentFragment();
+
     productosPaginaCatalogo.forEach(prod => {
-        const pres = extraerPresentacionesProducto(prod);
-        const comerciales = listaPresentacionesComerciales(prod);
+        const { pres, comerciales } = obtenerPresentacionesConCache(prod);
         const esAGranel = esProductoAGranel(prod);
 
         let optsHTML = comerciales.map(p => `<option value="${p.tipo}|${p.precio}">${p.label} (S/ ${Number(p.precio).toFixed(2)})</option>`).join('');
@@ -3979,20 +3996,46 @@ function renderizarProductosPorLista(listaProductos) {
             optsHTML += `<option value="monto|${pres.precioUnid}">💰 Venta por Monto (S/)</option>`;
         }
 
-        if (catalogoVentas) {
-            const imagenSrc = prod.imagen && prod.imagen !== 'https://via.placeholder.com/80' ? prod.imagen : 'https://via.placeholder.com/80';
-            catalogoVentas.innerHTML += `
-                <div class="prod-card">
-                    <img src="${imagenSrc}" alt="${prod.nombre}" onerror="this.src='https://via.placeholder.com/80'">
-                    <div class="prod-title">${prod.nombre}</div>
-                    <select id="pres-${prod.id}" class="select-pres" onchange="habilitarInputMonto(${prod.id}, this.value)">
-                        ${optsHTML}
-                    </select>
-                    <input type="number" step="0.01" id="monto-${prod.id}" class="form-control" placeholder="Monto S/" style="display: none; margin-bottom: 6px; font-size: 12px; padding: 4px;">
-                    <button class="btn-add-cart" onclick="agregarAlCarrito(${prod.id})">+ Añadir</button>
-                </div>`;
-        }
+        const imagenSrc = prod.imagen && prod.imagen !== 'https://via.placeholder.com/80' ? prod.imagen : 'https://via.placeholder.com/80';
+        const card = document.createElement('div');
+        card.className = 'prod-card';
+        card.innerHTML = `
+            <img src="${imagenSrc}" alt="${prod.nombre}" onerror="this.src='https://via.placeholder.com/80'">
+            <div class="prod-title">${prod.nombre}</div>
+            <select id="pres-${prod.id}" class="select-pres" onchange="habilitarInputMonto(${prod.id}, this.value)">
+                ${optsHTML}
+            </select>
+            <input type="number" step="0.01" id="monto-${prod.id}" class="form-control" placeholder="Monto S/" style="display: none; margin-bottom: 6px; font-size: 12px; padding: 4px;">
+            <button class="btn-add-cart" onclick="agregarAlCarrito(${prod.id})">+ Añadir</button>
+        `;
+        fragment.appendChild(card);
     });
+
+    catalogoVentas.innerHTML = '';
+    catalogoVentas.appendChild(fragment);
+
+    // Agregar controles de paginación para catálogo
+    const totalPaginasCat = Math.ceil(listaProductos.length / itemsPorPagina);
+    if (catalogoVentas && totalPaginasCat > 1) {
+        const paginacionCat = document.createElement('div');
+        paginacionCat.id = 'paginacion-catalogo';
+        paginacionCat.style.cssText = 'width: 100%; display: flex; justify-content: center; gap: 8px; padding: 15px; align-items: center; flex-wrap: wrap;';
+
+        const rangoPaginas = generarRangoPaginas(paginaCatalogo, totalPaginasCat);
+        const botonesPaginas = rangoPaginas.map(p => {
+            if (p === '...') {
+                return `<span style="padding: 6px 12px; color: #94a3b8;">...</span>`;
+            }
+            return `<button onclick="cambiarPaginaCatalogo(${p})" style="padding: 6px 12px; border-radius: 4px; border: 1px solid ${p === paginaCatalogo ? '#38bdf8' : '#334155'}; background: ${p === paginaCatalogo ? '#1e3a8a' : '#1e293b'}; color: white; cursor: pointer; font-weight: ${p === paginaCatalogo ? 'bold' : 'normal'}; min-width: 36px;">${p}</button>`;
+        }).join('');
+
+        paginacionCat.innerHTML = `
+            <button onclick="cambiarPaginaCatalogo(${paginaCatalogo - 1})" ${paginaCatalogo === 1 ? 'disabled' : ''} style="padding: 6px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; cursor: pointer;">Anterior</button>
+            ${botonesPaginas}
+            <button onclick="cambiarPaginaCatalogo(${paginaCatalogo + 1})" ${paginaCatalogo === totalPaginasCat ? 'disabled' : ''} style="padding: 6px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; cursor: pointer;">Siguiente</button>
+        `;
+        catalogoVentas.parentNode.appendChild(paginacionCat);
+    }
 
     // Agregar controles de paginación para catálogo
     const totalPaginasCat = Math.ceil(listaProductos.length / itemsPorPagina);
@@ -4027,6 +4070,9 @@ let esEscaneoActivo = false;
 let tiempoUltimoCaracter = 0;
 let bufferInputEscaneo = '';
 
+// Cache para memoización de presentaciones
+const cachePresentaciones = new Map();
+
 // Función auxiliar para generar rango de páginas inteligente con puntos suspensivos
 function generarRangoPaginas(paginaActual, totalPaginas) {
     const rango = [];
@@ -4060,6 +4106,23 @@ function generarRangoPaginas(paginaActual, totalPaginas) {
     }
 
     return rango;
+}
+
+// Función optimizada para obtener presentaciones con cache
+function obtenerPresentacionesConCache(prod) {
+    const cacheKey = `${prod.id}_${prod.categoria}_${prod.updated_at}`;
+    if (cachePresentaciones.has(cacheKey)) {
+        return cachePresentaciones.get(cacheKey);
+    }
+
+    const pres = extraerPresentacionesProducto(prod);
+    const comerciales = listaPresentacionesComerciales(prod);
+    const reglaCat = reglaPresentacionProducto(prod);
+    const labels = etiquetasPresentaciones(prod);
+
+    const resultado = { pres, comerciales, reglaCat, labels };
+    cachePresentaciones.set(cacheKey, resultado);
+    return resultado;
 }
 let timeoutInputEscaneo = null;
 let tiempoUltimoCaracterInput = 0;
