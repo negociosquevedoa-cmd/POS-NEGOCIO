@@ -1339,12 +1339,19 @@ function renderizarCompras(filtro = '') {
     if (catalogoCompras && totalPaginasCompras > 1) {
         const paginacionCompras = document.createElement('div');
         paginacionCompras.id = 'paginacion-compras';
-        paginacionCompras.style.cssText = 'width: 100%; display: flex; justify-content: center; gap: 8px; padding: 15px; align-items: center;';
+        paginacionCompras.style.cssText = 'width: 100%; display: flex; justify-content: center; gap: 8px; padding: 15px; align-items: center; flex-wrap: wrap;';
+
+        const rangoPaginas = generarRangoPaginas(paginaCatalogo, totalPaginasCompras);
+        const botonesPaginas = rangoPaginas.map(p => {
+            if (p === '...') {
+                return `<span style="padding: 6px 12px; color: #94a3b8;">...</span>`;
+            }
+            return `<button onclick="cambiarPaginaCatalogo(${p})" style="padding: 6px 12px; border-radius: 4px; border: 1px solid ${p === paginaCatalogo ? '#38bdf8' : '#334155'}; background: ${p === paginaCatalogo ? '#1e3a8a' : '#1e293b'}; color: white; cursor: pointer; font-weight: ${p === paginaCatalogo ? 'bold' : 'normal'}; min-width: 36px;">${p}</button>`;
+        }).join('');
+
         paginacionCompras.innerHTML = `
             <button onclick="cambiarPaginaCatalogo(${paginaCatalogo - 1})" ${paginaCatalogo === 1 ? 'disabled' : ''} style="padding: 6px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; cursor: pointer;">Anterior</button>
-            ${Array.from({length: totalPaginasCompras}, (_, i) => i + 1).map(p => `
-                <button onclick="cambiarPaginaCatalogo(${p})" style="padding: 6px 12px; border-radius: 4px; border: 1px solid ${p === paginaCatalogo ? '#38bdf8' : '#334155'}; background: ${p === paginaCatalogo ? '#1e3a8a' : '#1e293b'}; color: white; cursor: pointer; font-weight: ${p === paginaCatalogo ? 'bold' : 'normal'};">${p}</button>
-            `).join('')}
+            ${botonesPaginas}
             <button onclick="cambiarPaginaCatalogo(${paginaCatalogo + 1})" ${paginaCatalogo === totalPaginasCompras ? 'disabled' : ''} style="padding: 6px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; cursor: pointer;">Siguiente</button>
         `;
         catalogoCompras.parentNode.appendChild(paginacionCompras);
@@ -3992,12 +3999,19 @@ function renderizarProductosPorLista(listaProductos) {
     if (catalogoVentas && totalPaginasCat > 1) {
         const paginacionCat = document.createElement('div');
         paginacionCat.id = 'paginacion-catalogo';
-        paginacionCat.style.cssText = 'width: 100%; display: flex; justify-content: center; gap: 8px; padding: 15px; align-items: center;';
+        paginacionCat.style.cssText = 'width: 100%; display: flex; justify-content: center; gap: 8px; padding: 15px; align-items: center; flex-wrap: wrap;';
+
+        const rangoPaginas = generarRangoPaginas(paginaCatalogo, totalPaginasCat);
+        const botonesPaginas = rangoPaginas.map(p => {
+            if (p === '...') {
+                return `<span style="padding: 6px 12px; color: #94a3b8;">...</span>`;
+            }
+            return `<button onclick="cambiarPaginaCatalogo(${p})" style="padding: 6px 12px; border-radius: 4px; border: 1px solid ${p === paginaCatalogo ? '#38bdf8' : '#334155'}; background: ${p === paginaCatalogo ? '#1e3a8a' : '#1e293b'}; color: white; cursor: pointer; font-weight: ${p === paginaCatalogo ? 'bold' : 'normal'}; min-width: 36px;">${p}</button>`;
+        }).join('');
+
         paginacionCat.innerHTML = `
             <button onclick="cambiarPaginaCatalogo(${paginaCatalogo - 1})" ${paginaCatalogo === 1 ? 'disabled' : ''} style="padding: 6px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; cursor: pointer;">Anterior</button>
-            ${Array.from({length: totalPaginasCat}, (_, i) => i + 1).map(p => `
-                <button onclick="cambiarPaginaCatalogo(${p})" style="padding: 6px 12px; border-radius: 4px; border: 1px solid ${p === paginaCatalogo ? '#38bdf8' : '#334155'}; background: ${p === paginaCatalogo ? '#1e3a8a' : '#1e293b'}; color: white; cursor: pointer; font-weight: ${p === paginaCatalogo ? 'bold' : 'normal'};">${p}</button>
-            `).join('')}
+            ${botonesPaginas}
             <button onclick="cambiarPaginaCatalogo(${paginaCatalogo + 1})" ${paginaCatalogo === totalPaginasCat ? 'disabled' : ''} style="padding: 6px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; cursor: pointer;">Siguiente</button>
         `;
         catalogoVentas.parentNode.appendChild(paginacionCat);
@@ -4012,6 +4026,41 @@ let timeoutEscaneo = null;
 let esEscaneoActivo = false;
 let tiempoUltimoCaracter = 0;
 let bufferInputEscaneo = '';
+
+// Función auxiliar para generar rango de páginas inteligente con puntos suspensivos
+function generarRangoPaginas(paginaActual, totalPaginas) {
+    const rango = [];
+    const maxVisibles = 5; // Máximo de números de página a mostrar
+
+    if (totalPaginas <= maxVisibles) {
+        // Si hay pocas páginas, mostrar todas
+        for (let i = 1; i <= totalPaginas; i++) {
+            rango.push(i);
+        }
+    } else {
+        // Mostrar primera página, páginas alrededor de la actual, y última página
+        rango.push(1);
+
+        if (paginaActual > 3) {
+            rango.push('...');
+        }
+
+        const inicio = Math.max(2, paginaActual - 1);
+        const fin = Math.min(totalPaginas - 1, paginaActual + 1);
+
+        for (let i = inicio; i <= fin; i++) {
+            rango.push(i);
+        }
+
+        if (paginaActual < totalPaginas - 2) {
+            rango.push('...');
+        }
+
+        rango.push(totalPaginas);
+    }
+
+    return rango;
+}
 let timeoutInputEscaneo = null;
 let tiempoUltimoCaracterInput = 0;
 let ultimoTicketId = null;

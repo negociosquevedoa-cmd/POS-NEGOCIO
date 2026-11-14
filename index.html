@@ -567,8 +567,10 @@ body.rol-vendedor .campo-costo-admin {
 
             .nav-actions {
                 width: 100%;
-                justify-content: center;
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
                 gap: 8px;
+                justify-content: center;
             }
 
             .search-input {
@@ -578,11 +580,16 @@ body.rol-vendedor .campo-costo-admin {
             }
 
             .nav-btn {
-                padding: 12px 16px;
-                font-size: 14px;
-                min-width: 80px;
-                flex: 1;
+                padding: 12px 8px;
+                font-size: 12px;
+                min-height: 48px;
+                width: 100%;
                 text-align: center;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-wrap: wrap;
+                line-height: 1.2;
             }
         }
 
@@ -598,6 +605,21 @@ body.rol-vendedor .campo-costo-admin {
 
             .tab-content.active {
                 display: block !important;
+            }
+
+            /* Panel lateral de resumen de venta en móvil - al fondo */
+            .ventas-grid > .card:last-child {
+                order: 1; /* Mover resumen de venta al fondo en móvil */
+                max-height: none;
+                position: sticky;
+                bottom: 10px;
+                z-index: 100;
+                margin-top: 15px;
+            }
+
+            /* Productos panel en móvil */
+            .ventas-grid > .card:first-child {
+                order: 0;
             }
         }
 
@@ -626,6 +648,21 @@ body.rol-vendedor .campo-costo-admin {
 
             th, td {
                 padding: 8px 6px;
+            }
+
+            /* Paginación responsiva */
+            #paginacion-catalogo,
+            #paginacion-compras {
+                gap: 4px !important;
+                padding: 10px !important;
+            }
+
+            #paginacion-catalogo button,
+            #paginacion-compras button {
+                padding: 8px 10px !important;
+                font-size: 12px !important;
+                min-width: 32px !important;
+                min-height: 36px !important;
             }
         }
 
@@ -669,14 +706,19 @@ body.rol-vendedor .campo-costo-admin {
         /* Modal responsive */
         @media (max-width: 768px) {
             .modal-card {
-                width: 95% !important;
-                max-width: 95% !important;
-                margin: 10px auto;
+                width: 90% !important;
+                max-width: 400px !important;
+                margin: auto;
                 padding: 20px;
+                max-height: 90vh;
+                overflow-y: auto;
             }
 
             .modal-overlay {
                 padding: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
             }
         }
 
