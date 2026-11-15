@@ -4037,29 +4037,6 @@ function renderizarCatalogo(listaProductos) {
         catalogoVentas.parentNode.appendChild(paginacionCat);
     }
 
-    // Agregar controles de paginación para catálogo
-    const totalPaginasCat = Math.ceil(listaProductos.length / itemsPorPagina);
-    if (catalogoVentas && totalPaginasCat > 1) {
-        const paginacionCat = document.createElement('div');
-        paginacionCat.id = 'paginacion-catalogo';
-        paginacionCat.style.cssText = 'width: 100%; display: flex; justify-content: center; gap: 8px; padding: 15px; align-items: center; flex-wrap: wrap;';
-
-        const rangoPaginas = generarRangoPaginas(paginaCatalogo, totalPaginasCat);
-        const botonesPaginas = rangoPaginas.map(p => {
-            if (p === '...') {
-                return `<span style="padding: 6px 12px; color: #94a3b8;">...</span>`;
-            }
-            return `<button onclick="cambiarPaginaCatalogo(${p})" style="padding: 6px 12px; border-radius: 4px; border: 1px solid ${p === paginaCatalogo ? '#38bdf8' : '#334155'}; background: ${p === paginaCatalogo ? '#1e3a8a' : '#1e293b'}; color: white; cursor: pointer; font-weight: ${p === paginaCatalogo ? 'bold' : 'normal'}; min-width: 36px;">${p}</button>`;
-        }).join('');
-
-        paginacionCat.innerHTML = `
-            <button onclick="cambiarPaginaCatalogo(${paginaCatalogo - 1})" ${paginaCatalogo === 1 ? 'disabled' : ''} style="padding: 6px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; cursor: pointer;">Anterior</button>
-            ${botonesPaginas}
-            <button onclick="cambiarPaginaCatalogo(${paginaCatalogo + 1})" ${paginaCatalogo === totalPaginasCat ? 'disabled' : ''} style="padding: 6px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: white; cursor: pointer;">Siguiente</button>
-        `;
-        catalogoVentas.parentNode.appendChild(paginacionCat);
-    }
-
     // NO aplicar restricciones aquí para evitar recursividad
     // Las restricciones se aplican en DOMContentLoaded y en inicializarSistema
 }
