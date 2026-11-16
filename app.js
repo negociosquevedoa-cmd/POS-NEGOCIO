@@ -406,12 +406,25 @@ function reglaPresentacionProducto(prodOrCat) {
         };
     }
     if (c === 'PH') {
+        const esNoble = typeof prodOrCat === 'object' &&
+            String(prodOrCat.nombre || '').trim().toUpperCase().includes('NOBLE');
         const parejasPorPaquete = Number(prodOrCat && typeof prodOrCat === 'object'
             ? (prodOrCat.unidadesPaq ?? prodOrCat.unidades_paq)
             : 0);
         const factorPaquete = Number.isFinite(parejasPorPaquete) && parejasPorPaquete > 0
             ? parejasPorPaquete
             : 1;
+        if (esNoble) {
+            return {
+                ...REGLAS_PRESENTACION.PH,
+                slots: [
+                    { id: 4, campo: 'Caja', tipo: 'rollo', nombreCorto: 'Unidad', label: 'Unidad (1 rollo)', precio: 0, factor: 0.5, resumen: '▼ 1. UNIDAD (1 rollo)', stockable: false },
+                    { ...REGLAS_PRESENTACION.PH.slots[0], nombreCorto: 'Pareja', label: 'Pareja (2 unidades)', resumen: '▼ 2. PAREJA (2 unidades)' },
+                    { ...REGLAS_PRESENTACION.PH.slots[1], nombreCorto: '1/2 Paquete', label: `1/2 Paquete (${factorPaquete / 2} parejas)`, factor: factorPaquete / 2, resumen: `▼ 3. 1/2 PAQUETE (${factorPaquete / 2} parejas)` },
+                    { ...REGLAS_PRESENTACION.PH.slots[2], nombreCorto: 'Paquete', label: `Paquete (${factorPaquete} parejas)`, resumen: `▼ 4. PAQUETE (${factorPaquete} parejas)` }
+                ]
+            };
+        }
         return {
             ...REGLAS_PRESENTACION.PH,
             slots: REGLAS_PRESENTACION.PH.slots.map(slot => slot.id === 2
@@ -615,9 +628,11 @@ function normalizarPresentacionesCategoria(data) {
         return data;
     }
     if (String(data.categoria || '').trim().toUpperCase() === 'PH') {
+        const esNoble = String(data.nombre || '').trim().toUpperCase().includes('NOBLE');
         ['Doc', 'Caja', 'Tira', 'Docena'].forEach(campo => {
-            data['precio' + campo] = campo === 'Doc' ? data['precio' + campo] : 0;
-            data['costo' + campo] = campo === 'Doc' ? data['costo' + campo] : 0;
+            const conservarCampo = campo === 'Doc' || (esNoble && campo === 'Caja');
+            data['precio' + campo] = conservarCampo ? data['precio' + campo] : 0;
+            data['costo' + campo] = conservarCampo ? data['costo' + campo] : 0;
             data['stock' + campo] = 0;
         });
         data.stockPaq = aNumeroProd(data.stockPaq);
@@ -718,7 +733,7 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
     const regla = reglaPresentacionProducto(esPHX4
         ? { categoria: catVal, paquetesPlancha: Number(selectorPlancha?.value) || 6 }
         : (esPH
-            ? { categoria: catVal, unidadesPaq: leerCampoNumero('p-unidades-paq') }
+            ? { categoria: catVal, nombre: nomVal, unidadesPaq: leerCampoNumero('p-unidades-paq') }
             : catVal));
     const nota = document.getElementById('nota-stock-categoria');
     const bloqueConv = document.getElementById('bloque-conversiones');
@@ -1124,8 +1139,8 @@ function leerCampoNumero(id) {
     return aNumeroProd(el ? el.value : 0, 0);
 }
 
-function leerPresentacionesFormulario(categoria) {
-    const regla = reglaPresentacionProducto(categoria);
+function leerPresentacionesFormulario(prodOrCat) {
+    const regla = reglaPresentacionProducto(prodOrCat);
     const camposActivos = regla
         ? regla.slots.map(slot => CAMPOS_FORM_PRES[slot.id]).filter(Boolean)
         : Object.values(CAMPOS_FORM_PRES);
@@ -1157,7 +1172,10 @@ async function guardarProductoLocal(e) {
             return;
         }
     }
-    const presentacionesForm = leerPresentacionesFormulario(categoriaProducto);
+    const presentacionesForm = leerPresentacionesFormulario({
+        categoria: categoriaProducto,
+        nombre: document.getElementById('p-nombre').value
+    });
     const esPHX4 = categoriaProducto.trim().toUpperCase() === 'PHX4';
     const paquetesPlancha = esPHX4
         ? (Number(document.getElementById('p-paquetes-plancha')?.value) === 8 ? 8 : 6)
