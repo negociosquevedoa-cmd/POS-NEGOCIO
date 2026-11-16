@@ -542,13 +542,16 @@ function listaPresentacionesComerciales(prod) {
     const pres = extraerPresentacionesProducto(prod);
     const regla = reglaPresentacionProducto(prod);
     if (regla) {
+        const categoria = String((prod && prod.categoria) || '').trim().toUpperCase();
         return regla.slots.map(slot => {
             const guardado = pres['precio' + slot.campo];
             return {
                 tipo: slot.tipo,
                 label: slot.label,
                 nombreCorto: slot.nombreCorto,
-                precio: guardado > 0 ? guardado : slot.precio,
+                precio: categoria === 'LEJIA COJIN'
+                    ? (slot.tipo === 'unid' ? pres.precioUnid : slot.precio)
+                    : (guardado > 0 ? guardado : slot.precio),
                 factor: slot.factor,
                 campo: slot.campo
             };
