@@ -32,6 +32,14 @@ const REGLAS_PRESENTACION = {
             { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete completo', label: 'Paquete completo (80 sobres)', precio: 21, factor: 80, resumen: '▼ 5. PAQUETE COMPLETO (80 sobres)' }
         ]
     },
+    'LEJIA COJIN': {
+        unidadBase: 'unidades',
+        slots: [
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad', precio: 0, factor: 1, resumen: '▼ 1. UNIDAD' },
+            { id: 2, campo: 'Doc', tipo: 'promocion', nombreCorto: 'Promoción', label: 'Promoción 3 x S/ 1.00', precio: 1, factor: 3, resumen: '▼ 2. PROMOCIÓN (3 unidades)' },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete x 25', precio: 6.5, factor: 25, resumen: '▼ 3. PAQUETE (25 unidades)' }
+        ]
+    },
     OREGANO: {
         unidadBase: 'sobres',
         slots: [
