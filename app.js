@@ -949,7 +949,7 @@ async function cargarDatosDesdeLocalStorage() {
 
 function verificarAlertaStockUnidades() {
     const rolActual = obtenerRol();
-    const contenedor = document.getElementById('alerta-stock-contenido');
+    const contenedor = document.getElementById('panel-alerta-stock');
     if (!contenedor) return;
 
     if (rolActual === 'inventario_consulta' || rolActual === 'consulta') {
