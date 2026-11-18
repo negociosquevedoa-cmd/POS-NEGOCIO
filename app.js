@@ -446,31 +446,25 @@ function parejasPorPaquete(prod) {
 }
 
 function calcularStockMaximoPH(prod, tipoPres, exceptoKey) {
-    const parejasPorCaja = parejasPorPaquete(prod);
-    if (parejasPorCaja < 1) return 0;
+    const parejasPorPaquetePH = parejasPorPaquete(prod);
+    if (parejasPorPaquetePH < 1) return 0;
 
-    let paquetesReservados = 0;
     let parejasReservadas = 0;
     carrito.forEach(item => {
         if (String(item.id) !== String(prod.id) || item.key === exceptoKey) return;
-        if (item.tipoPres === 'paq') {
-            paquetesReservados += aNumeroProd(item.cantidad);
-        } else {
-            parejasReservadas += aNumeroProd(item.cantidad) * factorDePresentacion(prod, item.tipoPres);
-        }
+        const factor = item.tipoPres === 'paq'
+            ? parejasPorPaquetePH
+            : factorDePresentacion(prod, item.tipoPres);
+        parejasReservadas += aNumeroProd(item.cantidad) * factor;
     });
 
-    const paquetesDisponibles = Math.max(0, aNumeroProd(prod.stockPaq) - paquetesReservados);
-    if (tipoPres === 'paq') {
-        const paquetesParaParejasReservadas = Math.ceil(
-            Math.max(0, parejasReservadas - aNumeroProd(prod.stockUnid)) / parejasPorCaja
-        );
-        return Math.max(0, Math.floor(paquetesDisponibles - paquetesParaParejasReservadas));
-    }
-
-    const factorVenta = factorDePresentacion(prod, tipoPres);
+    const factorVenta = tipoPres === 'paq'
+        ? parejasPorPaquetePH
+        : factorDePresentacion(prod, tipoPres);
     if (factorVenta <= 0) return 0;
-    const parejasDisponibles = aNumeroProd(prod.stockUnid) + paquetesDisponibles * parejasPorCaja - parejasReservadas;
+    const parejasDisponibles = aNumeroProd(prod.stockUnid) +
+        Math.max(0, aNumeroProd(prod.stockPaq)) * parejasPorPaquetePH -
+        parejasReservadas;
     return Math.max(0, Math.floor((parejasDisponibles + Number.EPSILON) / factorVenta));
 }
 
@@ -2421,30 +2415,35 @@ function validarStockPHEnCarrito() {
 
         const resumen = resumenPorProducto.get(String(prod.id)) || {
             prod,
-            paquetes: 0,
             parejas: 0
         };
-        if (item.tipoPres === 'paq') {
-            resumen.paquetes += aNumeroProd(item.cantidad);
-        } else {
-            resumen.parejas += aNumeroProd(item.cantidad) * factorDePresentacion(prod, item.tipoPres);
-        }
+        const factor = item.tipoPres === 'paq'
+            ? parejasPorPaquete(prod)
+            : factorDePresentacion(prod, item.tipoPres);
+        resumen.parejas += aNumeroProd(item.cantidad) * factor;
         resumenPorProducto.set(String(prod.id), resumen);
     }
 
-    for (const { prod, paquetes, parejas } of resumenPorProducto.values()) {
+    for (const { prod, parejas } of resumenPorProducto.values()) {
         const stockPaquetes = aNumeroProd(prod.stockPaq);
-        if (paquetes > stockPaquetes) {
-            alert(`❌ Stock insuficiente de paquetes de ${prod.nombre}. Solo quedan ${stockPaquetes}.`);
-            return false;
-        }
-        const parejasDisponibles = aNumeroProd(prod.stockUnid) + (stockPaquetes - paquetes) * parejasPorPaquete(prod);
-        if (parejas > parejasDisponibles) {
+        const parejasDisponibles = aNumeroProd(prod.stockUnid) +
+            Math.max(0, stockPaquetes) * parejasPorPaquete(prod);
+        if (parejas > parejasDisponibles + Number.EPSILON) {
             alert(`❌ Stock insuficiente de parejas y paquetes de ${prod.nombre}.`);
             return false;
         }
     }
     return true;
+}
+
+function descontarStockPaquetePH(prod, cantidadPaquetes) {
+    const stockPaquetes = Math.max(0, aNumeroProd(prod.stockPaq));
+    const paquetesFisicos = Math.min(stockPaquetes, cantidadPaquetes);
+    const paquetesDesdeParejas = cantidadPaquetes - paquetesFisicos;
+    const parejasDesdeStockSuelto = paquetesDesdeParejas * parejasPorPaquete(prod);
+    prod.stockPaq = stockPaquetes - paquetesFisicos;
+    prod.stockUnid = Math.max(0, aNumeroProd(prod.stockUnid) - parejasDesdeStockSuelto);
+    return parejasDesdeStockSuelto;
 }
 
 function confirmarCobro() {
@@ -2543,12 +2542,14 @@ function confirmarCobro() {
         const prod = productos.find(p => String(p.id) === String(item.id));
         if (!prod || !esProductoPH(prod)) return;
         const cantidadPaquetes = aNumeroProd(item.cantidad);
-        prod.stockPaq = Math.max(0, aNumeroProd(prod.stockPaq) - cantidadPaquetes);
+        const parejasDesdeStockSuelto = descontarStockPaquetePH(prod, cantidadPaquetes);
         kardex.unshift({
             fecha: fechaActual,
             producto: item.nombre,
             tipo: 'Venta',
-            cantidad: `-${cantidadPaquetes} Paquete(s)`,
+            cantidad: `-${cantidadPaquetes} Paquete(s)${parejasDesdeStockSuelto > 0
+                ? ` (incluye -${parejasDesdeStockSuelto} Parejas sueltas)`
+                : ''}`,
             usuario: `${rol} (${metodoPagoSeleccionado})`
         });
     });
