@@ -1198,13 +1198,15 @@ async function guardarProductoLocal(e) {
     const paquetesPlancha = esPHX4
         ? (Number(document.getElementById('p-paquetes-plancha')?.value) === 8 ? 8 : 6)
         : leerCampoNumero('p-unidades-caja');
+    const precioVentaHelado = Number(document.getElementById('p-precio-helado').value) || 0;
     const productoData = {
         ...(prodAnterior || {}),
         id: editId ? parseInt(editId, 10) : Date.now(),
         nombre: document.getElementById('p-nombre').value,
         categoria: categoriaProducto,
         codigo: document.getElementById('p-codigo').value || 'Sin código',
-        precio_helado: parseFloat(document.getElementById('p-precio-helado').value) || 0,
+        precio_venta_helado: precioVentaHelado,
+        precio_helado: precioVentaHelado,
         ...presentacionesForm,
         imagen: imagenNueva || (prodAnterior && prodAnterior.imagen) || 'https://via.placeholder.com/80',
         unidadesPaq: esCategoriaPH ? 10 : leerCampoNumero('p-unidades-paq'),
