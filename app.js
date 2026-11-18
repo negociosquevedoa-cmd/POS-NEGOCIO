@@ -514,6 +514,17 @@ function factorStockBasePorPresentacion(prod, item) {
         }
     }
 
+    const tipo = String(tipoPres || '').trim().toLowerCase();
+    if (tipo === 'paq') {
+        return Number(prod.kgPaq || prod.kg_paq || prod.unidadesPaq || prod.unidades_paq) || 1;
+    }
+    if (tipo === 'caja') {
+        return Number(prod.kgCaja || prod.kg_caja || prod.unidadesCaja || prod.unidades_caja) || 1;
+    }
+    if (tipo === 'tira') {
+        return Number(prod.unidadesTira || prod.unidades_tira) || 1;
+    }
+
     if (normalizada.includes('paq')) {
         return Number(prod.kgPaq || prod.kg_paq || prod.unidadesPaq || prod.unidades_paq) || 1;
     }
@@ -523,6 +534,15 @@ function factorStockBasePorPresentacion(prod, item) {
 
     const factorGuardado = Number(item && item.factorUnidades);
     return Number.isFinite(factorGuardado) && factorGuardado > 0 ? factorGuardado : 1;
+}
+
+function stockBaseDisponibleProducto(prod) {
+    const stockUnid = aNumeroProd(prod && prod.stockUnid);
+    const stockPaq = aNumeroProd(prod && prod.stockPaq);
+    const stockCaja = aNumeroProd(prod && prod.stockCaja);
+    return stockUnid +
+        stockPaq * factorStockBasePorPresentacion(prod, { tipoPres: 'paq' }) +
+        stockCaja * factorStockBasePorPresentacion(prod, { tipoPres: 'caja' });
 }
 
 function etiquetaDePresentacion(prod, tipoPres) {
@@ -1841,9 +1861,12 @@ function agregarProductoPorCodigo(prod, codigo) {
     const itemKey = `${prod.id}-${tipoPres}`;
     const item = carrito.find(i => i.key === itemKey);
     const cantidadEnCarrito = item ? item.cantidad : 0;
-    const factorCodigo = reglaCodigo ? factorDePresentacion(prod, tipoPres) : 1;
+    const factorCodigo = factorStockBasePorPresentacion(prod, {
+        tipoPres,
+        etiquetaPres: reglaCodigo ? etiquetaDePresentacion(prod, tipoPres) : ''
+    });
     const reservadasCodigo = unidadesReservadasCarrito(prod.id, null);
-    const topeCodigo = reglaCodigo ? (pres.stockUnid || 0) : stockDisponible;
+    const topeCodigo = reglaCodigo ? (pres.stockUnid || 0) : stockBaseDisponibleProducto(prod);
 
     if (esProductoPH(prod)) {
         if (parejasPorPaquete(prod) < 1) {
@@ -1855,12 +1878,9 @@ function agregarProductoPorCodigo(prod, codigo) {
             alert(`❌ Stock insuficiente de parejas y paquetes para ${prod.nombre}.`);
             return;
         }
-    } else if (reservadasCodigo + factorCodigo > topeCodigo && reglaCodigo) {
-        alert(`❌ Stock insuficiente. Solo quedan ${Math.max(0, (pres.stockUnid || 0) - reservadasCodigo)} ${reglaCodigo.unidadBase}.`);
-        return;
-    }
-    if (!reglaCodigo && cantidadEnCarrito + 1 > stockDisponible) {
-        alert(`❌ Stock insuficiente. Solo quedan ${stockDisponible} disponible(s) de ${labels.unid}.`);
+    } else if (reservadasCodigo + factorCodigo > topeCodigo) {
+        const unidad = reglaCodigo ? reglaCodigo.unidadBase : labels.unid;
+        alert(`❌ Stock insuficiente. Solo quedan ${Math.max(0, topeCodigo - reservadasCodigo)} ${unidad} disponible(s).`);
         return;
     }
 
@@ -1878,8 +1898,8 @@ function agregarProductoPorCodigo(prod, codigo) {
             cantidad: 1,
             stockMax: esProductoPH(prod)
                 ? calcularStockMaximoPH(prod, tipoPres, null)
-                : (reglaCodigo ? Math.floor(Math.max(0, (pres.stockUnid || 0) - reservadasCodigo) / factorCodigo) : stockDisponible),
-            factorUnidades: reglaCodigo ? factorCodigo : 1,
+                : Math.floor(Math.max(0, topeCodigo - reservadasCodigo) / factorCodigo),
+            factorUnidades: factorCodigo,
             etiquetaPres: reglaCodigo ? etiquetaDePresentacion(prod, tipoPres) : ''
         });
     }
@@ -1945,10 +1965,13 @@ function agregarAlCarrito(id) {
     const item = carrito.find(i => i.key === itemKey);
     const cantidadEnCarrito = item ? item.cantidad : 0;
     const reglaVenta = reglaPresentacionProducto(prod);
-    const factorVenta = reglaVenta ? factorDePresentacion(prod, tipoPres) : 1;
     const etiquetaVenta = reglaVenta || tipoPres === 'unidad_helada'
         ? etiquetaDePresentacion(prod, tipoPres)
         : '';
+    const factorVenta = factorStockBasePorPresentacion(prod, {
+        tipoPres,
+        etiquetaPres: etiquetaVenta
+    });
 
     if (esProductoPH(prod) && parejasPorPaquete(prod) < 1) {
         alert(`Configura “Parejas por Paquete” para ${prod.nombre} antes de vender.`);
@@ -1967,16 +1990,13 @@ function agregarAlCarrito(id) {
             alert(`❌ Stock insuficiente. Quedan ${quedan} ${reglaVenta.unidadBase} y esta presentación descuenta ${factorVenta}.`);
             return;
         }
-    } else if (tipoPres === 'unid' || tipoPres === 'unidad_helada') {
-        const sueltos = parseFloat(prod.stockUnid) || 0;
-        const reservadas = unidadesIndividualesReservadasCarrito(id, null);
-        if (reservadas + 1 > sueltos) {
-            alert(`❌ Stock insuficiente. Solo quedan ${Math.max(0, sueltos - reservadas)} unidades de ${prod.nombre}.`);
+    } else {
+        const reservadas = unidadesReservadasCarrito(id, null);
+        const stockBase = stockBaseDisponibleProducto(prod);
+        if (reservadas + factorVenta > stockBase) {
+            alert(`❌ Stock insuficiente. Solo quedan ${Math.max(0, stockBase - reservadas)} unidades disponibles de ${prod.nombre}.`);
             return;
         }
-    } else if (cantidadEnCarrito + 1 > prod.stockUnid) {
-        alert(`❌ Stock insuficiente. Solo quedan ${prod.stockUnid} disponible(s).`);
-        return;
     }
 
     if (item) {
@@ -1991,17 +2011,13 @@ function agregarAlCarrito(id) {
             const otras = unidadesReservadasCarrito(id, item.key);
             const sueltos = parseFloat(prod.stockUnid) || 0;
             item.stockMax = Math.floor(Math.max(0, sueltos - otras) / factorVenta);
-        } else if (tipoPres === 'unid' || tipoPres === 'unidad_helada') {
-            const sueltos = parseFloat(prod.stockUnid) || 0;
-            const otras = unidadesIndividualesReservadasCarrito(id, item.key);
-            item.stockMax = Math.max(0, sueltos - otras);
+        } else {
+            const otras = unidadesReservadasCarrito(id, item.key);
+            item.stockMax = Math.floor(Math.max(0, stockBaseDisponibleProducto(prod) - otras) / factorVenta);
         }
     } else {
         const otras = reglaVenta ? unidadesReservadasCarrito(id, null) : 0;
         const sueltos = parseFloat(prod.stockUnid) || 0;
-        const otrasUnidadesIndividuales = tipoPres === 'unid' || tipoPres === 'unidad_helada'
-            ? unidadesIndividualesReservadasCarrito(id, null)
-            : 0;
         carrito.push({
             key: itemKey,
             id: prod.id,
@@ -2014,9 +2030,7 @@ function agregarAlCarrito(id) {
                 ? calcularStockMaximoPH(prod, tipoPres, null)
                 : (reglaVenta
                     ? Math.floor(Math.max(0, sueltos - otras) / factorVenta)
-                    : (tipoPres === 'unid' || tipoPres === 'unidad_helada'
-                        ? Math.max(0, sueltos - otrasUnidadesIndividuales)
-                        : prod.stockUnid)),
+                    : Math.floor(Math.max(0, stockBaseDisponibleProducto(prod) - otras) / factorVenta)),
             factorUnidades: factorVenta,
             etiquetaPres: etiquetaVenta
         });
