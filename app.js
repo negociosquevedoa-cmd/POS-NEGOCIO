@@ -2164,6 +2164,13 @@ function esCategoriaGaseosa(prod) {
     return String((prod && prod.categoria) || '').replace(/\s+/g, '').toUpperCase() === 'GASEOSA';
 }
 
+function precioHeladoProducto(prod) {
+    const campos = ['precio_helado', 'precio_venta_helado', 'precioHelado', 'precioVentaHelado'];
+    return campos
+        .map(campo => aNumeroProd(prod && prod[campo]))
+        .find(precio => precio > 0) || 0;
+}
+
 function unidadesPresentacionGaseosa(item, prod) {
     const tipo = String(item && item.tipoPres || '').trim().toLowerCase();
     if (tipo === 'unid' || tipo === 'unidad_helada') return 1;
@@ -2209,7 +2216,7 @@ function calcularSubtotalesPromoGaseosa() {
         const precioUnitarioPaquete = aNumeroProd(prod.precioPaq ?? prod.precio_paq) /
             aNumeroProd(prod.unidadesPaq ?? prod.unidades_paq);
         const diferenciaHelada = item.tipoPres === 'unidad_helada'
-            ? Number(prod.precio_helado || 0) - extraerPresentacionesProducto(prod).precioUnid
+            ? precioHeladoProducto(prod) - extraerPresentacionesProducto(prod).precioUnid
             : 0;
         const precioPaquetePorUnidad = Math.max(0, precioUnitarioPaquete + diferenciaHelada);
         subtotales.set(item, unidadesConPrecioPaquete * precioPaquetePorUnidad +
@@ -2390,7 +2397,7 @@ function calcularVueltoMixto() {
 function preciosOficialesProducto(prod, tipoPres) {
     if (String(tipoPres || '').toLowerCase() === 'unidad_helada') {
         return {
-            precio: Number(prod.precio_helado) || 0,
+            precio: precioHeladoProducto(prod),
             costo: Number(extraerPresentacionesProducto(prod).costoUnid) || 0
         };
     }
@@ -3748,7 +3755,7 @@ function editarProducto(id) {
 
     const inputCodigo = document.getElementById('p-codigo');
     if (inputCodigo) inputCodigo.value = prod.codigo || '';
-    setCampoForm('p-precio-helado', prod.precio_helado || 0);
+    setCampoForm('p-precio-helado', precioHeladoProducto(prod));
 
     Object.values(CAMPOS_FORM_PRES).forEach(meta => {
         setCampoForm(meta.costo, pres['costo' + meta.campo], 0);
@@ -3969,8 +3976,9 @@ function renderizarProductosPorLista(listaProductos) {
             const sep = idx ? '<br>' : '';
             return `${sep}<span class="price-badge" style="color:${coloresPrecio[idx] || '#38bdf8'};">${p.label}: S/ ${Number(p.precio).toFixed(2)}</span>`;
         }).join('');
-        if (Number(prod.precio_helado) > 0) {
-            preciosHTML += `${preciosHTML ? '<br>' : ''}<span class="price-badge" style="color:#67e8f9;">Helada: S/ ${Number(prod.precio_helado).toFixed(2)}</span>`;
+        const precioHelado = precioHeladoProducto(prod);
+        if (precioHelado > 0) {
+            preciosHTML += `${preciosHTML ? '<br>' : ''}<span class="price-badge" style="color:#67e8f9;">Helada: S/ ${precioHelado.toFixed(2)}</span>`;
         }
 
         let costosHTML = '';
@@ -4128,10 +4136,25 @@ function renderizarCatalogo(listaProductos) {
     productosPaginaCatalogo.forEach(prod => {
         const { pres, comerciales } = obtenerPresentacionesConCache(prod);
         const esAGranel = esProductoAGranel(prod);
-
-        let optsHTML = comerciales.map(p => `<option value="${p.tipo}|${p.precio}">${p.label} (S/ ${Number(p.precio).toFixed(2)})</option>`).join('');
-        if (Number(prod.precio_helado) > 0) {
-            optsHTML += `<option value="unidad_helada|${Number(prod.precio_helado)}">Unidad Helada (S/ ${Number(prod.precio_helado).toFixed(2)})</option>`;
+        const esGaseosa = esCategoriaGaseosa(prod);
+        const precioHelado = precioHeladoProducto(prod);
+        let optsHTML;
+        if (esGaseosa) {
+            const precioUnid = Number(pres.precioUnid) || 0;
+            const estadoUnidad = precioUnid > 0 ? '' : ' disabled';
+            const estadoHelada = precioHelado > 0 ? '' : ' disabled';
+            const otrasPresentaciones = comerciales
+                .filter(p => p.tipo !== 'unid')
+                .map(p => `<option value="${p.tipo}|${p.precio}">${p.label} (S/ ${Number(p.precio).toFixed(2)})</option>`)
+                .join('');
+            optsHTML = `<option value="unid|${precioUnid}"${estadoUnidad}>Unidad (S/ ${precioUnid.toFixed(2)})</option>` +
+                `<option value="unidad_helada|${precioHelado}"${estadoHelada}>Unidad Helada (S/ ${precioHelado.toFixed(2)})</option>` +
+                otrasPresentaciones;
+        } else {
+            optsHTML = comerciales.map(p => `<option value="${p.tipo}|${p.precio}">${p.label} (S/ ${Number(p.precio).toFixed(2)})</option>`).join('');
+            if (precioHelado > 0) {
+                optsHTML += `<option value="unidad_helada|${precioHelado}">Unidad Helada (S/ ${precioHelado.toFixed(2)})</option>`;
+            }
         }
 
         // Agregar opción de venta por monto para productos a granel
@@ -4940,7 +4963,7 @@ function productoParaSupabase(producto) {
         categoria: producto.categoria,
         codigo: producto.codigo,
         imagen: producto.imagen || 'https://via.placeholder.com/80',
-        precio_helado: Number(producto.precio_helado) || 0,
+        precio_helado: precioHeladoProducto(producto),
         unidades_paq: producto.unidadesPaq || producto.unidades_paq || 0,
         unidades_caja: producto.unidadesCaja || producto.unidades_caja || 0,
         kg_paq: producto.kgPaq || producto.kg_paq || 0,
@@ -5416,7 +5439,7 @@ async function loadProductosFromSupabase() {
                     codigo: p.codigo,
                     ...presentaciones,
                     imagen: p.imagen,
-                    precio_helado: Number(p.precio_helado) || 0,
+                    precio_helado: precioHeladoProducto(p),
                     unidadesPaq: p.unidades_paq || p.unidades_paquete,
                     unidadesCaja: p.unidades_caja || p.unidades_caja_box,
                     paquetesPlancha: String(p.categoria || '').trim().toUpperCase() === 'PHX4'
