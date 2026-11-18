@@ -56,6 +56,16 @@ const REGLAS_PRESENTACION = {
             { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Promoción', label: 'Promoción (2 sobres)', precio: 0.5, factor: 2, resumen: '▼ 2. PROMOCIÓN (2 sobres)' },
             { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Caja', label: 'Caja completo (40 sobres)', precio: 9, factor: 40, resumen: '▼ 3. CAJA COMPLETO (40 sobres)' }
         ]
+    },
+    GASEOSA: {
+        unidadBase: 'unidades',
+        slots: [
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad', precio: 0, factor: 1, resumen: '▼ 1. UNIDAD' },
+            { id: 7, campo: 'Helado', tipo: 'unidad_helada', nombreCorto: 'Unidad Helada', label: 'Unidad Helada', precio: 1.2, factor: 1, resumen: '▼ UNIDAD HELADA', stockable: false },
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: 'Docena', label: 'Docena', precio: 0, factor: 12, resumen: '▼ DOCENA', stockable: false },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Pqte', label: 'Pqte', precio: 0, factor: 15, resumen: '▼ PAQUETE', stockable: false },
+            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Caja', label: 'Caja', precio: 0, factor: 1, resumen: '▼ CAJA', stockable: false }
+        ]
     }
 };
 
@@ -420,6 +430,26 @@ function reglaPresentacionProducto(prodOrCat) {
         if (esNoble) return REGLAS_PRESENTACION['PH NOBLE'];
         return REGLAS_PRESENTACION.PH;
     }
+    if (c === 'GASEOSA') {
+        const producto = typeof prodOrCat === 'object' && prodOrCat ? prodOrCat : { categoria: c };
+        const unidadesPaq = aNumeroProd(producto.unidadesPaq ?? producto.unidades_paq) || 15;
+        const unidadesCaja = aNumeroProd(producto.unidadesCaja ?? producto.unidades_caja) || 1;
+        return {
+            ...REGLAS_PRESENTACION.GASEOSA,
+            slots: REGLAS_PRESENTACION.GASEOSA.slots.map(slot => {
+                if (slot.tipo === 'unidad_helada') {
+                    return { ...slot, precio: precioHeladoVentaProducto(producto) };
+                }
+                if (slot.tipo === 'paq') {
+                    return { ...slot, factor: unidadesPaq, label: `Pqte (${unidadesPaq} unidades)` };
+                }
+                if (slot.tipo === 'caja') {
+                    return { ...slot, factor: unidadesCaja };
+                }
+                return slot;
+            })
+        };
+    }
     return REGLAS_PRESENTACION[c] || null;
 }
 
@@ -566,7 +596,7 @@ function listaPresentacionesComerciales(prod) {
         const categoria = String((prod && prod.categoria) || '').trim().toUpperCase();
         const noble = categoria === 'PH NOBLE' ||
             (categoria === 'PH' && String((prod && prod.nombre) || '').trim().toUpperCase().includes('NOBLE'));
-        return regla.slots.map(slot => {
+        const comerciales = regla.slots.map(slot => {
             const guardado = pres['precio' + slot.campo];
             return {
                 tipo: slot.tipo,
@@ -581,6 +611,12 @@ function listaPresentacionesComerciales(prod) {
                 campo: slot.campo
             };
         });
+        if (categoria === 'GASEOSA') {
+            return comerciales.filter(p =>
+                p.tipo === 'unid' || p.tipo === 'unidad_helada' || p.precio > 0
+            );
+        }
+        return comerciales;
     }
     const labels = etiquetasPresentaciones(prod);
     const lista = [{ tipo: 'unid', label: labels.unid, precio: pres.precioUnid, factor: 1, campo: 'Unid' }];
@@ -609,7 +645,8 @@ function unidadesIndividualesReservadasCarrito(prodId, exceptoKey) {
 }
 
 function normalizarPresentacionesCategoria(data) {
-    const regla = reglaPresentacionProducto(data);
+    const esGaseosa = String(data.categoria || '').trim().toUpperCase() === 'GASEOSA';
+    const regla = esGaseosa ? null : reglaPresentacionProducto(data);
     if (!regla) {
         ['Tira', 'Docena'].forEach(campo => {
             data['precio' + campo] = 0;
@@ -755,11 +792,12 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
     const esPH = catVal === 'PH' || catVal === 'PH NOBLE';
     const esLeche = catVal === 'LECHE';
     const bloquePrecioHelado = document.getElementById('bloque-precio-helado');
-    const regla = reglaPresentacionProducto(esPHX4
+    const reglaCategoria = reglaPresentacionProducto(esPHX4
         ? { categoria: catVal, paquetesPlancha: Number(selectorPlancha?.value) || 6 }
         : (esPH
             ? { categoria: catVal, nombre: nomVal, unidadesPaq: 10 }
             : catVal));
+    const regla = catVal === 'GASEOSA' ? null : reglaCategoria;
     const nota = document.getElementById('nota-stock-categoria');
     const bloqueConv = document.getElementById('bloque-conversiones');
     const bloquePlancha = document.getElementById('bloque-plancha-phx4');
@@ -1121,7 +1159,8 @@ function fmtPrecioKardex(valor) {
 
 function detalleCambiosInventario(anterior, siguiente) {
     const oldP = extraerPresentacionesProducto(anterior);
-    const regla = reglaPresentacionProducto(siguiente);
+    const esGaseosa = String(siguiente.categoria || '').trim().toUpperCase() === 'GASEOSA';
+    const regla = esGaseosa ? null : reglaPresentacionProducto(siguiente);
     const presentaciones = regla
         ? regla.slots.map(slot => ({ key: slot.campo, label: slot.label }))
         : Object.values(CAMPOS_FORM_PRES)
@@ -1164,7 +1203,9 @@ function leerCampoNumero(id) {
 }
 
 function leerPresentacionesFormulario(prodOrCat) {
-    const regla = reglaPresentacionProducto(prodOrCat);
+    const categoria = typeof prodOrCat === 'string' ? prodOrCat : (prodOrCat && prodOrCat.categoria);
+    const esGaseosa = String(categoria || '').trim().toUpperCase() === 'GASEOSA';
+    const regla = esGaseosa ? null : reglaPresentacionProducto(prodOrCat);
     const camposActivos = regla
         ? regla.slots.map(slot => CAMPOS_FORM_PRES[slot.id]).filter(Boolean)
         : Object.values(CAMPOS_FORM_PRES);
@@ -3992,7 +4033,7 @@ function renderizarProductosPorLista(listaProductos) {
             return `${sep}<span class="price-badge" style="color:${coloresPrecio[idx] || '#38bdf8'};">${p.label}: S/ ${Number(p.precio).toFixed(2)}</span>`;
         }).join('');
         const precioHelado = precioHeladoProducto(prod);
-        if (precioHelado > 0) {
+        if (precioHelado > 0 && !comerciales.some(p => p.tipo === 'unidad_helada')) {
             preciosHTML += `${preciosHTML ? '<br>' : ''}<span class="price-badge" style="color:#67e8f9;">Helada: S/ ${precioHelado.toFixed(2)}</span>`;
         }
 
@@ -4158,7 +4199,7 @@ function renderizarCatalogo(listaProductos) {
             const precioUnid = Number(pres.precioUnid) || 0;
             const estadoUnidad = precioUnid > 0 ? '' : ' disabled';
             const otrasPresentaciones = comerciales
-                .filter(p => p.tipo !== 'unid')
+                .filter(p => p.tipo !== 'unid' && p.tipo !== 'unidad_helada')
                 .map(p => `<option value="${p.tipo}|${p.precio}">${p.label} (S/ ${Number(p.precio).toFixed(2)})</option>`)
                 .join('');
             optsHTML = `<option value="unid|${precioUnid}"${estadoUnidad}>Unidad (S/ ${precioUnid.toFixed(2)})</option>` +
