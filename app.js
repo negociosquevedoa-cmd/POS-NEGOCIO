@@ -1245,7 +1245,7 @@ async function guardarProductoLocal(e) {
             if (error) throw error;
             // Actualizar el producto local con los datos retornados de Supabase
             if (data) {
-                productos[index] = data;
+                productos[index] = { ...productoData, ...data };
                 // Guardar en localStorage
                 localStorage.setItem('lista_productos', JSON.stringify(productos));
             }
@@ -1303,6 +1303,7 @@ async function guardarProductoLocal(e) {
     localStorage.setItem('lista_kardex', JSON.stringify(kardex));
 
     renderizarProductos();
+    renderizarCatalogo(productos);
     cancelarEdicion();
 
     alert("¡Producto guardado exitosamente!");
@@ -2166,13 +2167,18 @@ function esCategoriaGaseosa(prod) {
 
 function precioHeladoProducto(prod) {
     const campos = ['precio_helado', 'precio_venta_helado', 'precioHelado', 'precioVentaHelado'];
-    return campos
-        .map(campo => aNumeroProd(prod && prod[campo]))
-        .find(precio => precio > 0) || 0;
+    for (const campo of campos) {
+        const valor = prod && prod[campo];
+        if (valor !== undefined && valor !== null && valor !== '') {
+            return Math.max(0, aNumeroProd(valor));
+        }
+    }
+    return 0;
 }
 
 function unidadesPresentacionGaseosa(item, prod) {
     const tipo = String(item && item.tipoPres || '').trim().toLowerCase();
+
     if (tipo === 'unid' || tipo === 'unidad_helada') return 1;
     if (tipo === 'paq') {
         return aNumeroProd(prod && (prod.unidadesPaq ?? prod.unidades_paq)) ||
@@ -4142,13 +4148,14 @@ function renderizarCatalogo(listaProductos) {
         if (esGaseosa) {
             const precioUnid = Number(pres.precioUnid) || 0;
             const estadoUnidad = precioUnid > 0 ? '' : ' disabled';
-            const estadoHelada = precioHelado > 0 ? '' : ' disabled';
             const otrasPresentaciones = comerciales
                 .filter(p => p.tipo !== 'unid')
                 .map(p => `<option value="${p.tipo}|${p.precio}">${p.label} (S/ ${Number(p.precio).toFixed(2)})</option>`)
                 .join('');
             optsHTML = `<option value="unid|${precioUnid}"${estadoUnidad}>Unidad (S/ ${precioUnid.toFixed(2)})</option>` +
-                `<option value="unidad_helada|${precioHelado}"${estadoHelada}>Unidad Helada (S/ ${precioHelado.toFixed(2)})</option>` +
+                (precioHelado > 0
+                    ? `<option value="unidad_helada|${precioHelado}">Unidad Helada (S/ ${precioHelado.toFixed(2)})</option>`
+                    : '') +
                 otrasPresentaciones;
         } else {
             optsHTML = comerciales.map(p => `<option value="${p.tipo}|${p.precio}">${p.label} (S/ ${Number(p.precio).toFixed(2)})</option>`).join('');
