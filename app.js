@@ -3,8 +3,17 @@ const REGLAS_PRESENTACION = {
         unidadBase: 'parejas',
         slots: [
             { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Pareja', label: 'Pareja', precio: 0, factor: 1, resumen: '▼ 1. PAREJA', stockLabel: 'Stock Parejas' },
-            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: '1/2 Paquete', label: '1/2 Paquete', precio: 0, factor: 0.5, resumen: '▼ 2. 1/2 PAQUETE', stockable: false },
-            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete', precio: 0, factor: 1, resumen: '▼ 3. PAQUETE', stockLabel: 'Stock Paquetes', stockable: true }
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: '1/2 Paquete', label: '1/2 Paquete (5 parejas)', precio: 0, factor: 5, resumen: '▼ 2. 1/2 PAQUETE (5 parejas)', stockable: false },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete (10 parejas)', precio: 0, factor: 10, resumen: '▼ 3. PAQUETE (10 parejas)', stockLabel: 'Stock Paquetes', stockable: true }
+        ]
+    },
+    'PH NOBLE': {
+        unidadBase: 'parejas',
+        slots: [
+            { id: 4, campo: 'Caja', tipo: 'rollo', nombreCorto: 'Unidad', label: 'Unidad (1 rollo)', precio: 0, factor: 0.5, resumen: '▼ 1. UNIDAD (1 rollo)', stockable: false },
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Pareja', label: 'Pareja (2 unidades)', precio: 1.5, factor: 1, resumen: '▼ 2. PAREJA (2 unidades)', stockLabel: 'Stock Parejas' },
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: '1/2 Paquete', label: '1/2 Paquete (5 parejas)', precio: 6.5, factor: 5, resumen: '▼ 3. 1/2 PAQUETE (5 parejas)', stockable: false },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete (10 parejas)', precio: 12.5, factor: 10, resumen: '▼ 4. PAQUETE (10 parejas)', stockLabel: 'Stock Paquetes', stockable: true }
         ]
     },
     PHX4: {
@@ -26,7 +35,7 @@ const REGLAS_PRESENTACION = {
         unidadBase: 'sobres',
         slots: [
             { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 sobre)', precio: 0.4, factor: 1, resumen: '▼ 1. UNIDAD (1 sobre)' },
-            { id: 2, campo: 'Doc', tipo: 'promocion', nombreCorto: 'Promoción', label: 'Promoción (3 sobres)', precio: 1, factor: 3, resumen: '▼ 2. PROMOCIÓN (3 sobres)' },
+            { id: 2, campo: 'Doc', tipo: 'promocion', nombreCorto: 'Promoción', label: 'Promoción (3 sobres por S/ 1.00)', precio: 1, factor: 3, resumen: '▼ 2. PROMOCIÓN (3 sobres por S/ 1.00)' },
             { id: 5, campo: 'Tira', tipo: 'tira', nombreCorto: 'Tira', label: 'Tira (10 sobres)', precio: 0, factor: 10, resumen: '▼ 3. TIRA (10 sobres)' },
             { id: 6, campo: 'Docena', tipo: 'docena', nombreCorto: 'Docena', label: 'Docena (12 sobres)', precio: 0, factor: 12, resumen: '▼ 4. DOCENA (12 sobres)' },
             { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete completo', label: 'Paquete completo (80 sobres)', precio: 21, factor: 80, resumen: '▼ 5. PAQUETE COMPLETO (80 sobres)' }
@@ -405,32 +414,11 @@ function reglaPresentacionProducto(prodOrCat) {
                 : slot)
         };
     }
-    if (c === 'PH') {
-        const esNoble = typeof prodOrCat === 'object' &&
-            String(prodOrCat.nombre || '').trim().toUpperCase().includes('NOBLE');
-        const parejasPorPaquete = Number(prodOrCat && typeof prodOrCat === 'object'
-            ? (prodOrCat.unidadesPaq ?? prodOrCat.unidades_paq)
-            : 0);
-        const factorPaquete = Number.isFinite(parejasPorPaquete) && parejasPorPaquete > 0
-            ? parejasPorPaquete
-            : 1;
-        if (esNoble) {
-            return {
-                ...REGLAS_PRESENTACION.PH,
-                slots: [
-                    { id: 4, campo: 'Caja', tipo: 'rollo', nombreCorto: 'Unidad', label: 'Unidad (1 rollo)', precio: 0, factor: 0.5, resumen: '▼ 1. UNIDAD (1 rollo)', stockable: false },
-                    { ...REGLAS_PRESENTACION.PH.slots[0], nombreCorto: 'Pareja', label: 'Pareja (2 unidades)', resumen: '▼ 2. PAREJA (2 unidades)' },
-                    { ...REGLAS_PRESENTACION.PH.slots[1], nombreCorto: '1/2 Paquete', label: `1/2 Paquete (${factorPaquete / 2} parejas)`, factor: factorPaquete / 2, resumen: `▼ 3. 1/2 PAQUETE (${factorPaquete / 2} parejas)` },
-                    { ...REGLAS_PRESENTACION.PH.slots[2], nombreCorto: 'Paquete', label: `Paquete (${factorPaquete} parejas)`, resumen: `▼ 4. PAQUETE (${factorPaquete} parejas)` }
-                ]
-            };
-        }
-        return {
-            ...REGLAS_PRESENTACION.PH,
-            slots: REGLAS_PRESENTACION.PH.slots.map(slot => slot.id === 2
-                ? { ...slot, factor: factorPaquete / 2 }
-                : slot)
-        };
+    if (c === 'PH' || c === 'PH NOBLE') {
+        const esNoble = c === 'PH NOBLE' || (typeof prodOrCat === 'object' &&
+            String(prodOrCat.nombre || '').trim().toUpperCase().includes('NOBLE'));
+        if (esNoble) return REGLAS_PRESENTACION['PH NOBLE'];
+        return REGLAS_PRESENTACION.PH;
     }
     return REGLAS_PRESENTACION[c] || null;
 }
@@ -448,11 +436,13 @@ function factorDePresentacion(prod, tipoPres) {
 }
 
 function esProductoPH(prod) {
-    return String((prod && prod.categoria) || '').trim().toUpperCase() === 'PH';
+    const categoria = String((prod && prod.categoria) || '').trim().toUpperCase();
+    return categoria === 'PH' || categoria === 'PH NOBLE' ||
+        (categoria === 'PH' && String((prod && prod.nombre) || '').trim().toUpperCase().includes('NOBLE'));
 }
 
 function parejasPorPaquete(prod) {
-    return aNumeroProd(prod && (prod.unidadesPaq ?? prod.unidades_paq));
+    return esProductoPH(prod) ? 10 : aNumeroProd(prod && (prod.unidadesPaq ?? prod.unidades_paq));
 }
 
 function calcularStockMaximoPH(prod, tipoPres, exceptoKey) {
@@ -508,6 +498,10 @@ function factorStockBasePorPresentacion(prod, item) {
         if (slot) return slot.factor;
     }
 
+    if (normalizada.includes('docena') || String(tipoPres || '').trim().toLowerCase() === 'docena') {
+        return 12;
+    }
+
     if (esPresentacionSaco(prod)) {
         if (categoria.includes('MENESTRAS') &&
             (normalizada.includes('1/4') || String(tipoPres || '').trim().toLowerCase() === 'paq')) {
@@ -556,6 +550,8 @@ function listaPresentacionesComerciales(prod) {
     const regla = reglaPresentacionProducto(prod);
     if (regla) {
         const categoria = String((prod && prod.categoria) || '').trim().toUpperCase();
+        const noble = categoria === 'PH NOBLE' ||
+            (categoria === 'PH' && String((prod && prod.nombre) || '').trim().toUpperCase().includes('NOBLE'));
         return regla.slots.map(slot => {
             const guardado = pres['precio' + slot.campo];
             return {
@@ -564,7 +560,9 @@ function listaPresentacionesComerciales(prod) {
                 nombreCorto: slot.nombreCorto,
                 precio: categoria === 'LEJIA COJIN'
                     ? (slot.tipo === 'unid' ? pres.precioUnid : slot.precio)
-                    : (guardado > 0 ? guardado : slot.precio),
+                    : (noble
+                        ? (slot.campo === 'Caja' ? (guardado > 0 ? guardado : slot.precio) : slot.precio)
+                        : (guardado > 0 ? guardado : slot.precio)),
                 factor: slot.factor,
                 campo: slot.campo
             };
@@ -627,17 +625,30 @@ function normalizarPresentacionesCategoria(data) {
         data.stockCaja = 0;
         return data;
     }
-    if (String(data.categoria || '').trim().toUpperCase() === 'PH') {
-        const esNoble = String(data.nombre || '').trim().toUpperCase().includes('NOBLE');
+    const categoriaPH = String(data.categoria || '').trim().toUpperCase();
+    if (categoriaPH === 'PH' || categoriaPH === 'PH NOBLE') {
+        const esNoble = categoriaPH === 'PH NOBLE' ||
+            String(data.nombre || '').trim().toUpperCase().includes('NOBLE');
         ['Doc', 'Caja', 'Tira', 'Docena'].forEach(campo => {
             const conservarCampo = campo === 'Doc' || (esNoble && campo === 'Caja');
             data['precio' + campo] = conservarCampo ? data['precio' + campo] : 0;
             data['costo' + campo] = conservarCampo ? data['costo' + campo] : 0;
             data['stock' + campo] = 0;
         });
+        if (esNoble) {
+            data.precioUnid = 1.5;
+            data.precioDoc = 6.5;
+            data.precioPaq = 12.5;
+        }
+        data.unidadesPaq = 10;
+        data.unidades_paq = 10;
         data.stockPaq = aNumeroProd(data.stockPaq);
         data.stockUnid = aNumeroProd(data.stockUnid);
         return data;
+    }
+    if (String(data.categoria || '').trim().toUpperCase() === 'GUSTA' ||
+        String(data.categoria || '').trim().toUpperCase() === 'GUSTAS') {
+        data.precioDoc = 1;
     }
     const camposRegla = new Set(regla.slots.map(slot => slot.campo));
     ['Unid', 'Doc', 'Paq', 'Caja', 'Tira', 'Docena'].forEach(campo => {
@@ -727,13 +738,13 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
     const esMenestras = catVal.includes('MENESTRAS');
     const selectorPlancha = document.getElementById('p-paquetes-plancha');
     const esPHX4 = catVal === 'PHX4';
-    const esPH = catVal === 'PH';
+    const esPH = catVal === 'PH' || catVal === 'PH NOBLE';
     const esLeche = catVal === 'LECHE';
     const bloquePrecioHelado = document.getElementById('bloque-precio-helado');
     const regla = reglaPresentacionProducto(esPHX4
         ? { categoria: catVal, paquetesPlancha: Number(selectorPlancha?.value) || 6 }
         : (esPH
-            ? { categoria: catVal, nombre: nomVal, unidadesPaq: leerCampoNumero('p-unidades-paq') }
+            ? { categoria: catVal, nombre: nomVal, unidadesPaq: 10 }
             : catVal));
     const nota = document.getElementById('nota-stock-categoria');
     const bloqueConv = document.getElementById('bloque-conversiones');
@@ -747,10 +758,12 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
     if (bloquePlancha) bloquePlancha.style.display = esPHX4 ? '' : 'none';
     if (labelUnidadesPaq) labelUnidadesPaq.textContent = esPH ? 'Parejas por Paquete' : 'Unidades por paquete';
     if (inputUnidadesPaq) {
-        inputUnidadesPaq.min = esPH ? '1' : '0';
+        inputUnidadesPaq.min = esPH ? '10' : '0';
         inputUnidadesPaq.step = esPH ? '1' : '0.01';
-        inputUnidadesPaq.required = esPH;
-        inputUnidadesPaq.placeholder = esPH ? 'Ej. 12 o 20' : 'Ej. 12';
+        inputUnidadesPaq.required = false;
+        inputUnidadesPaq.readOnly = esPH;
+        if (esPH) inputUnidadesPaq.value = '10';
+        inputUnidadesPaq.placeholder = esPH ? '10 parejas' : 'Ej. 12';
     }
     ['p-unidades-caja', 'p-kg-paq', 'p-kg-caja'].forEach(id => {
         const input = document.getElementById(id);
@@ -775,10 +788,7 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
             nota.textContent = `El stock se controla en paquetes. Cada plancha descuenta ${factorPlancha} paquetes. El precio de Plancha se calcula con el precio de Paquete, pero puedes editarlo.`;
         }
         if (esPH && nota) {
-            const parejasPorPaquete = leerCampoNumero('p-unidades-paq');
-            nota.textContent = parejasPorPaquete > 0
-                ? `El stock se controla en parejas y paquetes. Cada paquete contiene ${parejasPorPaquete} parejas; vender por pareja o medio paquete abre paquetes automáticamente si hace falta.`
-                : 'Ingresa cuántas parejas trae cada paquete para habilitar la conversión automática de stock.';
+            nota.textContent = 'El stock se controla en parejas y paquetes. Cada paquete contiene 10 parejas y cada 1/2 paquete 5 parejas; los rollos individuales descuentan 1/2 pareja.';
         }
     } else {
         if (nota) nota.style.display = 'none';
@@ -1164,14 +1174,8 @@ async function guardarProductoLocal(e) {
         : null;
     const imagenNueva = (document.getElementById('imagen-base64') || {}).value;
     const categoriaProducto = document.getElementById('p-categoria').value;
-    if (categoriaProducto.trim().toUpperCase() === 'PH') {
-        const parejasPorCaja = leerCampoNumero('p-unidades-paq');
-        if (!Number.isInteger(parejasPorCaja) || parejasPorCaja < 1) {
-            alert('Ingresa un número entero mayor que cero en “Parejas por Paquete”.');
-            document.getElementById('p-unidades-paq').focus();
-            return;
-        }
-    }
+    const categoriaPH = categoriaProducto.trim().toUpperCase();
+    const esCategoriaPH = categoriaPH === 'PH' || categoriaPH === 'PH NOBLE';
     const presentacionesForm = leerPresentacionesFormulario({
         categoria: categoriaProducto,
         nombre: document.getElementById('p-nombre').value
@@ -1189,13 +1193,13 @@ async function guardarProductoLocal(e) {
         precio_helado: parseFloat(document.getElementById('p-precio-helado').value) || 0,
         ...presentacionesForm,
         imagen: imagenNueva || (prodAnterior && prodAnterior.imagen) || 'https://via.placeholder.com/80',
-        unidadesPaq: leerCampoNumero('p-unidades-paq'),
+        unidadesPaq: esCategoriaPH ? 10 : leerCampoNumero('p-unidades-paq'),
         unidadesCaja: paquetesPlancha,
         paquetesPlancha: esPHX4 ? paquetesPlancha : 0,
         kgPaq: leerCampoNumero('p-kg-paq'),
         kgCaja: leerCampoNumero('p-kg-caja'),
         // Nombres alternativos para compatibilidad
-        unidades_paq: leerCampoNumero('p-unidades-paq'),
+        unidades_paq: esCategoriaPH ? 10 : leerCampoNumero('p-unidades-paq'),
         unidades_caja: paquetesPlancha,
         kg_paq: leerCampoNumero('p-kg-paq'),
         kg_caja: leerCampoNumero('p-kg-caja')
@@ -1832,9 +1836,11 @@ function agregarProductoPorCodigo(prod, codigo) {
 
     const reglaCodigo = reglaPresentacionProducto(prod);
     if (reglaCodigo) {
-        tipoPres = 'unid';
-        const slotUnidad = slotPorTipo(prod, 'unid');
-        precioPres = pres.precioUnid > 0 ? pres.precioUnid : (slotUnidad ? slotUnidad.precio : 0);
+        const slotUnidad = reglaCodigo.slots.find(slot => slot.nombreCorto === 'Unidad') ||
+            slotPorTipo(prod, 'unid');
+        tipoPres = slotUnidad ? slotUnidad.tipo : 'unid';
+        const precioGuardado = slotUnidad ? pres['precio' + slotUnidad.campo] : pres.precioUnid;
+        precioPres = precioGuardado > 0 ? precioGuardado : (slotUnidad ? slotUnidad.precio : 0);
         stockDisponible = pres.stockUnid || 0;
     }
 
@@ -2146,10 +2152,92 @@ function precioUnitarioAplicado(item) {
     return Number.isFinite(precio) ? precio : 0;
 }
 
-function subtotalItemCarrito(item) {
+function esCategoriaGaseosa(prod) {
+    return String((prod && prod.categoria) || '').replace(/\s+/g, '').toUpperCase() === 'GASEOSA';
+}
+
+function unidadesPresentacionGaseosa(item, prod) {
+    const tipo = String(item && item.tipoPres || '').trim().toLowerCase();
+    if (tipo === 'unid' || tipo === 'unidad_helada') return 1;
+    if (tipo === 'paq') {
+        return aNumeroProd(prod && (prod.unidadesPaq ?? prod.unidades_paq)) ||
+            factorStockBasePorPresentacion(prod, item);
+    }
+    if (tipo === 'caja') {
+        return aNumeroProd(prod && (prod.unidadesCaja ?? prod.unidades_caja)) ||
+            factorStockBasePorPresentacion(prod, item);
+    }
+    if (tipo === 'doc') return 12;
+    return factorStockBasePorPresentacion(prod, item);
+}
+
+function calcularSubtotalesPromoGaseosa() {
+    const lineasGaseosa = carrito.map(item => ({
+        item,
+        prod: productos.find(prod => String(prod.id) === String(item.id))
+    })).filter(({ item, prod }) =>
+        prod && esCategoriaGaseosa(prod) && item.tipoPres !== 'monto' && Number(item.cantidad) > 0
+    );
+    const unidadesTotales = lineasGaseosa.reduce((total, { item, prod }) =>
+        total + Number(item.cantidad) * unidadesPresentacionGaseosa(item, prod), 0);
+    if (unidadesTotales < 15) return null;
+
+    const configuracionCompleta = lineasGaseosa.every(({ prod }) =>
+        aNumeroProd(prod.precioPaq ?? prod.precio_paq) > 0 &&
+        aNumeroProd(prod.unidadesPaq ?? prod.unidades_paq) > 0
+    );
+    if (!configuracionCompleta) return null;
+
+    let unidadesPromocion = Math.floor(unidadesTotales / 15) * 15;
+    const subtotales = new Map();
+    lineasGaseosa.forEach(({ item, prod }) => {
+        const factor = unidadesPresentacionGaseosa(item, prod);
+        const unidadesLinea = Number(item.cantidad) * factor;
+        const unidadesConPrecioPaquete = Math.min(unidadesLinea, unidadesPromocion);
+        unidadesPromocion -= unidadesConPrecioPaquete;
+
+        const subtotalRegular = precioUnitarioAplicado(item) * Number(item.cantidad);
+        const precioRegularPorUnidad = subtotalRegular / unidadesLinea;
+        const precioUnitarioPaquete = aNumeroProd(prod.precioPaq ?? prod.precio_paq) /
+            aNumeroProd(prod.unidadesPaq ?? prod.unidades_paq);
+        const diferenciaHelada = item.tipoPres === 'unidad_helada'
+            ? Number(prod.precio_helado || 0) - extraerPresentacionesProducto(prod).precioUnid
+            : 0;
+        const precioPaquetePorUnidad = Math.max(0, precioUnitarioPaquete + diferenciaHelada);
+        subtotales.set(item, unidadesConPrecioPaquete * precioPaquetePorUnidad +
+            (unidadesLinea - unidadesConPrecioPaquete) * precioRegularPorUnidad);
+    });
+    return subtotales;
+}
+
+function validarPromoGaseosaEnCarrito() {
+    const unidadesTotales = carrito.reduce((total, item) => {
+        const prod = productos.find(producto => String(producto.id) === String(item.id));
+        if (!prod || !esCategoriaGaseosa(prod) || item.tipoPres === 'monto') return total;
+        return total + Number(item.cantidad) * unidadesPresentacionGaseosa(item, prod);
+    }, 0);
+    if (unidadesTotales < 15) return true;
+
+    const productosSinPrecioPaquete = carrito
+        .map(item => productos.find(prod => String(prod.id) === String(item.id)))
+        .filter((prod, index) => {
+            const item = carrito[index];
+            return prod && esCategoriaGaseosa(prod) && item.tipoPres !== 'monto' && Number(item.cantidad) > 0 &&
+                (!(aNumeroProd(prod.precioPaq ?? prod.precio_paq) > 0) ||
+                    !(aNumeroProd(prod.unidadesPaq ?? prod.unidades_paq) > 0));
+        });
+    if (productosSinPrecioPaquete.length === 0) return true;
+
+    const nombres = [...new Set(productosSinPrecioPaquete.map(prod => prod.nombre))].join(', ');
+    alert(`Configura el precio y las unidades del paquete de gaseosa para aplicar el combo de 15: ${nombres}.`);
+    return false;
+}
+
+function subtotalItemCarrito(item, subtotalesPromo) {
     if (item.tipoPres === 'monto' && item.precio_personalizado === undefined) {
         return Number(item.montoTotal) || 0;
     }
+    if (subtotalesPromo && subtotalesPromo.has(item)) return subtotalesPromo.get(item);
     return precioUnitarioAplicado(item) * (Number(item.cantidad) || 0);
 }
 
@@ -2187,23 +2275,27 @@ function actualizarCarritoUI() {
     contenedor.innerHTML = '';
 
     let total = 0;
+    const subtotalesPromo = calcularSubtotalesPromoGaseosa();
     carrito.forEach(item => {
         let subtotal;
         let displayInfo;
 
         if (item.tipoPres === 'monto') {
             // Para venta por monto, usar el monto total directamente
-            subtotal = subtotalItemCarrito(item);
+            subtotal = subtotalItemCarrito(item, subtotalesPromo);
             displayInfo = `💰 S/ ${subtotal.toFixed(2)} (${item.cantidad.toFixed(2)} KG)`;
         } else {
-            const precio = precioUnitarioAplicado(item);
-            subtotal = subtotalItemCarrito(item);
+            subtotal = subtotalItemCarrito(item, subtotalesPromo);
+            const precio = Number(item.cantidad) > 0
+                ? subtotal / Number(item.cantidad)
+                : precioUnitarioAplicado(item);
             const prodItem = productos.find(prod => String(prod.id) === String(item.id));
             const unidadesTxt = item.factorUnidades > 1
                 ? ` · ${item.cantidad * item.factorUnidades} ${prodItem && esProductoPH(prodItem) ? 'parejas' : 'unid'}`
                 : '';
             const presTxt = item.etiquetaPres ? `${item.etiquetaPres} · ` : '';
-            displayInfo = `${presTxt}S/ ${precio.toFixed(2)} x ${item.cantidad}${unidadesTxt}`;
+            const promoTxt = subtotalesPromo && subtotalesPromo.has(item) ? ' · Combo gaseosa 15u' : '';
+            displayInfo = `${presTxt}S/ ${precio.toFixed(2)} x ${item.cantidad}${unidadesTxt}${promoTxt}`;
         }
 
         total += subtotal;
@@ -2303,6 +2395,7 @@ function preciosOficialesProducto(prod, tipoPres) {
         promocion: 'Doc',
         paq: 'Paq',
         caja: 'Caja',
+        rollo: 'Caja',
         tira: 'Tira',
         docena: 'Docena'
     };
@@ -2366,6 +2459,7 @@ function confirmarCobro() {
         return;
     }
     if (!validarStockPHEnCarrito()) return;
+    if (!validarPromoGaseosaEnCarrito()) return;
 
     let montoEfectivo = 0;
     let montoYape = 0;
@@ -2389,16 +2483,17 @@ function confirmarCobro() {
     }
 
     let detalles = [];
+    const subtotalesPromo = calcularSubtotalesPromoGaseosa();
     const itemsTicket = carrito.map(item => {
         const producto = productos.find(prod => String(prod.id) === String(item.id));
         const presentacion = item.etiquetaPres ||
             (producto && item.tipoPres !== 'monto'
                 ? etiquetaDePresentacion(producto, item.tipoPres)
                 : (item.tipoPres === 'monto' ? 'KG' : item.tipoPres));
-        const precioAplicado = precioUnitarioAplicado(item);
-        const total = item.tipoPres === 'monto' && item.precio_personalizado === undefined
-            ? Number(item.montoTotal) || 0
-            : precioAplicado * (Number(item.cantidad) || 0);
+        const total = subtotalItemCarrito(item, subtotalesPromo);
+        const precioAplicado = item.tipoPres === 'monto'
+            ? precioUnitarioAplicado(item)
+            : (Number(item.cantidad) > 0 ? total / Number(item.cantidad) : precioUnitarioAplicado(item));
         const preciosOficiales = producto
             ? preciosOficialesProducto(producto, item.tipoPres)
             : { precio: Number(item.precio) || 0, costo: 0 };
@@ -3628,6 +3723,10 @@ function editarProducto(id) {
             catForm = categoriaSinEspacios === 'BEBIDAS' ? 'Bebidas' : categoriaSinEspacios;
         }
         if (String(catForm).trim().toUpperCase() === 'GUSTAS') catForm = 'GUSTA';
+        if (String(catForm).trim().toUpperCase() === 'PH' &&
+            String(prod.nombre || '').trim().toUpperCase().includes('NOBLE')) {
+            catForm = 'PH NOBLE';
+        }
         inputCategoria.value = catForm;
         actualizarNombresPresentaciones();
     }
@@ -3654,7 +3753,7 @@ function editarProducto(id) {
         });
     }
 
-    setCampoForm('p-unidades-paq', prod.unidadesPaq || 0);
+    setCampoForm('p-unidades-paq', esProductoPH(prod) ? 10 : (prod.unidadesPaq || 0));
     setCampoForm('p-unidades-caja', prod.unidadesCaja || 0);
     setCampoForm('p-kg-paq', prod.kgPaq || 0);
     setCampoForm('p-kg-caja', prod.kgCaja || 0);
@@ -3664,7 +3763,7 @@ function editarProducto(id) {
     if (!prod.kgPaq && prod.kg_paq) setCampoForm('p-kg-paq', prod.kg_paq);
     if (!prod.kgCaja && prod.kg_caja) setCampoForm('p-kg-caja', prod.kg_caja);
 
-    if (String(prod.categoria || '').trim().toUpperCase() === 'PH') {
+    if (esProductoPH(prod)) {
         actualizarNombresPresentaciones();
     }
 
@@ -4796,6 +4895,8 @@ const COLUMNAS_SUPABASE_VALIDAS = [
     'costo_doc', 'precio_doc', 'stock_doc',
     'costo_paq', 'precio_paq', 'stock_paq',
     'costo_caja', 'precio_caja', 'stock_caja',
+    'costo_tira', 'precio_tira', 'stock_tira',
+    'costo_docena', 'precio_docena', 'stock_docena',
     'unidades_paq', 'unidades_caja',
     'kg_paq', 'kg_caja',
     'unidades_paquete', 'unidades_caja_box',
@@ -4836,8 +4937,7 @@ function productoParaSupabase(producto) {
         updated_at: new Date().toISOString()
     };
 
-    // Agregar campos de presentaciones básicas (unid, doc, paq, caja)
-    const presentacionesBasicas = ['unid', 'doc', 'paq', 'caja'];
+    const presentacionesBasicas = ['unid', 'doc', 'paq', 'caja', 'tira', 'docena'];
     presentacionesBasicas.forEach(sufijo => {
         payload[`costo_${sufijo}`] = producto[`costo${sufijo.charAt(0).toUpperCase() + sufijo.slice(1)}`] || 0;
         payload[`precio_${sufijo}`] = producto[`precio${sufijo.charAt(0).toUpperCase() + sufijo.slice(1)}`] || 0;
@@ -5285,8 +5385,7 @@ async function loadProductosFromSupabase() {
         if (data && data.length > 0) {
             columnasProductosSupabase = new Set(Object.keys(data[0]));
             const productosSupabase = data.map(p => {
-                // Solo leer presentaciones básicas que existen en Supabase
-                const presentacionesBasicas = ['unid', 'doc', 'paq', 'caja'];
+                const presentacionesBasicas = ['unid', 'doc', 'paq', 'caja', 'tira', 'docena'];
                 const presentaciones = presentacionesBasicas.reduce((pres, sufijo) => {
                     const campo = sufijo.charAt(0).toUpperCase() + sufijo.slice(1);
                     pres[`costo${campo}`] = p[`costo_${sufijo}`] || 0;
