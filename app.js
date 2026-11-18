@@ -949,9 +949,11 @@ async function cargarDatosDesdeLocalStorage() {
 
 function verificarAlertaStockUnidades() {
     const rolActual = obtenerRol();
-    
-    // 2. Si el usuario es de consulta, no ejecutar ni mostrar la alerta
+    const contenedor = document.getElementById('alerta-stock-contenido');
+    if (!contenedor) return;
+
     if (rolActual === 'inventario_consulta' || rolActual === 'consulta') {
+        contenedor.innerHTML = '';
         return;
     }
 
@@ -959,22 +961,20 @@ function verificarAlertaStockUnidades() {
     productos.forEach(p => {
         const labels = etiquetasPresentaciones(p);
         const stock = extraerPresentacionesProducto(p).stockUnid;
+        const stockFormateado = Number(stock.toFixed(2));
         if (esPresentacionSaco(p)) {
-            if (stock < 33) productosAlertados.push(`• <strong>${p.nombre}</strong> (${p.categoria || ''}): <span style="color:red; font-weight:bold;">${stock} ${labels.unid}</span>`);
+            if (stock < 33) productosAlertados.push(`• <strong>${p.nombre}</strong> (${p.categoria || ''}): <span style="color:#f87171; font-weight:bold;">${stockFormateado} ${labels.unid}</span>`);
         } else {
-            if (stock < 4) productosAlertados.push(`• <strong>${p.nombre}</strong> (${p.categoria || ''}): <span style="color:red; font-weight:bold;">${stock} ${labels.unid}</span>`);
+            if (stock < 4) productosAlertados.push(`• <strong>${p.nombre}</strong> (${p.categoria || ''}): <span style="color:#f87171; font-weight:bold;">${stockFormateado} ${labels.unid}</span>`);
         }
     });
 
     if (productosAlertados.length > 0) {
-        const contenedor = document.getElementById('modal-alerta-contenido');
-        if (contenedor) {
-            contenedor.innerHTML = `<p style="margin-bottom: 12px; font-weight: 500;">Atención, los siguientes productos requieren reabastecimiento:</p>` + productosAlertados.join('<br>');
-            document.getElementById('modal-alerta-stock').style.display = 'flex';
-        }
+        contenedor.innerHTML = `<p>Atención, los siguientes productos requieren reabastecimiento:</p>${productosAlertados.join('<br>')}`;
+    } else {
+        contenedor.innerHTML = '<p class="alerta-stock-vacio">✓ No hay productos con stock bajo.</p>';
     }
 }
-function cerrarModalAlerta() { document.getElementById('modal-alerta-stock').style.display = 'none'; }
 
 function abrirModalMisComandas() {
     const cont = document.getElementById('contenedor-mis-comandas');
@@ -1347,6 +1347,7 @@ function renderizarProductos(filtro = '') {
 
     // Renderizar UNA SOLA VEZ sin recursividad
     renderizarProductosPorLista(prodsFiltrados);
+    verificarAlertaStockUnidades();
 }
 
 function renderizarCompras(filtro = '') {
@@ -4295,7 +4296,6 @@ async function inicializarSistema() {
     // Renderizar productos solo una vez (sin recursividad)
     if (typeof renderizarProductos === 'function') renderizarProductos();
 
-    if (typeof verificarAlertaStockUnidades === 'function') verificarAlertaStockUnidades();
     if (typeof renderizarRegistroComandasVendedor === 'function') renderizarRegistroComandasVendedor();
     if (typeof renderizarKardex === 'function') renderizarKardex();
     if (typeof renderizarReportes === 'function') renderizarReportes();
