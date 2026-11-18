@@ -2179,6 +2179,12 @@ function precioHeladoProducto(prod) {
     return 0;
 }
 
+function precioHeladoVentaProducto(prod) {
+    const precioConfigurado = precioHeladoProducto(prod);
+    if (precioConfigurado > 0) return precioConfigurado;
+    return esCategoriaGaseosa(prod) ? 1.2 : 0;
+}
+
 function unidadesPresentacionGaseosa(item, prod) {
     const tipo = String(item && item.tipoPres || '').trim().toLowerCase();
 
@@ -2225,7 +2231,7 @@ function calcularSubtotalesPromoGaseosa() {
         const precioUnitarioPaquete = aNumeroProd(prod.precioPaq ?? prod.precio_paq) /
             aNumeroProd(prod.unidadesPaq ?? prod.unidades_paq);
         const diferenciaHelada = item.tipoPres === 'unidad_helada'
-            ? precioHeladoProducto(prod) - extraerPresentacionesProducto(prod).precioUnid
+            ? precioHeladoVentaProducto(prod) - extraerPresentacionesProducto(prod).precioUnid
             : 0;
         const precioPaquetePorUnidad = Math.max(0, precioUnitarioPaquete + diferenciaHelada);
         subtotales.set(item, unidadesConPrecioPaquete * precioPaquetePorUnidad +
@@ -2406,7 +2412,7 @@ function calcularVueltoMixto() {
 function preciosOficialesProducto(prod, tipoPres) {
     if (String(tipoPres || '').toLowerCase() === 'unidad_helada') {
         return {
-            precio: precioHeladoProducto(prod),
+            precio: precioHeladoVentaProducto(prod),
             costo: Number(extraerPresentacionesProducto(prod).costoUnid) || 0
         };
     }
@@ -4146,7 +4152,7 @@ function renderizarCatalogo(listaProductos) {
         const { pres, comerciales } = obtenerPresentacionesConCache(prod);
         const esAGranel = esProductoAGranel(prod);
         const esGaseosa = esCategoriaGaseosa(prod);
-        const precioHelado = precioHeladoProducto(prod);
+        const precioHelado = precioHeladoVentaProducto(prod);
         let optsHTML;
         if (esGaseosa) {
             const precioUnid = Number(pres.precioUnid) || 0;
@@ -4282,6 +4288,9 @@ let tiempoUltimoCaracterInput = 0;
 let ultimoTicketId = null;
 
 async function inicializarSistema() {
+    aplicarMenuPorRol();
+    if (typeof aplicarRestriccionesPorRol === 'function') aplicarRestriccionesPorRol();
+
     // Cargar datos desde localStorage primero (async porque puede consultar Supabase)
     await cargarDatosDesdeLocalStorage();
     await cargarSesionCajaActual();
