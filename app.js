@@ -103,13 +103,29 @@ function obtenerRol() {
         localStorage.getItem('usuario_rol') ||
         localStorage.getItem('rol_usuario') ||
         localStorage.getItem('rol') ||
-        'admin'
+        ''
     ).trim().toLowerCase();
 
     if (raw === 'administrador' || raw === 'admin') return 'admin';
     if (raw === 'vendedor' || raw === 'vendedor2') return 'vendedor';
     if (raw === 'inventario_consulta') return 'inventario_consulta';
     return raw;
+}
+
+function esAdmin() {
+    const raw = (
+        localStorage.getItem('usuario_rol') ||
+        localStorage.getItem('rol_usuario') ||
+        localStorage.getItem('rol') ||
+        ''
+    ).trim().toLowerCase();
+    return raw === 'administrador' || raw === 'admin';
+}
+
+function requerirAdmin() {
+    if (esAdmin()) return true;
+    alert('Solo el administrador puede modificar el inventario, los precios o la configuración.');
+    return false;
 }
 
 function obtenerFechaCajaLocal(fecha = new Date()) {
@@ -126,6 +142,8 @@ let syncQueue = [];
 
 // Variables globales (declaradas al inicio para evitar errores de inicialización)
 let productos = [];
+let productosDesdeSupabase = false;
+let productosLoadVersion = 0;
 let kardex = [];
 let comandas = [];
 let historialComandasRealizadas = [];
@@ -237,8 +255,8 @@ if (typeof window.supabase !== 'undefined') {
 }
 
 const rol = obtenerRol();
-const usuarioActual = (localStorage.getItem('usuario_rol') || (rol === 'admin' ? 'administrador' : rol)).trim().toLowerCase();
-const esAdministrador = rol === 'admin' || usuarioActual === 'administrador';
+const usuarioActual = (localStorage.getItem('usuario_rol') || rol || '').trim().toLowerCase();
+const esAdministrador = esAdmin();
 const esConsulta = usuarioActual === 'inventario_consulta' || usuarioActual === 'consulta';
 const sinRestriccionesCaja = esAdministrador || esConsulta;
 const fechaAperturaCajaHoy = obtenerFechaCajaLocal();
@@ -344,6 +362,7 @@ function mostrarEl(id, visible, displayValue) {
 
 function aplicarMenuPorRol() {
     const rolActual = obtenerRol();
+    const administrador = esAdmin();
     const esVendedor = rolActual === 'vendedor';
     const esInventarioConsulta = rolActual === 'inventario_consulta';
 
@@ -362,20 +381,20 @@ function aplicarMenuPorRol() {
     // Vendedor: ventas, compras directas, inventario, caja, kárdex, registro ventas, cierre/arqueo
     mostrarEl('btn-tab-ventas', !esInventarioConsulta, 'inline-block');
     mostrarEl('btn-tab-inventario', true, 'inline-block');
-    mostrarEl('btn-tab-almacen', !esVendedor && !esInventarioConsulta, 'inline-block');
+    mostrarEl('btn-tab-almacen', administrador, 'inline-block');
     mostrarEl('btn-tab-caja', !esInventarioConsulta, 'inline-block');
     mostrarEl('btn-tab-kardex', !esInventarioConsulta, 'inline-block');
     mostrarEl('btn-tab-compras', esVendedor && !esInventarioConsulta, 'inline-block');
-    mostrarEl('btn-tab-reportes', !esVendedor && !esInventarioConsulta, 'inline-block');
+    mostrarEl('btn-tab-reportes', administrador, 'inline-block');
     mostrarEl('btn-registro-ventas', esVendedor && !esInventarioConsulta, 'inline-block');
     mostrarEl('seccion-historial-diario-admin', !esVendedor && !esInventarioConsulta, 'block');
     mostrarEl('btn-mis-comandas-vendedor', esVendedor && !esInventarioConsulta, 'inline-block');
     mostrarEl('btn-cierre-caja', !esInventarioConsulta, 'inline-block');
-    mostrarEl('col-header-acciones', !esVendedor && !esInventarioConsulta, 'table-cell');
-    mostrarEl('col-header-costos', !esVendedor && !esInventarioConsulta, 'table-cell');
+    mostrarEl('col-header-acciones', administrador, 'table-cell');
+    mostrarEl('col-header-costos', administrador, 'table-cell');
     mostrarEl('col-header-stock', !esInventarioConsulta, 'table-cell');
     mostrarEl('info-caja', !esInventarioConsulta, 'block');
-    mostrarEl('card-inventario-form', !esInventarioConsulta, 'flex');
+    mostrarEl('card-inventario-form', administrador, 'flex');
 
     const pCategoria = document.getElementById('p-categoria');
     const inputNombre = document.getElementById('p-nombre');
@@ -748,6 +767,7 @@ function unidadesIndividualesReservadasCarrito(prodId, exceptoKey) {
 }
 
 function normalizarPresentacionesCategoria(data) {
+    if (!esAdmin()) return data;
     const esGaseosa = String(data.categoria || '').trim().toUpperCase() === 'GASEOSA';
     const regla = esGaseosa ? null : reglaPresentacionProducto(data);
     if (!regla) {
@@ -874,6 +894,7 @@ function mostrarBloquesPresentacionEstandar() {
 }
 
 function actualizarPrecioPlanchaPHX4() {
+    if (!esAdmin()) return;
     const categoria = document.getElementById('p-categoria')?.value.trim().toUpperCase();
     if (categoria !== 'PHX4') return;
 
@@ -884,6 +905,7 @@ function actualizarPrecioPlanchaPHX4() {
 }
 
 function cambiarPaquetesPorPlancha() {
+    if (!esAdmin()) return;
     actualizarPrecioPlanchaPHX4();
     actualizarNombresPresentaciones();
 }
@@ -1058,18 +1080,28 @@ if (inputImg) {
 }
 
 // Cargar datos desde localStorage después de declarar las variables
+function leerListaLocalStorage(clave) {
+    try {
+        const valor = JSON.parse(localStorage.getItem(clave) || '[]');
+        return Array.isArray(valor) ? valor : [];
+    } catch (error) {
+        console.error(`No se pudo cargar "${clave}" desde localStorage.`, error);
+        return [];
+    }
+}
+
 async function cargarDatosDesdeLocalStorage() {
-    productos = JSON.parse(localStorage.getItem('lista_productos')) || [];
-    kardex = JSON.parse(localStorage.getItem('lista_kardex')) || [];
-    comandas = JSON.parse(localStorage.getItem('lista_comandas')) || [];
-    historialComandasRealizadas = JSON.parse(localStorage.getItem('historial_comandas_realizadas')) || [];
-    gastosDelDia = JSON.parse(localStorage.getItem('lista_gastos_dia')) || [];
-    historialCierresCaja = JSON.parse(localStorage.getItem('historial_cierres_caja')) || [];
-    almacen = JSON.parse(localStorage.getItem('lista_almacen')) || [];
-    salidasAlmacen = JSON.parse(localStorage.getItem('lista_salidas_almacen')) || [];
+    productos = leerListaLocalStorage('lista_productos');
+    kardex = leerListaLocalStorage('lista_kardex');
+    comandas = leerListaLocalStorage('lista_comandas');
+    historialComandasRealizadas = leerListaLocalStorage('historial_comandas_realizadas');
+    gastosDelDia = leerListaLocalStorage('lista_gastos_dia');
+    historialCierresCaja = leerListaLocalStorage('historial_cierres_caja');
+    almacen = leerListaLocalStorage('lista_almacen');
+    salidasAlmacen = leerListaLocalStorage('lista_salidas_almacen');
 
     // Si localStorage está vacío o no tiene productos, cargar desde Supabase (una sola vez)
-    if (!productos || productos.length === 0) {
+    if (!productosDesdeSupabase && (!productos || productos.length === 0)) {
         console.log('📥 localStorage vacío, cargando productos desde Supabase...');
         await loadProductosFromSupabase();
     }
@@ -1141,6 +1173,7 @@ function eliminarComandaVendedor(comandaId) {
 }
 
 function recargarListaProductos() {
+    if (productosDesdeSupabase) return;
     try {
         const raw = localStorage.getItem('lista_productos');
         if (!raw) return;
@@ -1327,7 +1360,7 @@ function leerPresentacionesFormulario(prodOrCat) {
 
 async function guardarProductoLocal(e) {
     if (e) e.preventDefault();
-    if (obtenerRol() === 'inventario_consulta') return;
+    if (!requerirAdmin()) return;
     recargarListaProductos();
     recargarListaKardex();
 
@@ -1471,14 +1504,16 @@ function renderizarProductos(filtro = '') {
     console.log('🔄 renderizarProductos() llamado, productos cargados:', productos.length);
 
     // Solo recargar desde localStorage si productos está vacío (evitar recarga innecesaria)
-    if (!productos || productos.length === 0) {
-        if (localStorage.getItem('lista_productos')) {
-            try {
-                productos = JSON.parse(localStorage.getItem('lista_productos')) || [];
+    if (!productosDesdeSupabase && (!productos || productos.length === 0)) {
+        try {
+            const raw = localStorage.getItem('lista_productos');
+            if (raw) {
+                productos = JSON.parse(raw) || [];
                 console.log('📥 Recargados productos desde localStorage:', productos.length);
-            } catch (e) {
-                productos = [];
             }
+        } catch (error) {
+            console.error('No se pudieron recargar productos desde localStorage.', error);
+            productos = [];
         }
     }
 
@@ -1755,6 +1790,7 @@ function abrirModalCostosComanda(comandaId) {
 function cerrarModalCostos() { document.getElementById('modal-costos-comanda').style.display = 'none'; }
 
 async function confirmarCostosComanda() {
+    if (!requerirAdmin()) return;
     if (isProcessing || !comandaActualAprobar) return;
     const comandaId = comandaActualAprobar.comandaId;
     if (!comandas.some(comanda => comanda.comandaId === comandaId)) return;
@@ -3091,7 +3127,7 @@ function confirmarCobro() {
     carrito.forEach(item => {
         const prod = productos.find(p => p.id === item.id);
         if (prod) {
-            syncProductoToSupabase(prod);
+            syncStockProductoToSupabase(prod);
         }
     });
 
@@ -3979,6 +4015,7 @@ function verTicketComprobante(ticketId) {
 }
 function aplicarRestriccionesPorRol() {
     const rolUsuario = obtenerRol();
+    const administrador = esAdmin();
     const esInventarioConsulta = rolUsuario === 'inventario_consulta';
     
     // IDs EXACTOS definidos en el HTML para los costos
@@ -3988,7 +4025,7 @@ function aplicarRestriccionesPorRol() {
     const inputCategoria = document.getElementById('p-categoria');
     const inputCodigo = document.getElementById('p-codigo');
     const tituloForm = document.getElementById('titulo-form-producto') || document.querySelector('.form-title');
-    mostrarEl('card-inventario-form', !esInventarioConsulta, 'flex');
+    mostrarEl('card-inventario-form', administrador, 'flex');
 
     if (esInventarioConsulta) {
         document.body.classList.add('rol-inventario-consulta');
@@ -4038,10 +4075,25 @@ function aplicarRestriccionesPorRol() {
         if (inputCodigo) inputCodigo.readOnly = false;
         if (tituloForm) tituloForm.textContent = "Registrar / Editar Producto";
     }
+
+    if (!administrador) {
+        ['form-almacen', 'form-salida-almacen'].forEach(id => {
+            const form = document.getElementById(id);
+            if (form) form.style.display = 'none';
+        });
+        document.querySelectorAll(
+            '#btn-nuevo-producto, button[onclick*="editarProducto"], ' +
+            'button[onclick*="eliminarProducto"], button[onclick*="editarProductoAlmacen"], ' +
+            'button[onclick*="eliminarProductoAlmacen"]'
+        ).forEach(el => { el.style.display = 'none'; });
+        document.querySelectorAll('#form-producto input, #form-producto select, #form-producto button').forEach(el => {
+            el.disabled = true;
+        });
+    }
 }
 
 function editarProducto(id) {
-    if (obtenerRol() === 'inventario_consulta') return;
+    if (!requerirAdmin()) return;
     recargarListaProductos();
     const prod = productos.find(p => String(p.id) === String(id));
     if (!prod) return;
@@ -4143,7 +4195,7 @@ function editarProducto(id) {
 }
 
 function eliminarProducto(id) {
-    if (obtenerRol() === 'inventario_consulta') return;
+    if (!requerirAdmin()) return;
     if(confirm("¿Eliminar este producto del inventario?")) {
         const prod = productos.find(p => p.id === id);
         if (prod) {
@@ -4301,7 +4353,7 @@ function renderizarProductosPorLista(listaProductos) {
         }
 
         let costosHTML = '';
-        if (rolActual !== 'vendedor' && rolActual !== 'inventario_consulta') {
+        if (esAdmin()) {
             const presentacionesCosto = reglaCat
                 ? reglaCat.slots.map(slot => ({
                     campo: slot.campo,
@@ -4367,7 +4419,7 @@ function renderizarProductosPorLista(listaProductos) {
         }
 
         let accionesTd = '';
-        if (rolActual !== 'vendedor' && rolActual !== 'inventario_consulta') {
+        if (esAdmin()) {
             accionesTd = `
                 <td>
                     <button onclick="editarProducto(${prod.id})" style="background: #2563eb; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">Editar</button>
@@ -4928,7 +4980,8 @@ window.recargarListaProductos = recargarListaProductos;
 
 // Funciones de Almacén
 function guardarProductoAlmacen(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
+    if (!requerirAdmin()) return;
     const fecha = document.getElementById('alm-fecha').value;
     const producto = document.getElementById('alm-producto').value;
     const presentacion = document.getElementById('alm-presentacion').value;
@@ -4961,7 +5014,8 @@ function guardarProductoAlmacen(e) {
 }
 
 function registrarSalidaAlmacen(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
+    if (!requerirAdmin()) return;
     const fecha = document.getElementById('sal-fecha').value;
     const productoId = parseInt(document.getElementById('sal-producto').value);
     const cantidad = parseFloat(document.getElementById('sal-cantidad').value) || 0;
@@ -5023,10 +5077,10 @@ function renderizarAlmacen() {
             <td>S/ ${aNumeroProd(prod.costo).toFixed(2)}</td>
             <td>S/ ${aNumeroProd(prod.actualCosto).toFixed(2)} (${prod.actualCostoFecha || ''})</td>
             <td>${aNumeroProd(prod.stock).toFixed(2)} ${prod.presentacion || ''}</td>
-            <td>
+            ${esAdmin() ? `<td>
                 <button onclick="editarProductoAlmacen(${prod.id})" style="background: #2563eb; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">Editar</button>
                 <button onclick="eliminarProductoAlmacen(${prod.id})" style="background: #991b1b; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">Eliminar</button>
-            </td>
+            </td>` : ''}
         </tr>
     `).join('') || '<tr><td colspan="7" style="text-align: center; color: #64748b;">No hay productos en almacén.</td></tr>';
 
@@ -5062,6 +5116,7 @@ function renderizarAlmacen() {
 }
 
 function editarProductoAlmacen(id) {
+    if (!requerirAdmin()) return;
     const prod = almacen.find(p => p.id === id);
     if (!prod) return;
 
@@ -5083,6 +5138,7 @@ function editarProductoAlmacen(id) {
 }
 
 function eliminarProductoAlmacen(id) {
+    if (!requerirAdmin()) return;
     if (confirm('¿Eliminar este producto del almacén?')) {
         const prodAEliminar = almacen.find(p => p.id === id);
         almacen = almacen.filter(p => p.id !== id);
@@ -5310,9 +5366,13 @@ function productoParaSupabase(producto) {
 
 // Sincronizar un producto con Supabase
 async function syncProductoToSupabase(producto) {
+    if (!esAdmin()) {
+        console.warn('Se rechazó la sincronización de configuración del producto: se requiere administrador.');
+        return false;
+    }
     if (!supabaseClient || !isOnline) {
         syncQueue.push({ type: 'producto', data: producto });
-        return;
+        return false;
     }
 
     try {
@@ -5325,14 +5385,56 @@ async function syncProductoToSupabase(producto) {
             syncQueue.push({ type: 'producto', data: producto });
         } else {
             console.log('✅ Producto sincronizado:', producto.nombre);
+            return true;
         }
     } catch (error) {
         console.error('Error de red al sincronizar producto:', error);
         syncQueue.push({ type: 'producto', data: producto });
     }
+    return false;
+}
+
+function stockProductoParaSupabase(producto) {
+    const stock = { id: producto.id, updated_at: new Date().toISOString() };
+    ['unid', 'doc', 'paq', 'caja', 'tira', 'docena'].forEach(sufijo => {
+        const campo = `stock${sufijo.charAt(0).toUpperCase()}${sufijo.slice(1)}`;
+        stock[`stock_${sufijo}`] = producto[campo] ?? 0;
+    });
+    return sanitizarPayloadParaSupabase(stock);
+}
+
+async function syncStockProductoToSupabase(producto) {
+    const payload = stockProductoParaSupabase(producto);
+    if (!supabaseClient || !isOnline) {
+        syncQueue.push({ type: 'stock_producto', data: producto });
+        return false;
+    }
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('productos')
+            .update(payload)
+            .eq('id', producto.id)
+            .select('id')
+            .single();
+        if (error || !data) {
+            console.error(`Error al sincronizar el stock de ${producto.nombre}:`, error || 'Producto no encontrado');
+            syncQueue.push({ type: 'stock_producto', data: producto });
+            return false;
+        }
+        return true;
+    } catch (error) {
+        console.error(`Error de red al sincronizar el stock de ${producto.nombre}:`, error);
+        syncQueue.push({ type: 'stock_producto', data: producto });
+        return false;
+    }
 }
 
 async function incrementarStockProductoEnSupabase(productoId, cantidad, nombreProducto) {
+    if (!esAdmin()) {
+        console.warn('Se rechazó el ajuste de stock en Supabase: se requiere administrador.');
+        return false;
+    }
     const incremento = Number(cantidad);
     if (!Number.isFinite(incremento) || incremento <= 0) {
         console.error(`No se puede incrementar el stock de ${nombreProducto}: cantidad inválida.`);
@@ -5521,6 +5623,10 @@ async function syncComandaVentaToSupabase(comanda) {
 
 // Sincronizar producto de almacén con Supabase
 async function syncAlmacenToSupabase(producto) {
+    if (!esAdmin()) {
+        console.warn('Se rechazó la sincronización del almacén: se requiere administrador.');
+        return false;
+    }
     if (!supabaseClient || !isOnline) {
         syncQueue.push({ type: 'almacen', data: producto });
         return;
@@ -5556,6 +5662,10 @@ async function syncAlmacenToSupabase(producto) {
 
 // Sincronizar salida de almacén con Supabase
 async function syncSalidaAlmacenToSupabase(salida) {
+    if (!esAdmin()) {
+        console.warn('Se rechazó la sincronización de salidas del almacén: se requiere administrador.');
+        return false;
+    }
     if (!supabaseClient || !isOnline) {
         syncQueue.push({ type: 'salida_almacen', data: salida });
         return;
@@ -5601,6 +5711,9 @@ async function procesarColaSincronizacion() {
             case 'producto':
                 await syncProductoToSupabase(item.data);
                 break;
+            case 'stock_producto':
+                await syncStockProductoToSupabase(item.data);
+                break;
             case 'incremento_stock_producto':
                 await incrementarStockProductoEnSupabase(
                     item.data.productoId,
@@ -5634,20 +5747,11 @@ async function procesarColaSincronizacion() {
 // ============================================
 
 function refrescarVistasProductos() {
-    recargarListaProductos();
     if (typeof renderizarProductos === 'function') renderizarProductos();
     if (typeof renderizarCompras === 'function') renderizarCompras();
 }
 
 function refrescarVistasAlmacen() {
-    try {
-        const rawAlm = localStorage.getItem('lista_almacen');
-        if (rawAlm) almacen = JSON.parse(rawAlm) || almacen || [];
-    } catch (e) { /* conservar almacén en memoria */ }
-    try {
-        const rawSal = localStorage.getItem('lista_salidas_almacen');
-        if (rawSal) salidasAlmacen = JSON.parse(rawSal) || salidasAlmacen || [];
-    } catch (e) { /* conservar salidas en memoria */ }
     if (typeof renderizarAlmacen === 'function') renderizarAlmacen();
 }
 
@@ -5731,6 +5835,7 @@ async function loadProductosFromSupabase() {
         return;
     }
 
+    const loadVersion = ++productosLoadVersion;
     try {
         const { data, error } = await supabaseClient
             .from('productos')
@@ -5742,15 +5847,18 @@ async function loadProductosFromSupabase() {
             return;
         }
 
-        if (data && data.length > 0) {
-            columnasProductosSupabase = new Set(Object.keys(data[0]));
-            const productosSupabase = data.map(p => {
+        if (loadVersion !== productosLoadVersion) return;
+        const filasSupabase = Array.isArray(data) ? data : [];
+        if (filasSupabase.length > 0) {
+            columnasProductosSupabase = new Set(Object.keys(filasSupabase[0]));
+        }
+        const productosSupabase = filasSupabase.map(p => {
                 const presentacionesBasicas = ['unid', 'doc', 'paq', 'caja', 'tira', 'docena'];
                 const presentaciones = presentacionesBasicas.reduce((pres, sufijo) => {
                     const campo = sufijo.charAt(0).toUpperCase() + sufijo.slice(1);
-                    pres[`costo${campo}`] = p[`costo_${sufijo}`] || 0;
-                    pres[`precio${campo}`] = p[`precio_${sufijo}`] || 0;
-                    pres[`stock${campo}`] = p[`stock_${sufijo}`] || 0;
+                    pres[`costo${campo}`] = p[`costo_${sufijo}`] ?? 0;
+                    pres[`precio${campo}`] = p[`precio_${sufijo}`] ?? 0;
+                    pres[`stock${campo}`] = p[`stock_${sufijo}`] ?? 0;
                     return pres;
                 }, {});
 
@@ -5781,12 +5889,12 @@ async function loadProductosFromSupabase() {
                 };
             });
 
-            productos = productosSupabase;
-            guardarEnLocalStorageSeguro('lista_productos', productosSupabase);
-            console.log(`✔️ ${productosSupabase.length} productos cargados de Supabase`);
-        } else {
-            console.log('ℹ️ Supabase no devolvió productos; se muestra el catálogo local');
-        }
+        productos = productosSupabase;
+        productosDesdeSupabase = true;
+        cachePresentaciones.clear();
+        guardarEnLocalStorageSeguro('lista_productos', productosSupabase);
+        console.log(`✔️ ${productosSupabase.length} productos cargados de Supabase`);
+        refrescarVistasProductos();
     } catch (error) {
         console.error('Error de red al cargar productos:', error);
     }
@@ -5814,8 +5922,8 @@ async function loadAlmacenFromSupabase() {
             return;
         }
 
-        if (data && data.length > 0) {
-            const almacenSupabase = data.map(a => ({
+        const filasSupabase = Array.isArray(data) ? data : [];
+        const almacenSupabase = filasSupabase.map(a => ({
                 id: a.id,
                 fecha: a.fecha,
                 producto: a.producto,
@@ -5827,10 +5935,9 @@ async function loadAlmacenFromSupabase() {
                 usuario: a.usuario
             }));
 
-            guardarEnLocalStorageSeguro('lista_almacen', almacenSupabase);
-            almacen = almacenSupabase;
-            console.log(`✔️ ${almacenSupabase.length} productos de almacén cargados`);
-        }
+        almacen = almacenSupabase;
+        guardarEnLocalStorageSeguro('lista_almacen', almacenSupabase);
+        console.log(`✔️ ${almacenSupabase.length} productos de almacén cargados`);
     } catch (error) {
         console.error('Error de red al cargar almacén:', error);
     }
@@ -5860,8 +5967,8 @@ async function loadSalidasAlmacenFromSupabase() {
             return;
         }
 
-        if (data && data.length > 0) {
-            const salidasSupabase = data.map(s => ({
+        const filasSupabase = Array.isArray(data) ? data : [];
+        const salidasSupabase = filasSupabase.map(s => ({
                 id: s.id,
                 fecha: s.fecha,
                 producto: s.producto,
@@ -5871,10 +5978,9 @@ async function loadSalidasAlmacenFromSupabase() {
                 usuario: s.usuario
             }));
 
-            guardarEnLocalStorageSeguro('lista_salidas_almacen', salidasSupabase);
-            salidasAlmacen = salidasSupabase;
-            console.log(`✔️ ${salidasSupabase.length} salidas de almacén cargadas`);
-        }
+        salidasAlmacen = salidasSupabase;
+        guardarEnLocalStorageSeguro('lista_salidas_almacen', salidasSupabase);
+        console.log(`✔️ ${salidasSupabase.length} salidas de almacén cargadas`);
     } catch (error) {
         console.error('Error de red al cargar salidas de almacén:', error);
     }
