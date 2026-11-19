@@ -66,6 +66,25 @@ const REGLAS_PRESENTACION = {
             { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Pqte', label: 'Pqte', precio: 0, factor: 15, resumen: '▼ PAQUETE', stockable: false },
             { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Caja', label: 'Caja', precio: 0, factor: 1, resumen: '▼ CAJA', stockable: false }
         ]
+    },
+    'MAYONESA 8G': {
+        unidadBase: 'unidades',
+        slots: [
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 unid)', precio: 0.4, factor: 1, resumen: '▼ 1. UNIDAD', precioFijo: true },
+            { id: 2, campo: 'Doc', tipo: 'promocion', nombreCorto: 'Promoción', label: 'Promoción (3 unid)', precio: 1, factor: 3, resumen: '▼ 2. PROMOCIÓN (3 unid)', stockable: false, precioFijo: true },
+            { id: 6, campo: 'Docena', tipo: 'docena', nombreCorto: 'Docena', label: 'Docena (12 unid)', precio: 3.5, factor: 12, resumen: '▼ 3. DOCENA (12 unid)', stockable: false, precioFijo: true },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: '1/2 Caja', label: '1/2 Caja (120 unid)', precio: 29, factor: 120, resumen: '▼ 4. 1/2 CAJA (120 unid)', stockable: false, precioFijo: true },
+            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Caja', label: 'Caja (240 unid)', precio: 58, factor: 240, resumen: '▼ 5. CAJA (240 unid)', stockable: false, precioFijo: true }
+        ]
+    },
+    'FIDEO SOPA': {
+        unidadBase: 'unidades',
+        slots: [
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 unid)', precio: 1.5, factor: 1, resumen: '▼ 1. UNIDAD', precioFijo: true },
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: '1/2 Kg', label: '1/2 Kg (2 unid)', precio: 2.5, factor: 2, resumen: '▼ 2. 1/2 KG (2 unid)', stockable: false, precioFijo: true },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: '1 Kg', label: '1 Kg (4 unid)', precio: 4.8, factor: 4, resumen: '▼ 3. 1 KG (4 unid)', stockable: false, precioFijo: true },
+            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Paquete / 5 Kg', label: '1 Paquete / 5 Kg (20 unid)', precio: 24, factor: 20, resumen: '▼ 4. PAQUETE / 5 KG (20 unid)', stockable: false, precioFijo: true }
+        ]
     }
 };
 
@@ -450,6 +469,8 @@ function reglaPresentacionProducto(prodOrCat) {
             })
         };
     }
+    if (c === 'MAYONESA 8G') return REGLAS_PRESENTACION['MAYONESA 8G'];
+    if (c === 'FIDEO SOPA') return REGLAS_PRESENTACION['FIDEO SOPA'];
     return REGLAS_PRESENTACION[c] || null;
 }
 
@@ -602,11 +623,13 @@ function listaPresentacionesComerciales(prod) {
                 tipo: slot.tipo,
                 label: slot.label,
                 nombreCorto: slot.nombreCorto,
-                precio: categoria === 'LEJIA COJIN'
+                precio: slot.precioFijo
+                    ? slot.precio
+                    : (categoria === 'LEJIA COJIN'
                     ? (slot.tipo === 'unid' ? pres.precioUnid : slot.precio)
                     : (noble
                         ? (slot.campo === 'Caja' ? (guardado > 0 ? guardado : slot.precio) : slot.precio)
-                        : (guardado > 0 ? guardado : slot.precio)),
+                        : (guardado > 0 ? guardado : slot.precio))),
                 factor: slot.factor,
                 campo: slot.campo
             };
@@ -710,7 +733,11 @@ function normalizarPresentacionesCategoria(data) {
     });
     regla.slots.forEach(slot => {
         const campo = slot.campo;
-        if (!(data['precio' + campo] > 0)) data['precio' + campo] = slot.precio;
+        if (slot.precioFijo) {
+            data['precio' + campo] = slot.precio;
+        } else if (!(data['precio' + campo] > 0)) {
+            data['precio' + campo] = slot.precio;
+        }
         if (campo !== 'Unid') data['stock' + campo] = 0;
     });
     return data;
@@ -732,6 +759,7 @@ function aplicarFormularioCategoriaEspecial(regla, aplicarPrecios) {
         const inputStock = document.getElementById(meta.stock);
         const tieneStock = Boolean(slot && slot.stockable !== false && (slot.factor === 1 || slot.stockable === true));
         if (inputPrecio) inputPrecio.required = Boolean(slot);
+        if (inputPrecio) inputPrecio.readOnly = Boolean(slot && slot.precioFijo);
         if (inputStock) inputStock.required = tieneStock;
         if (!slot) return;
 
@@ -758,6 +786,7 @@ function mostrarBloquesPresentacionEstandar() {
         const precioInput = document.getElementById(meta.precio);
         const stockInput = document.getElementById(meta.stock);
         if (precioInput) precioInput.required = i === 1;
+        if (precioInput) precioInput.readOnly = false;
         if (stockInput) stockInput.required = i === 1;
         const grupoStock = stockInput ? stockInput.closest('.form-group') : null;
         if (grupoStock) grupoStock.style.display = '';
@@ -1899,7 +1928,9 @@ function agregarProductoPorCodigo(prod, codigo) {
             slotPorTipo(prod, 'unid');
         tipoPres = slotUnidad ? slotUnidad.tipo : 'unid';
         const precioGuardado = slotUnidad ? pres['precio' + slotUnidad.campo] : pres.precioUnid;
-        precioPres = precioGuardado > 0 ? precioGuardado : (slotUnidad ? slotUnidad.precio : 0);
+        precioPres = slotUnidad && slotUnidad.precioFijo
+            ? slotUnidad.precio
+            : (precioGuardado > 0 ? precioGuardado : (slotUnidad ? slotUnidad.precio : 0));
         stockDisponible = pres.stockUnid || 0;
     }
 
@@ -2281,6 +2312,64 @@ function calcularSubtotalesPromoGaseosa() {
     return subtotales;
 }
 
+function esCategoriaFideoSopa(prod) {
+    return String((prod && prod.categoria) || '').trim().toUpperCase() === 'FIDEO SOPA';
+}
+
+function calcularSubtotalesFideoSopa() {
+    const lineasFideo = carrito.map(item => ({
+        item,
+        prod: productos.find(prod => String(prod.id) === String(item.id))
+    })).filter(({ item, prod }) =>
+        prod && esCategoriaFideoSopa(prod) && item.tipoPres !== 'monto' && Number(item.cantidad) > 0
+    ).map(({ item, prod }) => {
+        const factor = factorStockBasePorPresentacion(prod, item);
+        return { item, factor, unidades: Number(item.cantidad) * factor };
+    }).sort((a, b) => b.factor - a.factor);
+    if (lineasFideo.length === 0) return null;
+
+    const epsilon = 1e-9;
+    const unidadesTotales = lineasFideo.reduce((total, linea) => total + linea.unidades, 0);
+    const unidadesPrecioKg = Math.floor((unidadesTotales + epsilon) / 4) * 4;
+    const unidadesRestantes = Math.max(0, unidadesTotales - unidadesPrecioKg);
+    const unidadesMedioKg = Math.floor((unidadesRestantes + epsilon) / 2) * 2;
+    const unidadesSueltas = Math.max(0, unidadesRestantes - unidadesMedioKg);
+    const tramosPrecio = [
+        { unidades: unidadesPrecioKg, precioPorUnidad: 1.2 },
+        { unidades: unidadesMedioKg, precioPorUnidad: 1.25 },
+        { unidades: unidadesSueltas, precioPorUnidad: 1.5 }
+    ];
+    const subtotales = new Map(lineasFideo.map(linea => [linea.item, 0]));
+    let indiceLinea = 0;
+    let unidadesLinea = lineasFideo[0].unidades;
+
+    tramosPrecio.forEach(tramo => {
+        let unidadesTramo = tramo.unidades;
+        while (unidadesTramo > epsilon && indiceLinea < lineasFideo.length) {
+            if (unidadesLinea <= epsilon) {
+                indiceLinea += 1;
+                unidadesLinea = lineasFideo[indiceLinea] ? lineasFideo[indiceLinea].unidades : 0;
+                continue;
+            }
+            const asignadas = Math.min(unidadesTramo, unidadesLinea);
+            const item = lineasFideo[indiceLinea].item;
+            subtotales.set(item, subtotales.get(item) + asignadas * tramo.precioPorUnidad);
+            unidadesTramo -= asignadas;
+            unidadesLinea -= asignadas;
+        }
+    });
+    return subtotales;
+}
+
+function calcularSubtotalesPromocionalesCarrito() {
+    const subtotales = calcularSubtotalesPromoGaseosa() || new Map();
+    const subtotalesFideo = calcularSubtotalesFideoSopa();
+    if (subtotalesFideo) {
+        subtotalesFideo.forEach((subtotal, item) => subtotales.set(item, subtotal));
+    }
+    return subtotales.size > 0 ? subtotales : null;
+}
+
 function validarPromoGaseosaEnCarrito() {
     const unidadesTotales = carrito.reduce((total, item) => {
         const prod = productos.find(producto => String(producto.id) === String(item.id));
@@ -2346,7 +2435,7 @@ function actualizarCarritoUI() {
     contenedor.innerHTML = '';
 
     let total = 0;
-    const subtotalesPromo = calcularSubtotalesPromoGaseosa();
+    const subtotalesPromo = calcularSubtotalesPromocionalesCarrito();
     carrito.forEach(item => {
         let subtotal;
         let displayInfo;
@@ -2365,7 +2454,9 @@ function actualizarCarritoUI() {
                 ? ` · ${item.cantidad * item.factorUnidades} ${prodItem && esProductoPH(prodItem) ? 'parejas' : 'unid'}`
                 : '';
             const presTxt = item.etiquetaPres ? `${item.etiquetaPres} · ` : '';
-            const promoTxt = subtotalesPromo && subtotalesPromo.has(item) ? ' · Combo gaseosa 15u' : '';
+            const promoTxt = subtotalesPromo && subtotalesPromo.has(item)
+                ? (prodItem && esCategoriaFideoSopa(prodItem) ? ' · Surtido FIDEO SOPA' : ' · Combo gaseosa 15u')
+                : '';
             displayInfo = `${presTxt}S/ ${precio.toFixed(2)} x ${item.cantidad}${unidadesTxt}${promoTxt}`;
         }
 
@@ -2459,6 +2550,13 @@ function preciosOficialesProducto(prod, tipoPres) {
     }
     const pres = extraerPresentacionesProducto(prod);
     const tipo = String(tipoPres || '').toLowerCase();
+    const slot = slotPorTipo(prod, tipo);
+    if (slot && slot.precioFijo) {
+        return {
+            precio: slot.precio,
+            costo: Number(pres[`costo${slot.campo}`]) || 0
+        };
+    }
     const camposPorTipo = {
         monto: 'Unid',
         unid: 'Unid',
@@ -2559,7 +2657,7 @@ function confirmarCobro() {
     }
 
     let detalles = [];
-    const subtotalesPromo = calcularSubtotalesPromoGaseosa();
+    const subtotalesPromo = calcularSubtotalesPromocionalesCarrito();
     const itemsTicket = carrito.map(item => {
         const producto = productos.find(prod => String(prod.id) === String(item.id));
         const presentacion = item.etiquetaPres ||
@@ -3827,7 +3925,9 @@ function editarProducto(id) {
         reglaEdicion.slots.forEach((slot) => {
             const meta = CAMPOS_FORM_PRES[slot.id];
             const inputPrecio = meta && document.getElementById(meta.precio);
-            if (inputPrecio && !(parseFloat(inputPrecio.value) > 0)) inputPrecio.value = slot.precio;
+            if (inputPrecio && (slot.precioFijo || !(parseFloat(inputPrecio.value) > 0))) {
+                inputPrecio.value = slot.precio;
+            }
         });
     }
 
