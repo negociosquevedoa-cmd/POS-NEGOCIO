@@ -41,6 +41,16 @@ const REGLAS_PRESENTACION = {
             { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete completo', label: 'Paquete completo (80 sobres)', precio: 21, factor: 80, resumen: '▼ 5. PAQUETE COMPLETO (80 sobres)' }
         ]
     },
+    LECHE: {
+        unidadBase: 'unidades',
+        slots: [
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 unid)', precio: 0, factor: 1, resumen: '▼ 1. UNIDAD', stockLabel: 'Stock Inicial Unid' },
+            { id: 2, campo: 'Doc', tipo: 'sixpack', nombreCorto: 'Sixpack', label: 'Sixpack (6 unid)', precio: 0, factor: 6, resumen: '▼ 2. SIXPACK (6 unid)', stockable: false },
+            { id: 6, campo: 'Docena', tipo: 'docena', nombreCorto: 'Docena', label: 'Docena (12 unid)', precio: 0, factor: 12, resumen: '▼ 3. DOCENA (12 unid)', stockable: false },
+            { id: 3, campo: 'Paq', tipo: 'bandeja', nombreCorto: 'Bandeja', label: 'Bandeja (24 unid)', precio: 0, factor: 24, resumen: '▼ 4. BANDEJA (24 unid)', stockable: false },
+            { id: 4, campo: 'Caja', tipo: 'caja', nombreCorto: 'Caja', label: 'Caja (48 unid)', precio: 0, factor: 48, resumen: '▼ 5. CAJA (48 unid)', stockable: false }
+        ]
+    },
     'LEJIA COJIN': {
         unidadBase: 'unidades',
         slots: [
@@ -130,6 +140,76 @@ let isSendingComanda = false;
 let isProcessing = false;
 let metodoPagoSeleccionado = 'Efectivo';
 let totalPagarActual = 0;
+
+function esErrorCuotaLocalStorage(error) {
+    return Boolean(error && (
+        error.name === 'QuotaExceededError' ||
+        error.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+        error.code === 22 ||
+        error.code === 1014
+    ));
+}
+
+function limpiarCachesLocalStorage() {
+    const patronCache = /(^|[_-])(cache|cached)([_-]|$)/;
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+        const clave = localStorage.key(i);
+        if (!clave || !patronCache.test(clave.toLowerCase())) continue;
+        try {
+            localStorage.removeItem(clave);
+        } catch (error) {
+            console.warn(`No se pudo limpiar la caché local "${clave}".`, error);
+        }
+    }
+}
+
+function guardarEnLocalStorageSeguro(clave, valor) {
+    let serializado;
+    try {
+        serializado = typeof valor === 'string' ? valor : JSON.stringify(valor);
+    } catch (error) {
+        console.error(`No se pudo serializar el almacenamiento local "${clave}".`, error);
+        return false;
+    }
+
+    try {
+        localStorage.setItem(clave, serializado);
+        return true;
+    } catch (error) {
+        if (!esErrorCuotaLocalStorage(error)) {
+            console.error(`No se pudo guardar "${clave}" en localStorage.`, error);
+            return false;
+        }
+        console.warn(`Se excedió la cuota de localStorage al guardar "${clave}"; se limpiarán cachés y se reintentará.`, error);
+    }
+
+    limpiarCachesLocalStorage();
+    if (clave === 'lista_productos') {
+        const imagenPlaceholder = 'https://via.placeholder.com/80';
+        const productosParaGuardar = Array.isArray(valor) ? valor : productos;
+        const productosLivianos = productosParaGuardar.map(producto => {
+            const imagen = producto && producto.imagen;
+            if (typeof imagen === 'string' && (imagen.startsWith('data:') || imagen.length > 100000)) {
+                return { ...producto, imagen: imagenPlaceholder };
+            }
+            return producto;
+        });
+        try {
+            serializado = JSON.stringify(productosLivianos);
+        } catch (error) {
+            console.error('No se pudo serializar la versión ligera de lista_productos.', error);
+            return false;
+        }
+    }
+
+    try {
+        localStorage.setItem(clave, serializado);
+        return true;
+    } catch (error) {
+        console.error(`No se pudo guardar "${clave}" en localStorage tras limpiar cachés${clave === 'lista_productos' ? ' y reducir imágenes' : ''}. Los datos permanecen en memoria.`, error);
+        return false;
+    }
+}
 
 // Variables de paginación
 let paginaInventario = 1;
@@ -819,7 +899,6 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
     const selectorPlancha = document.getElementById('p-paquetes-plancha');
     const esPHX4 = catVal === 'PHX4';
     const esPH = catVal === 'PH' || catVal === 'PH NOBLE';
-    const esLeche = catVal === 'LECHE';
     const bloquePrecioHelado = document.getElementById('bloque-precio-helado');
     const reglaCategoria = reglaPresentacionProducto(esPHX4
         ? { categoria: catVal, paquetesPlancha: Number(selectorPlancha?.value) || 6 }
@@ -946,24 +1025,6 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
         if (document.getElementById('lbl-stock-4')) document.getElementById('lbl-stock-4').textContent = 'Stock Inicial Caja';
     }
     }
-    if (esLeche) {
-        textoCampo('sum-pres-1', '▼ 1. VENTAS POR UNIDAD / LATA');
-        textoCampo('lbl-costo-1', 'Precio Costo Unidad / Lata (S/)');
-        textoCampo('lbl-precio-1', 'Precio Venta Unidad / Lata (S/)');
-        textoCampo('lbl-stock-1', 'Stock Inicial Unidad / Lata');
-        textoCampo('sum-pres-2', '▼ 2. VENTAS SIXPACK');
-        textoCampo('lbl-costo-2', 'Precio Costo Sixpack (S/)');
-        textoCampo('lbl-precio-2', 'Precio Venta Sixpack (S/)');
-        textoCampo('lbl-stock-2', 'Stock Inicial Sixpack');
-        textoCampo('sum-pres-3', '▼ 3. VENTAS POR PLANCHA');
-        textoCampo('lbl-costo-3', 'Precio Costo Plancha (S/)');
-        textoCampo('lbl-precio-3', 'Precio Venta Plancha (S/)');
-        textoCampo('lbl-stock-3', 'Stock Inicial Plancha');
-        textoCampo('sum-pres-4', '▼ 4. VENTAS POR CAJA');
-        textoCampo('lbl-costo-4', 'Precio Costo Caja (S/)');
-        textoCampo('lbl-precio-4', 'Precio Venta Caja (S/)');
-        textoCampo('lbl-stock-4', 'Stock Inicial Caja');
-    }
     // Control de visibilidad de costos según el rol
     const rolUsuario = obtenerRol();
     Object.values(CAMPOS_FORM_PRES).forEach(meta => {
@@ -1072,8 +1133,8 @@ function eliminarComandaVendedor(comandaId) {
     if (confirm(`¿Estás seguro de eliminar el pedido ${comandaId}?`)) {
         comandas = comandas.filter(c => c.comandaId !== comandaId);
         historialComandasRealizadas = historialComandasRealizadas.filter(c => c.comandaId !== comandaId);
-        localStorage.setItem('lista_comandas', JSON.stringify(comandas));
-        localStorage.setItem('historial_comandas_realizadas', JSON.stringify(historialComandasRealizadas));
+        guardarEnLocalStorageSeguro('lista_comandas', comandas);
+        guardarEnLocalStorageSeguro('historial_comandas_realizadas', historialComandasRealizadas);
         abrirModalMisComandas();
         renderizarRegistroComandasVendedor();
     }
@@ -1319,7 +1380,7 @@ async function guardarProductoLocal(e) {
             if (data) {
                 productos[index] = { ...productoData, ...data };
                 // Guardar en localStorage
-                localStorage.setItem('lista_productos', JSON.stringify(productos));
+                guardarEnLocalStorageSeguro('lista_productos', productos);
             }
         } catch (error) {
             const motivo = error && error.message ? error.message : String(error);
@@ -1371,8 +1432,8 @@ async function guardarProductoLocal(e) {
         });
     }
 
-    localStorage.setItem('lista_productos', JSON.stringify(productos));
-    localStorage.setItem('lista_kardex', JSON.stringify(kardex));
+    guardarEnLocalStorageSeguro('lista_productos', productos);
+    guardarEnLocalStorageSeguro('lista_kardex', kardex);
 
     renderizarProductos();
     renderizarCatalogo(productos);
@@ -1617,9 +1678,9 @@ async function enviarSolicitudCompra() {
             estado: 'POR PAGAR'
         });
 
-        localStorage.setItem('lista_comandas', JSON.stringify(comandas));
-        localStorage.setItem('historial_comandas_realizadas', JSON.stringify(historialComandasRealizadas));
-        localStorage.setItem('lista_kardex', JSON.stringify(kardex));
+        guardarEnLocalStorageSeguro('lista_comandas', comandas);
+        guardarEnLocalStorageSeguro('historial_comandas_realizadas', historialComandasRealizadas);
+        guardarEnLocalStorageSeguro('lista_kardex', kardex);
         carritoCompras = [];
         actualizarCarritoComprasUI();
         alert("Pedido enviado al administrador correctamente.");
@@ -1778,10 +1839,10 @@ async function confirmarCostosComanda() {
 
         comandas = comandas.filter(c => c.comandaId !== comandaId);
 
-        localStorage.setItem('lista_comandas', JSON.stringify(comandas));
-        localStorage.setItem('historial_comandas_realizadas', JSON.stringify(historialComandasRealizadas));
-        localStorage.setItem('lista_productos', JSON.stringify(productos));
-        localStorage.setItem('lista_kardex', JSON.stringify(kardex));
+        guardarEnLocalStorageSeguro('lista_comandas', comandas);
+        guardarEnLocalStorageSeguro('historial_comandas_realizadas', historialComandasRealizadas);
+        guardarEnLocalStorageSeguro('lista_productos', productos);
+        guardarEnLocalStorageSeguro('lista_kardex', kardex);
 
         alert(stockSupabaseActualizado
             ? "Comanda procesada e inventario actualizado correctamente."
@@ -2361,11 +2422,93 @@ function calcularSubtotalesFideoSopa() {
     return subtotales;
 }
 
+function esCategoriaGusta(prod) {
+    const categoria = String((prod && prod.categoria) || '').trim().toUpperCase();
+    return categoria === 'GUSTA' || categoria === 'GUSTAS';
+}
+
+function calcularSubtotalesSurtidoGusta() {
+    const grupos = new Map();
+    carrito.forEach(item => {
+        if (item.tipoPres !== 'unid' && item.tipoPres !== 'promocion') return;
+        if (item.precio_personalizado !== undefined || !(Number(item.cantidad) > 0)) return;
+        const prod = productos.find(producto => String(producto.id) === String(item.id));
+        if (!prod || !esCategoriaGusta(prod)) return;
+
+        const regla = reglaPresentacionProducto(prod);
+        const slotUnidad = regla && regla.slots.find(slot => slot.tipo === 'unid');
+        const slotPromocion = regla && regla.slots.find(slot => slot.tipo === 'promocion');
+        if (!slotUnidad || !slotPromocion || slotPromocion.factor <= 1) return;
+
+        const presentaciones = extraerPresentacionesProducto(prod);
+        const precioUnidad = presentaciones.precioUnid > 0 ? presentaciones.precioUnid : slotUnidad.precio;
+        const precioPromocion = presentaciones.precioDoc > 0 ? presentaciones.precioDoc : slotPromocion.precio;
+        if (!(precioUnidad > 0) || !(precioPromocion > 0)) return;
+
+        const claveGrupo = JSON.stringify([
+            precioUnidad.toFixed(4),
+            precioPromocion.toFixed(4),
+            slotPromocion.factor
+        ]);
+        if (!grupos.has(claveGrupo)) {
+            grupos.set(claveGrupo, {
+                factorPromocion: slotPromocion.factor,
+                precioUnidad,
+                precioPromocion,
+                lineas: []
+            });
+        }
+        const factor = factorStockBasePorPresentacion(prod, item);
+        grupos.get(claveGrupo).lineas.push({
+            item,
+            factor,
+            unidades: Number(item.cantidad) * factor
+        });
+    });
+
+    const subtotales = new Map();
+    grupos.forEach(grupo => {
+        const unidadesTotales = grupo.lineas.reduce((total, linea) => total + linea.unidades, 0);
+        if (unidadesTotales < grupo.factorPromocion) return;
+        let unidadesPromocion = Math.floor(unidadesTotales / grupo.factorPromocion) * grupo.factorPromocion;
+        grupo.lineas.sort((a, b) => b.factor - a.factor);
+        const subtotalesGrupo = [];
+        grupo.lineas.forEach(linea => {
+            const unidadesConPrecioPromocional = Math.min(linea.unidades, unidadesPromocion);
+            unidadesPromocion -= unidadesConPrecioPromocional;
+            const subtotal =
+                (unidadesConPrecioPromocional / grupo.factorPromocion) * grupo.precioPromocion +
+                (linea.unidades - unidadesConPrecioPromocional) * grupo.precioUnidad;
+            subtotalesGrupo.push({ item: linea.item, subtotal });
+        });
+        const unidadesConPrecioPromocional = Math.floor(unidadesTotales / grupo.factorPromocion) * grupo.factorPromocion;
+        const totalGrupo = Number((
+            (unidadesConPrecioPromocional / grupo.factorPromocion) * grupo.precioPromocion +
+            (unidadesTotales - unidadesConPrecioPromocional) * grupo.precioUnidad
+        ).toFixed(2));
+        const totalesRedondeados = subtotalesGrupo.map(linea => Number(linea.subtotal.toFixed(2)));
+        let centavosRestantes = Math.round((totalGrupo - totalesRedondeados.reduce((total, subtotal) => total + subtotal, 0)) * 100);
+        let indiceRedondeo = 0;
+        while (centavosRestantes !== 0 && totalesRedondeados.length > 0) {
+            const ajuste = Math.sign(centavosRestantes) / 100;
+            totalesRedondeados[indiceRedondeo] = Number((totalesRedondeados[indiceRedondeo] + ajuste).toFixed(2));
+            centavosRestantes -= Math.sign(centavosRestantes);
+            indiceRedondeo = (indiceRedondeo + 1) % totalesRedondeados.length;
+        }
+        subtotalesGrupo.forEach((linea, index) => subtotales.set(linea.item, totalesRedondeados[index]));
+    });
+    return subtotales.size > 0 ? subtotales : null;
+}
+
 function calcularSubtotalesPromocionalesCarrito() {
     const subtotales = calcularSubtotalesPromoGaseosa() || new Map();
     const subtotalesFideo = calcularSubtotalesFideoSopa();
     if (subtotalesFideo) {
         subtotalesFideo.forEach((subtotal, item) => subtotales.set(item, subtotal));
+    }
+    const subtotalesGusta = calcularSubtotalesSurtidoGusta();
+    if (subtotalesGusta) {
+        subtotalesGusta.forEach((subtotal, item) => subtotales.set(item, subtotal));
     }
     return subtotales.size > 0 ? subtotales : null;
 }
@@ -2455,7 +2598,9 @@ function actualizarCarritoUI() {
                 : '';
             const presTxt = item.etiquetaPres ? `${item.etiquetaPres} · ` : '';
             const promoTxt = subtotalesPromo && subtotalesPromo.has(item)
-                ? (prodItem && esCategoriaFideoSopa(prodItem) ? ' · Surtido FIDEO SOPA' : ' · Combo gaseosa 15u')
+                ? (prodItem && esCategoriaFideoSopa(prodItem)
+                    ? ' · Surtido FIDEO SOPA'
+                    : (prodItem && esCategoriaGusta(prodItem) ? ' · Surtido GUSTA' : ' · Combo gaseosa 15u'))
                 : '';
             displayInfo = `${presTxt}S/ ${precio.toFixed(2)} x ${item.cantidad}${unidadesTxt}${promoTxt}`;
         }
@@ -2568,7 +2713,7 @@ function preciosOficialesProducto(prod, tipoPres) {
         tira: 'Tira',
         docena: 'Docena'
     };
-    const campo = camposPorTipo[tipo] || 'Unid';
+    const campo = camposPorTipo[tipo] || (slot && slot.campo) || 'Unid';
 
     return {
         precio: Number(pres[`precio${campo}`]) || 0,
@@ -2908,8 +3053,8 @@ function confirmarCobro() {
         }
     });
 
-    localStorage.setItem('lista_productos', JSON.stringify(productos));
-    localStorage.setItem('lista_kardex', JSON.stringify(kardex));
+    guardarEnLocalStorageSeguro('lista_productos', productos);
+    guardarEnLocalStorageSeguro('lista_kardex', kardex);
 
     // Sincronizar venta y productos con Supabase
     syncVentaToSupabase({
@@ -3080,7 +3225,7 @@ async function cargarSesionCajaActual() {
             const sesionLocal = leerSesionCajaLocal();
             if (sesionLocal?.estado === 'CERRADA' && sesionSupabase.estado === 'ABIERTA') {
                 sesionCajaActual = { ...sesionLocal, id: data.id, usuario_id: data.usuario_id };
-                localStorage.setItem(claveSesionCaja, JSON.stringify(sesionCajaActual));
+                guardarEnLocalStorageSeguro(claveSesionCaja, sesionCajaActual);
                 await registrarMovimientoCajaSupabase(
                     sesionSupabase.fecha_apertura,
                     'APERTURA',
@@ -3092,7 +3237,7 @@ async function cargarSesionCajaActual() {
             }
             sesionCajaActual = sesionSupabase;
             montoInicialCaja = sesionSupabase.monto_inicial;
-            localStorage.setItem(claveSesionCaja, JSON.stringify(sesionSupabase));
+            guardarEnLocalStorageSeguro(claveSesionCaja, sesionSupabase);
             await registrarMovimientoCajaSupabase(
                 sesionSupabase.fecha_apertura,
                 'APERTURA',
@@ -3145,7 +3290,7 @@ async function sincronizarAperturaCajaSupabase() {
             .single();
         if (error) throw error;
         sesionCajaActual = normalizarSesionCajaSupabase(data);
-        localStorage.setItem(claveSesionCaja, JSON.stringify(sesionCajaActual));
+        guardarEnLocalStorageSeguro(claveSesionCaja, sesionCajaActual);
         await registrarMovimientoCajaSupabase(
             sesionCajaActual.fecha_apertura,
             'APERTURA',
@@ -3195,7 +3340,7 @@ async function guardarSesionCajaSupabase() {
         if (resultado.error) throw resultado.error;
         if (resultado.data) {
             sesionCajaActual = normalizarSesionCajaSupabase(resultado.data);
-            localStorage.setItem(claveSesionCaja, JSON.stringify(sesionCajaActual));
+            guardarEnLocalStorageSeguro(claveSesionCaja, sesionCajaActual);
         }
         if (sesionCajaActual.estado === 'CERRADA') {
             const fechaCierre = sesionCajaActual.fecha_cierre || new Date().toISOString();
@@ -3347,7 +3492,7 @@ async function registrarEstadoCierreCaja(fecha = new Date()) {
         ventas: resumen.ventasDelDia,
         salidas: resumen.gastosDelDiaHoy
     };
-    localStorage.setItem(claveSesionCaja, JSON.stringify(sesionCajaActual));
+    guardarEnLocalStorageSeguro(claveSesionCaja, sesionCajaActual);
     await guardarSesionCajaSupabase();
     actualizarEstadoVisualCaja();
     return true;
@@ -3473,9 +3618,9 @@ function registrarGastoDia(e) {
         if (histCmd) histCmd.estado = 'CANCELADO';
     }
 
-    localStorage.setItem('lista_gastos_dia', JSON.stringify(gastosDelDia));
-    localStorage.setItem('lista_kardex', JSON.stringify(kardex));
-    localStorage.setItem('historial_comandas_realizadas', JSON.stringify(historialComandasRealizadas));
+    guardarEnLocalStorageSeguro('lista_gastos_dia', gastosDelDia);
+    guardarEnLocalStorageSeguro('lista_kardex', kardex);
+    guardarEnLocalStorageSeguro('historial_comandas_realizadas', historialComandasRealizadas);
     
     alert("Salida de dinero registrada con éxito.");
     document.getElementById('form-registro-gasto').reset();
@@ -3505,7 +3650,7 @@ function imprimirArqueoTurno() {
         salidas: gastosDelDiaHoy
     };
     historialCierresCaja.unshift(nuevoCierre);
-    localStorage.setItem('historial_cierres_caja', JSON.stringify(historialCierresCaja));
+    guardarEnLocalStorageSeguro('historial_cierres_caja', historialCierresCaja);
 
     mostrarTicketCierre(nuevoCierre);
     renderizarHistorialCierres();
@@ -3991,10 +4136,10 @@ function eliminarProducto(id) {
                 cantidad: 'Removido',
                 usuario: rol
             });
-            localStorage.setItem('lista_kardex', JSON.stringify(kardex));
+            guardarEnLocalStorageSeguro('lista_kardex', kardex);
         }
         productos = productos.filter(p => p.id !== id);
-        localStorage.setItem('lista_productos', JSON.stringify(productos));
+        guardarEnLocalStorageSeguro('lista_productos', productos);
         renderizarProductos();
         renderizarKardex();
     }
@@ -4784,7 +4929,7 @@ function guardarProductoAlmacen(e) {
     };
 
     almacen.push(nuevoProducto);
-    localStorage.setItem('lista_almacen', JSON.stringify(almacen));
+    guardarEnLocalStorageSeguro('lista_almacen', almacen);
 
     // Sincronizar con Supabase
     syncAlmacenToSupabase(nuevoProducto);
@@ -4830,8 +4975,8 @@ function registrarSalidaAlmacen(e) {
     };
 
     salidasAlmacen.push(nuevaSalida);
-    localStorage.setItem('lista_almacen', JSON.stringify(almacen));
-    localStorage.setItem('lista_salidas_almacen', JSON.stringify(salidasAlmacen));
+    guardarEnLocalStorageSeguro('lista_almacen', almacen);
+    guardarEnLocalStorageSeguro('lista_salidas_almacen', salidasAlmacen);
 
     // Sincronizar con Supabase
     syncSalidaAlmacenToSupabase(nuevaSalida);
@@ -4908,7 +5053,7 @@ function editarProductoAlmacen(id) {
         if (!isNaN(costoNum) && costoNum >= 0) {
             prod.actualCosto = costoNum;
             prod.actualCostoFecha = new Date().toISOString().split('T')[0];
-            localStorage.setItem('lista_almacen', JSON.stringify(almacen));
+            guardarEnLocalStorageSeguro('lista_almacen', almacen);
 
             // Sincronizar con Supabase
             syncAlmacenToSupabase(prod);
@@ -4923,7 +5068,7 @@ function eliminarProductoAlmacen(id) {
     if (confirm('¿Eliminar este producto del almacén?')) {
         const prodAEliminar = almacen.find(p => p.id === id);
         almacen = almacen.filter(p => p.id !== id);
-        localStorage.setItem('lista_almacen', JSON.stringify(almacen));
+        guardarEnLocalStorageSeguro('lista_almacen', almacen);
 
         // Nota: Para eliminar de Supabase necesitaríamos usar .delete()
         // Por ahora solo sincronizamos el estado local
@@ -5543,7 +5688,7 @@ async function loadVentasFromSupabase() {
         ];
 
         try {
-            localStorage.setItem('lista_kardex', JSON.stringify(kardex));
+            guardarEnLocalStorageSeguro('lista_kardex', kardex);
         } catch (error) {
             console.error('Error al guardar las ventas descargadas en el almacenamiento local:', error);
         }
@@ -5618,8 +5763,8 @@ async function loadProductosFromSupabase() {
                 };
             });
 
-            localStorage.setItem('lista_productos', JSON.stringify(productosSupabase));
             productos = productosSupabase;
+            guardarEnLocalStorageSeguro('lista_productos', productosSupabase);
             console.log(`✔️ ${productosSupabase.length} productos cargados de Supabase`);
         } else {
             console.log('ℹ️ Supabase no devolvió productos; se muestra el catálogo local');
@@ -5664,7 +5809,7 @@ async function loadAlmacenFromSupabase() {
                 usuario: a.usuario
             }));
 
-            localStorage.setItem('lista_almacen', JSON.stringify(almacenSupabase));
+            guardarEnLocalStorageSeguro('lista_almacen', almacenSupabase);
             almacen = almacenSupabase;
             console.log(`✔️ ${almacenSupabase.length} productos de almacén cargados`);
         }
@@ -5708,7 +5853,7 @@ async function loadSalidasAlmacenFromSupabase() {
                 usuario: s.usuario
             }));
 
-            localStorage.setItem('lista_salidas_almacen', JSON.stringify(salidasSupabase));
+            guardarEnLocalStorageSeguro('lista_salidas_almacen', salidasSupabase);
             salidasAlmacen = salidasSupabase;
             console.log(`✔️ ${salidasSupabase.length} salidas de almacén cargadas`);
         }
