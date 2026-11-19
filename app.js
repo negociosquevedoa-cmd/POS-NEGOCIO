@@ -152,21 +152,39 @@ function esErrorCuotaLocalStorage(error) {
 
 function limpiarCachesLocalStorage() {
     const patronCache = /(^|[_-])(cache|cached)([_-]|$)/;
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-        const clave = localStorage.key(i);
-        if (!clave || !patronCache.test(clave.toLowerCase())) continue;
-        try {
-            localStorage.removeItem(clave);
-        } catch (error) {
-            console.warn(`No se pudo limpiar la caché local "${clave}".`, error);
+    try {
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+            const clave = localStorage.key(i);
+            if (!clave || !patronCache.test(clave.toLowerCase())) continue;
+            try {
+                localStorage.removeItem(clave);
+            } catch (error) {
+                console.warn(`No se pudo limpiar la caché local "${clave}".`, error);
+            }
         }
+    } catch (error) {
+        console.warn('No se pudieron enumerar las cachés locales para liberar espacio.', error);
     }
+}
+
+function productosParaCacheLocalStorage(listaProductos) {
+    const imagenPlaceholder = 'https://via.placeholder.com/80';
+    return listaProductos.map(producto => {
+        const imagen = producto && producto.imagen;
+        if (typeof imagen === 'string' && (imagen.startsWith('data:') || imagen.length > 100000)) {
+            return { ...producto, imagen: imagenPlaceholder };
+        }
+        return producto;
+    });
 }
 
 function guardarEnLocalStorageSeguro(clave, valor) {
     let serializado;
     try {
-        serializado = typeof valor === 'string' ? valor : JSON.stringify(valor);
+        const valorParaGuardar = clave === 'lista_productos'
+            ? productosParaCacheLocalStorage(Array.isArray(valor) ? valor : productos)
+            : valor;
+        serializado = typeof valorParaGuardar === 'string' ? valorParaGuardar : JSON.stringify(valorParaGuardar);
     } catch (error) {
         console.error(`No se pudo serializar el almacenamiento local "${clave}".`, error);
         return false;
@@ -184,29 +202,11 @@ function guardarEnLocalStorageSeguro(clave, valor) {
     }
 
     limpiarCachesLocalStorage();
-    if (clave === 'lista_productos') {
-        const imagenPlaceholder = 'https://via.placeholder.com/80';
-        const productosParaGuardar = Array.isArray(valor) ? valor : productos;
-        const productosLivianos = productosParaGuardar.map(producto => {
-            const imagen = producto && producto.imagen;
-            if (typeof imagen === 'string' && (imagen.startsWith('data:') || imagen.length > 100000)) {
-                return { ...producto, imagen: imagenPlaceholder };
-            }
-            return producto;
-        });
-        try {
-            serializado = JSON.stringify(productosLivianos);
-        } catch (error) {
-            console.error('No se pudo serializar la versión ligera de lista_productos.', error);
-            return false;
-        }
-    }
-
     try {
         localStorage.setItem(clave, serializado);
         return true;
     } catch (error) {
-        console.error(`No se pudo guardar "${clave}" en localStorage tras limpiar cachés${clave === 'lista_productos' ? ' y reducir imágenes' : ''}. Los datos permanecen en memoria.`, error);
+        console.error(`No se pudo guardar "${clave}" en localStorage tras limpiar cachés. Los datos permanecen en memoria.`, error);
         return false;
     }
 }
@@ -1143,7 +1143,25 @@ function eliminarComandaVendedor(comandaId) {
 function recargarListaProductos() {
     try {
         const raw = localStorage.getItem('lista_productos');
-        if (raw) productos = JSON.parse(raw) || productos || [];
+        if (!raw) return;
+        const productosGuardados = JSON.parse(raw);
+        if (!Array.isArray(productosGuardados)) return;
+
+        const productosEnMemoria = new Map(productos.map(producto => [String(producto.id), producto]));
+        const idsGuardados = new Set(productosGuardados.map(producto => String(producto.id)));
+        const productosCombinados = productosGuardados.map(productoGuardado => {
+            const productoMemoria = productosEnMemoria.get(String(productoGuardado.id));
+            if (!productoMemoria) return productoGuardado;
+
+            const imagenMemoria = productoMemoria.imagen;
+            const imagenGuardada = productoGuardado.imagen;
+            const imagen = imagenMemoria && imagenMemoria !== 'https://via.placeholder.com/80'
+                ? imagenMemoria
+                : (imagenGuardada || imagenMemoria);
+            return { ...productoGuardado, ...productoMemoria, imagen };
+        });
+        const productosSoloEnMemoria = productos.filter(producto => !idsGuardados.has(String(producto.id)));
+        productos = [...productosCombinados, ...productosSoloEnMemoria];
     } catch (e) {
         /* conservar lista en memoria */
     }
