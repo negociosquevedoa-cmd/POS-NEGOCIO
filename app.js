@@ -41,6 +41,14 @@ const REGLAS_PRESENTACION = {
             { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete completo', label: 'Paquete completo (80 sobres)', precio: 21, factor: 80, resumen: '▼ 5. PAQUETE COMPLETO (80 sobres)' }
         ]
     },
+    'SAN MIGUEL': {
+        unidadBase: 'unidades',
+        slots: [
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 unid)', precio: 0, factor: 1, resumen: '▼ 1. VENTAS POR UNIDAD', stockLabel: 'Stock Inicial Unid' },
+            { id: 2, campo: 'Doc', tipo: 'doc', nombreCorto: '3 Unidades', label: '3 Unidades (3 unid)', precio: 0, factor: 3, resumen: '▼ 2. VENTAS 3 UNIDADES', stockable: false },
+            { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete / Pqte (25 unid)', precio: 0, factor: 25, resumen: '▼ 3. VENTAS POR PAQUETE (25 UNID)', stockable: false }
+        ]
+    },
     LECHE: {
         unidadBase: 'unidades',
         slots: [
@@ -2355,6 +2363,10 @@ function esCategoriaGaseosa(prod) {
     return String((prod && prod.categoria) || '').replace(/\s+/g, '').toUpperCase() === 'GASEOSA';
 }
 
+function esCategoriaSanMiguel(prod) {
+    return String((prod && prod.categoria) || '').trim().toUpperCase() === 'SAN MIGUEL';
+}
+
 function precioHeladoProducto(prod) {
     const campos = ['precio_helado', 'precio_venta_helado', 'precioHelado', 'precioVentaHelado'];
     for (const campo of campos) {
@@ -2820,6 +2832,28 @@ function descontarStockPaquetePH(prod, cantidadPaquetes) {
     return parejasDesdeStockSuelto;
 }
 
+function validarStockSanMiguelEnCarrito() {
+    const requerimientos = new Map();
+    carrito.forEach(item => {
+        const prod = productos.find(producto => String(producto.id) === String(item.id));
+        if (!prod || !esCategoriaSanMiguel(prod)) return;
+
+        const id = String(prod.id);
+        const requerimiento = requerimientos.get(id) || { prod, unidades: 0 };
+        requerimiento.unidades += aNumeroProd(item.cantidad) * factorStockBasePorPresentacion(prod, item);
+        requerimientos.set(id, requerimiento);
+    });
+
+    for (const { prod, unidades } of requerimientos.values()) {
+        const stockDisponible = aNumeroProd(prod.stockUnid);
+        if (unidades > stockDisponible) {
+            alert(`❌ Stock insuficiente de unidades para ${prod.nombre}. Se requieren ${unidades} y solo hay ${stockDisponible}.`);
+            return false;
+        }
+    }
+    return true;
+}
+
 function confirmarCobro() {
     if (!validarHorarioCajaVendedor()) return;
     if (requiereAperturaCajaHoy()) {
@@ -2833,6 +2867,7 @@ function confirmarCobro() {
     }
     if (!validarStockPHEnCarrito()) return;
     if (!validarPromoGaseosaEnCarrito()) return;
+    if (!validarStockSanMiguelEnCarrito()) return;
 
     let montoEfectivo = 0;
     let montoYape = 0;
