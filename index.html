@@ -69,6 +69,10 @@ body.rol-vendedor .campo-costo-admin {
     body.rol-inventario-consulta .inventario-grid {
         grid-template-columns: 1fr !important;
     }
+    body.rol-vendedor .inventario-grid,
+    .inventario-grid.inventario-sin-formulario {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;

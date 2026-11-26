@@ -373,6 +373,10 @@ document.addEventListener('DOMContentLoaded', function() {
 function mostrarEl(id, visible, displayValue) {
     const el = document.getElementById(id);
     if (el) el.style.display = visible ? (displayValue || '') : 'none';
+    if (id === 'card-inventario-form') {
+        const tabInventario = document.getElementById('tab-inventario');
+        if (tabInventario) tabInventario.classList.toggle('inventario-sin-formulario', !visible);
+    }
 }
 
 function aplicarMenuPorRol() {
@@ -3556,17 +3560,21 @@ async function guardarSesionCajaSupabase() {
 }
 
 async function registrarMovimientoCajaSupabase(fecha, tipo, monto, descripcion) {
+    const usuarioId = sesionCajaActual?.usuario_id || localStorage.getItem('usuario_id');
+    if (!usuarioId) {
+        throw new Error('No se pudo registrar el movimiento de caja: falta el identificador del usuario.');
+    }
     const { data: movimientosExistentes, error: errorConsulta } = await supabaseClient
         .from('kardex_caja')
         .select('id')
-        .eq('usuario', usuarioActual)
+        .eq('usuario_id', usuarioId)
         .eq('tipo', tipo)
         .eq('fecha', fecha);
     if (errorConsulta) throw errorConsulta;
     if (movimientosExistentes && movimientosExistentes.length > 0) return;
     const { error } = await supabaseClient
         .from('kardex_caja')
-        .insert({ fecha, tipo, monto, descripcion, usuario: usuarioActual });
+        .insert({ fecha, tipo, monto, descripcion, usuario_id: usuarioId });
     if (error) throw error;
 }
 

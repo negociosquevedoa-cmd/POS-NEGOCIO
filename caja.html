@@ -389,7 +389,7 @@
                                 tipo: 'APERTURA',
                                 monto: sesion.monto_inicial,
                                 descripcion: `Apertura de caja ${sesion.fecha_operativa}`,
-                                usuario: usuarioActual
+                                usuario_id: usuarioId
                             });
                         if (errorMovimiento) {
                             console.warn('No se pudo registrar en kardex_caja:', errorMovimiento);
