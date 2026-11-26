@@ -7,6 +7,13 @@ const REGLAS_PRESENTACION = {
             { id: 3, campo: 'Paq', tipo: 'paq', nombreCorto: 'Paquete', label: 'Paquete (10 parejas)', precio: 0, factor: 10, resumen: '▼ 3. PAQUETE (10 parejas)', stockLabel: 'Stock Paquetes', stockable: true }
         ]
     },
+    NUTRIBELA: {
+        unidadBase: 'unidades',
+        slots: [
+            { id: 1, campo: 'Unid', tipo: 'unid', nombreCorto: 'Unidad', label: 'Unidad (1 unid)', precio: 0, factor: 1, resumen: '▼ 1. UNIDAD', stockLabel: 'Stock Inicial Unid' },
+            { id: 6, campo: 'Docena', tipo: 'docena', nombreCorto: 'Docena', label: 'Docena (12 unid)', precio: 0, factor: 12, resumen: '▼ 2. DOCENA (12 unid)', stockable: false }
+        ]
+    },
     'PH NOBLE': {
         unidadBase: 'parejas',
         slots: [
@@ -528,6 +535,7 @@ const CAMPOS_FORM_PRES = {
 };
 
 function reglaPresentacionProducto(prodOrCat) {
+    if (esProductoNutribela(prodOrCat)) return REGLAS_PRESENTACION.NUTRIBELA;
     const cat = typeof prodOrCat === 'string'
         ? prodOrCat
         : (prodOrCat && prodOrCat.categoria);
@@ -579,6 +587,15 @@ function reglaPresentacionProducto(prodOrCat) {
     if (c === 'MAYONESA 8G') return REGLAS_PRESENTACION['MAYONESA 8G'];
     if (c === 'FIDEO SOPA') return REGLAS_PRESENTACION['FIDEO SOPA'];
     return REGLAS_PRESENTACION[c] || null;
+}
+
+function esProductoNutribela(prodOrCat) {
+    if (typeof prodOrCat === 'string') {
+        return prodOrCat.trim().toUpperCase() === 'NUTRIBELA';
+    }
+    const categoria = String((prodOrCat && prodOrCat.categoria) || '').trim().toUpperCase();
+    const nombre = String((prodOrCat && prodOrCat.nombre) || '').trim().toUpperCase();
+    return categoria === 'NUTRIBELA' || nombre.includes('NUTRIBELA');
 }
 
 function slotPorTipo(prod, tipoPres) {
@@ -777,6 +794,7 @@ function unidadesIndividualesReservadasCarrito(prodId, exceptoKey) {
 function normalizarPresentacionesCategoria(data) {
     if (!esAdmin()) return data;
     const esGaseosa = String(data.categoria || '').trim().toUpperCase() === 'GASEOSA';
+    if (esProductoNutribela(data)) return data;
     const regla = esGaseosa ? null : reglaPresentacionProducto(data);
     if (!regla) {
         ['Tira', 'Docena'].forEach(campo => {
@@ -930,11 +948,13 @@ function actualizarNombresPresentaciones(aplicarPrecios) {
     const esPHX4 = catVal === 'PHX4';
     const esPH = catVal === 'PH' || catVal === 'PH NOBLE';
     const bloquePrecioHelado = document.getElementById('bloque-precio-helado');
-    const reglaCategoria = reglaPresentacionProducto(esPHX4
+    const reglaCategoria = reglaPresentacionProducto(esProductoNutribela({ categoria: catVal, nombre: nomVal })
+        ? { categoria: catVal, nombre: nomVal }
+        : (esPHX4
         ? { categoria: catVal, paquetesPlancha: Number(selectorPlancha?.value) || 6 }
         : (esPH
             ? { categoria: catVal, nombre: nomVal, unidadesPaq: 10 }
-            : catVal));
+            : catVal)));
     const regla = catVal === 'GASEOSA' ? null : reglaCategoria;
     const nota = document.getElementById('nota-stock-categoria');
     const bloqueConv = document.getElementById('bloque-conversiones');
@@ -2321,6 +2341,11 @@ function modificarCantidadDirecta(key, valor) {
         } else {
             const prodItem = productos.find(p => String(p.id) === String(item.id));
             const reglaItem = prodItem && reglaPresentacionProducto(prodItem);
+            if (esProductoNutribela(prodItem) && Number.isFinite(num) && !Number.isInteger(num)) {
+                alert('NUTRIBELA se vende en unidades enteras.');
+                actualizarCarritoUI();
+                return;
+            }
             if (prodItem && esProductoPH(prodItem)) {
                 item.stockMax = calcularStockMaximoPH(prodItem, item.tipoPres, item.key);
             } else if (reglaItem) {
@@ -2566,6 +2591,62 @@ function calcularSubtotalesSurtidoGusta() {
     return subtotales.size > 0 ? subtotales : null;
 }
 
+function calcularSubtotalesSurtidoNutribela() {
+    const lineas = [];
+    carrito.forEach(item => {
+        if (item.tipoPres !== 'unid' || item.precio_personalizado !== undefined || !(Number(item.cantidad) > 0)) return;
+        const prod = productos.find(producto => String(producto.id) === String(item.id));
+        if (!prod || !esProductoNutribela(prod)) return;
+
+        const regla = reglaPresentacionProducto(prod);
+        const slotUnidad = regla && regla.slots.find(slot => slot.tipo === 'unid');
+        const slotDocena = regla && regla.slots.find(slot => slot.tipo === 'docena');
+        if (!slotUnidad || !slotDocena) return;
+
+        const presentaciones = extraerPresentacionesProducto(prod);
+        const precioUnidad = presentaciones.precioUnid > 0 ? presentaciones.precioUnid : slotUnidad.precio;
+        const precioDocena = presentaciones.precioDocena > 0 ? presentaciones.precioDocena : slotDocena.precio;
+        if (!(precioUnidad > 0) || !(precioDocena > 0)) return;
+
+        const factor = factorStockBasePorPresentacion(prod, item);
+        lineas.push({
+            item,
+            unidades: Number(item.cantidad) * factor,
+            precioUnidad,
+            precioDocena
+        });
+    });
+
+    const unidadesTotales = lineas.reduce((total, linea) => total + linea.unidades, 0);
+    if (unidadesTotales < 12) return null;
+
+    let unidadesPromocionales = Math.floor(unidadesTotales / 12) * 12;
+    const subtotalesSinRedondear = lineas.map(linea => {
+        const unidadesConPrecioDocena = Math.min(linea.unidades, unidadesPromocionales);
+        unidadesPromocionales -= unidadesConPrecioDocena;
+        return {
+            item: linea.item,
+            subtotal: unidadesConPrecioDocena * (linea.precioDocena / 12) +
+                (linea.unidades - unidadesConPrecioDocena) * linea.precioUnidad
+        };
+    });
+
+    const totalGrupo = Number(subtotalesSinRedondear.reduce((total, linea) => total + linea.subtotal, 0).toFixed(2));
+    const subtotalesRedondeados = subtotalesSinRedondear.map(linea => Number(linea.subtotal.toFixed(2)));
+    let centavosRestantes = Math.round((totalGrupo - subtotalesRedondeados.reduce((total, subtotal) => total + subtotal, 0)) * 100);
+    let indiceRedondeo = 0;
+    while (centavosRestantes !== 0 && subtotalesRedondeados.length > 0) {
+        const ajuste = Math.sign(centavosRestantes) / 100;
+        subtotalesRedondeados[indiceRedondeo] = Number((subtotalesRedondeados[indiceRedondeo] + ajuste).toFixed(2));
+        centavosRestantes -= Math.sign(centavosRestantes);
+        indiceRedondeo = (indiceRedondeo + 1) % subtotalesRedondeados.length;
+    }
+
+    const subtotales = new Map();
+    subtotalesSinRedondear.forEach((linea, index) => subtotales.set(linea.item, subtotalesRedondeados[index]));
+    return subtotales;
+}
+
 function calcularSubtotalesPromocionalesCarrito() {
     const subtotales = calcularSubtotalesPromoGaseosa() || new Map();
     const subtotalesFideo = calcularSubtotalesFideoSopa();
@@ -2575,6 +2656,10 @@ function calcularSubtotalesPromocionalesCarrito() {
     const subtotalesGusta = calcularSubtotalesSurtidoGusta();
     if (subtotalesGusta) {
         subtotalesGusta.forEach((subtotal, item) => subtotales.set(item, subtotal));
+    }
+    const subtotalesNutribela = calcularSubtotalesSurtidoNutribela();
+    if (subtotalesNutribela) {
+        subtotalesNutribela.forEach((subtotal, item) => subtotales.set(item, subtotal));
     }
     return subtotales.size > 0 ? subtotales : null;
 }
@@ -2666,7 +2751,9 @@ function actualizarCarritoUI() {
             const promoTxt = subtotalesPromo && subtotalesPromo.has(item)
                 ? (prodItem && esCategoriaFideoSopa(prodItem)
                     ? ' · Surtido FIDEO SOPA'
-                    : (prodItem && esCategoriaGusta(prodItem) ? ' · Surtido GUSTA' : ' · Combo gaseosa 15u'))
+                    : (prodItem && esCategoriaGusta(prodItem)
+                        ? ' · Surtido GUSTA'
+                        : (prodItem && esProductoNutribela(prodItem) ? ' · Surtido NUTRIBELA' : ' · Combo gaseosa 15u')))
                 : '';
             displayInfo = `${presTxt}S/ ${precio.toFixed(2)} x ${item.cantidad}${unidadesTxt}${promoTxt}`;
         }
@@ -2689,7 +2776,7 @@ function actualizarCarritoUI() {
                 </div>
                 <div class="cart-controls">
                     <button class="btn-qty" onclick="cambiarCantidad('${item.key}', -1)">-</button>
-                    <input type="number" step="0.1" min="0.1" max="${item.stockMax}" class="input-qty" value="${item.cantidad}" onchange="modificarCantidadDirecta('${item.key}', this.value)">
+                    <input type="number" step="${esProductoNutribela(prodItem) ? '1' : '0.1'}" min="${esProductoNutribela(prodItem) ? '1' : '0.1'}" max="${item.stockMax}" class="input-qty" value="${item.cantidad}" onchange="modificarCantidadDirecta('${item.key}', this.value)">
                     <button class="btn-qty" onclick="cambiarCantidad('${item.key}', 1)">+</button>
                     <button class="btn-del" onclick="eliminarDelCarrito('${item.key}')">🗑️</button>
                 </div>
