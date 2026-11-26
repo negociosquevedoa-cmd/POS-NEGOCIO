@@ -385,7 +385,7 @@
                         const { error: errorMovimiento } = await supabaseClient
                             .from('kardex_caja')
                             .insert({
-                                fecha: sesion.fecha_apertura,
+                                created_at: sesion.fecha_apertura,
                                 tipo: 'APERTURA',
                                 monto: sesion.monto_inicial,
                                 descripcion: `Apertura de caja ${sesion.fecha_operativa}`,

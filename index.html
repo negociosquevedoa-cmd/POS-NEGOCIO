@@ -1599,22 +1599,5 @@ body.rol-vendedor .campo-costo-admin {
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
-    <script>
-        (function iniciarDatosEnPantalla() {
-            function arrancar() {
-                if (typeof window.initSupabase === 'function') window.initSupabase();
-                if (typeof window.arrancarSincronizacion === 'function') {
-                    window.arrancarSincronizacion();
-                }
-                if (typeof window.refrescarVistasProductos === 'function') window.refrescarVistasProductos();
-                if (typeof window.refrescarVistasAlmacen === 'function') window.refrescarVistasAlmacen();
-            }
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', arrancar);
-            } else {
-                arrancar();
-            }
-        })();
-    </script>
 </body>
 </html>

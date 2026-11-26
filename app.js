@@ -504,8 +504,8 @@ function cambiarTab(tab) {
         document.getElementById('tab-inventario').classList.add('active');
         document.getElementById('btn-tab-inventario').classList.add('active');
         actualizarNombresPresentaciones();
-        // NO llamar a renderizarProductos aquí para evitar recursividad
-        // Los productos ya se renderizan en inicializarSistema
+        const filtroInventario = document.querySelector('#card-inventario-lista .search-input')?.value || '';
+        filtrarInventario(filtroInventario);
     } else if (tab === 'almacen') {
         document.getElementById('tab-almacen').classList.add('active');
         document.getElementById('btn-tab-almacen').classList.add('active');
@@ -627,6 +627,7 @@ function parejasPorPaquete(prod) {
 function calcularStockMaximoPH(prod, tipoPres, exceptoKey) {
     const parejasPorPaquetePH = parejasPorPaquete(prod);
     if (parejasPorPaquetePH < 1) return 0;
+    const presentaciones = extraerPresentacionesProducto(prod);
 
     let parejasReservadas = 0;
     carrito.forEach(item => {
@@ -641,8 +642,8 @@ function calcularStockMaximoPH(prod, tipoPres, exceptoKey) {
         ? parejasPorPaquetePH
         : factorDePresentacion(prod, tipoPres);
     if (factorVenta <= 0) return 0;
-    const parejasDisponibles = aNumeroProd(prod.stockUnid) +
-        Math.max(0, aNumeroProd(prod.stockPaq)) * parejasPorPaquetePH -
+    const parejasDisponibles = presentaciones.stockUnid +
+        Math.max(0, presentaciones.stockPaq) * parejasPorPaquetePH -
         parejasReservadas;
     return Math.max(0, Math.floor((parejasDisponibles + Number.EPSILON) / factorVenta));
 }
@@ -715,10 +716,27 @@ function factorStockBasePorPresentacion(prod, item) {
     return Number.isFinite(factorGuardado) && factorGuardado > 0 ? factorGuardado : 1;
 }
 
+function stockUnidadesBaseProducto(prod) {
+    const stockUnid = primerValorDefinido(prod, [
+        'stockUnid', 'stock_unid', 'stock_unidad', 'stockUnidad', 'stockKg', 'stock1'
+    ]);
+    const unidadesSueltas = aNumeroProd(stockUnid);
+    if (unidadesSueltas > 0) return unidadesSueltas;
+
+    const stock = primerValorDefinido(prod, ['stock']);
+    if (stock !== undefined) {
+        return aNumeroProd(stock) * factorStockBasePorPresentacion(prod, {
+            presentacion: prod && prod.presentacion
+        });
+    }
+    return unidadesSueltas;
+}
+
 function stockBaseDisponibleProducto(prod) {
-    const stockUnid = aNumeroProd(prod && prod.stockUnid);
-    const stockPaq = aNumeroProd(prod && prod.stockPaq);
-    const stockCaja = aNumeroProd(prod && prod.stockCaja);
+    const presentaciones = extraerPresentacionesProducto(prod || {});
+    const stockUnid = presentaciones.stockUnid;
+    const stockPaq = presentaciones.stockPaq;
+    const stockCaja = presentaciones.stockCaja;
     return stockUnid +
         stockPaq * factorStockBasePorPresentacion(prod, { tipoPres: 'paq' }) +
         stockCaja * factorStockBasePorPresentacion(prod, { tipoPres: 'caja' });
@@ -1135,7 +1153,7 @@ async function cargarDatosDesdeLocalStorage() {
     // Si localStorage está vacío o no tiene productos, cargar desde Supabase (una sola vez)
     if (!productosDesdeSupabase && (!productos || productos.length === 0)) {
         console.log('📥 localStorage vacío, cargando productos desde Supabase...');
-        await loadProductosFromSupabase();
+        await loadProductosFromSupabase(false);
     }
 }
 
@@ -1306,16 +1324,16 @@ function extraerPresentacionesProducto(prod) {
     return {
         costoUnid: aNumeroProd(primerValorDefinido(prod, ['costoUnid', 'costoKg', 'costo1'])),
         precioUnid: aNumeroProd(primerValorDefinido(prod, ['precioUnid', 'precioKg', 'precio1'])),
-        stockUnid: aNumeroProd(primerValorDefinido(prod, ['stockUnid', 'stockKg', 'stock1'])),
+        stockUnid: stockUnidadesBaseProducto(prod),
         costoDoc: aNumeroProd(primerValorDefinido(prod, ['costoDoc', 'costo10kg', 'costo10Kg', 'costo2'])),
         precioDoc: aNumeroProd(primerValorDefinido(prod, ['precioDoc', 'precio10kg', 'precio10Kg', 'precio2'])),
-        stockDoc: aNumeroProd(primerValorDefinido(prod, ['stockDoc', 'stock10kg', 'stock10Kg', 'stock2'])),
+        stockDoc: aNumeroProd(primerValorDefinido(prod, ['stockDoc', 'stock_doc', 'stock10kg', 'stock10Kg', 'stock2'])),
         costoPaq: aNumeroProd(primerValorDefinido(prod, ['costoPaq', 'precioCostoPqte', 'precio_costo_pqte', 'costoMedioSaco', 'costo12saco', 'costo3'])),
         precioPaq: aNumeroProd(primerValorDefinido(prod, ['precioPaq', 'precioMedioSaco', 'precio12saco', 'precio3'])),
-        stockPaq: aNumeroProd(primerValorDefinido(prod, ['stockPaq', 'stockMedioSaco', 'stock12saco', 'stock3'])),
+        stockPaq: aNumeroProd(primerValorDefinido(prod, ['stockPaq', 'stock_paq', 'stockMedioSaco', 'stock12saco', 'stock3'])),
         costoCaja: aNumeroProd(primerValorDefinido(prod, ['costoCaja', 'costoCaia', 'costoSaco', 'costo4'])),
         precioCaja: aNumeroProd(primerValorDefinido(prod, ['precioCaja', 'precioSaco', 'precio4'])),
-        stockCaja: aNumeroProd(primerValorDefinido(prod, ['stockCaja', 'stockSaco', 'stock4'])),
+        stockCaja: aNumeroProd(primerValorDefinido(prod, ['stockCaja', 'stock_caja', 'stockSaco', 'stock4'])),
         costoTira: aNumeroProd(primerValorDefinido(prod, ['costoTira', 'costo_tira'])),
         precioTira: aNumeroProd(primerValorDefinido(prod, ['precioTira', 'precio_tira'])),
         stockTira: aNumeroProd(primerValorDefinido(prod, ['stockTira', 'stock_tira'])),
@@ -2136,6 +2154,7 @@ function agregarAlCarrito(id) {
     const selectPres = document.getElementById(`pres-${id}`).value.split('|');
     const tipoPres = selectPres[0];
     const precioPres = parseFloat(selectPres[1]);
+    const stockUnid = extraerPresentacionesProducto(prod).stockUnid;
 
     // Manejar venta por monto para productos a granel
     if (tipoPres === 'monto') {
@@ -2149,14 +2168,14 @@ function agregarAlCarrito(id) {
 
         const pres = extraerPresentacionesProducto(prod);
         const kgCalculados = montoIngresado / pres.precioUnid;
-
-        if (kgCalculados > pres.stockUnid) {
-            alert(`❌ Stock insuficiente. Solo quedan ${pres.stockUnid.toFixed(2)} KG disponible(s).`);
-            return;
-        }
-
         const itemKey = `${id}-monto`;
         const item = carrito.find(i => i.key === itemKey);
+        const stockReservado = unidadesReservadasCarrito(id, null);
+
+        if (stockReservado + kgCalculados > pres.stockUnid) {
+            alert(`❌ Stock insuficiente. Solo quedan ${Math.max(0, pres.stockUnid - stockReservado).toFixed(2)} KG disponible(s).`);
+            return;
+        }
 
         if (item) {
             item.cantidad += kgCalculados;
@@ -2207,7 +2226,7 @@ function agregarAlCarrito(id) {
         }
     } else if (reglaVenta) {
         const reservadas = unidadesReservadasCarrito(id, null);
-        const sueltos = parseFloat(prod.stockUnid) || 0;
+        const sueltos = stockUnid;
         if (reservadas + factorVenta > sueltos) {
             const quedan = Math.max(0, sueltos - reservadas);
             alert(`❌ Stock insuficiente. Quedan ${quedan} ${reglaVenta.unidadBase} y esta presentación descuenta ${factorVenta}.`);
@@ -2232,7 +2251,7 @@ function agregarAlCarrito(id) {
             item.factorUnidades = factorVenta;
             item.etiquetaPres = etiquetaVenta;
             const otras = unidadesReservadasCarrito(id, item.key);
-            const sueltos = parseFloat(prod.stockUnid) || 0;
+            const sueltos = stockUnid;
             item.stockMax = Math.floor(Math.max(0, sueltos - otras) / factorVenta);
         } else {
             const otras = unidadesReservadasCarrito(id, item.key);
@@ -3569,12 +3588,12 @@ async function registrarMovimientoCajaSupabase(fecha, tipo, monto, descripcion) 
         .select('id')
         .eq('usuario_id', usuarioId)
         .eq('tipo', tipo)
-        .eq('fecha', fecha);
+        .eq('created_at', fecha);
     if (errorConsulta) throw errorConsulta;
     if (movimientosExistentes && movimientosExistentes.length > 0) return;
     const { error } = await supabaseClient
         .from('kardex_caja')
-        .insert({ fecha, tipo, monto, descripcion, usuario_id: usuarioId });
+        .insert({ created_at: fecha, tipo, monto, descripcion, usuario_id: usuarioId });
     if (error) throw error;
 }
 
@@ -4355,11 +4374,17 @@ function cambiarPaginaInventario(pagina) {
 }
 
 function cambiarPaginaCatalogo(pagina) {
-    // No recargar desde localStorage, ya tenemos los datos en memoria
     const filtroActual = document.querySelector('#tab-ventas .search-input')?.value || '';
-    paginaCatalogo = pagina;
-    // Solo renderizar el catálogo, no todo el inventario
-    renderizarCatalogo(productos);
+    const filtro = filtroActual.toLowerCase().trim();
+    const productosFiltrados = productos.filter(p => {
+        const nombre = (p.nombre || '').toLowerCase();
+        const codigo = (p.codigo || '').toLowerCase();
+        const categoria = (p.categoria || '').toLowerCase();
+        return nombre.includes(filtro) || codigo.includes(filtro) || categoria.includes(filtro);
+    });
+    const totalPaginas = Math.max(1, Math.ceil(productosFiltrados.length / itemsPorPagina));
+    paginaCatalogo = Math.min(Math.max(1, Math.floor(Number(pagina) || 1)), totalPaginas);
+    renderizarCatalogo(productosFiltrados);
 }
 
 function filtrarInventario(t) {
@@ -4394,7 +4419,7 @@ function filtrarProductos(t) {
         const categoria = (p.categoria || '').toLowerCase();
         return nombre.includes(filtro) || codigo.includes(filtro) || categoria.includes(filtro);
     });
-    // NO resetear a página al filtrar para mejorar rendimiento
+    paginaCatalogo = 1;
     renderizarCatalogo(prodsFiltrados);
 
     if (prodsFiltrados.length === 1 && filtro.length > 5) {
@@ -4443,17 +4468,12 @@ function renderizarProductosPorLista(listaProductos) {
     const tablaInventario = document.getElementById('tabla-inventario');
     const catalogoVentas = document.getElementById('catalogo-productos');
     const catalogoCompras = document.getElementById('catalogo-compras');
+    const inventarioActivo = document.getElementById('tab-inventario')?.classList.contains('active');
 
-    // Si no existe la tabla de inventario, no hacer nada
-    if (!tablaInventario) {
-        console.warn('⚠️ No se encontró la tabla de inventario (#tabla-inventario)');
-        return;
+    if (inventarioActivo && tablaInventario) {
+        console.log(`📊 Renderizando ${listaProductos.length} productos en la tabla de inventario`);
+        tablaInventario.innerHTML = '';
     }
-
-    console.log(`📊 Renderizando ${listaProductos.length} productos en la tabla de inventario`);
-
-    // Limpiar solo inventario, no el catálogo
-    if (tablaInventario) tablaInventario.innerHTML = '';
     if (catalogoCompras) catalogoCompras.innerHTML = '';
 
     const tituloCat = document.getElementById('titulo-catalogo');
@@ -4464,7 +4484,9 @@ function renderizarProductosPorLista(listaProductos) {
     // Paginación para inventario
     const inicioInv = (paginaInventario - 1) * itemsPorPagina;
     const finInv = inicioInv + itemsPorPagina;
-    const productosPaginaInventario = listaProductos.slice(inicioInv, finInv);
+    const productosPaginaInventario = inventarioActivo
+        ? listaProductos.slice(inicioInv, finInv)
+        : [];
 
     // Construir HTML de filas en un string para evitar múltiples manipulaciones del DOM
     let filasHTML = '';
@@ -4579,17 +4601,17 @@ function renderizarProductosPorLista(listaProductos) {
     });
 
     // Inyectar todas las filas de una sola vez
-    if (tablaInventario && filasHTML) {
+    if (inventarioActivo && tablaInventario && filasHTML) {
         tablaInventario.innerHTML = filasHTML;
         console.log(`✅ ${productosPaginaInventario.length} filas inyectadas en la tabla`);
         console.log(`📏 Longitud del HTML inyectado: ${filasHTML.length} caracteres`);
-    } else {
+    } else if (inventarioActivo && tablaInventario) {
         console.warn('⚠️ No se pudo inyectar filas: tablaInventario=', !!tablaInventario, 'filasHTML=', !!filasHTML);
     }
 
     // Agregar controles de paginación para inventario
     const totalPaginasInv = Math.ceil(listaProductos.length / itemsPorPagina);
-    if (tablaInventario && totalPaginasInv > 1) {
+    if (inventarioActivo && tablaInventario && totalPaginasInv > 1) {
         const rangoPaginasInv = generarRangoPaginas(paginaInventario, totalPaginasInv);
         const botonesPaginasInv = rangoPaginasInv.map(p => {
             if (p === '...') {
@@ -4610,9 +4632,9 @@ function renderizarProductosPorLista(listaProductos) {
             </tr>
         `;
     }
-
-    // Renderizar catálogo por separado solo si está vacío
-    if (catalogoVentas && catalogoVentas.children.length === 0) {
+    // Mantener el catálogo actualizado solo cuando está visible.
+    if (catalogoVentas && (catalogoVentas.children.length === 0 ||
+        document.getElementById('tab-ventas')?.classList.contains('active'))) {
         renderizarCatalogo(listaProductos);
     }
 }
@@ -4625,6 +4647,9 @@ function renderizarCatalogo(listaProductos) {
     // Eliminar paginación anterior del catálogo si existe
     const paginacionCat = document.getElementById('paginacion-catalogo');
     if (paginacionCat) paginacionCat.remove();
+
+    const totalPaginasCat = Math.ceil(listaProductos.length / itemsPorPagina);
+    paginaCatalogo = Math.min(Math.max(1, paginaCatalogo), Math.max(1, totalPaginasCat));
 
     // Paginación para catálogo de ventas
     const inicioCat = (paginaCatalogo - 1) * itemsPorPagina;
@@ -4683,7 +4708,6 @@ function renderizarCatalogo(listaProductos) {
     catalogoVentas.appendChild(fragment);
 
     // Agregar controles de paginación para catálogo
-    const totalPaginasCat = Math.ceil(listaProductos.length / itemsPorPagina);
     if (catalogoVentas && totalPaginasCat > 1) {
         const paginacionCat = document.createElement('div');
         paginacionCat.id = 'paginacion-catalogo';
@@ -4797,7 +4821,6 @@ async function inicializarSistema() {
     if (typeof renderizarKardex === 'function') renderizarKardex();
     if (typeof renderizarReportes === 'function') renderizarReportes();
     if (typeof renderizarHistorialCierres === 'function') renderizarHistorialCierres();
-    refrescarVistasAlmacen();
     arrancarSincronizacion();
 
     document.addEventListener('keydown', manejarAtajosTeclado);
@@ -5956,7 +5979,7 @@ async function loadVentasFromSupabase() {
 }
 
 // Cargar productos desde Supabase
-async function loadProductosFromSupabase() {
+async function loadProductosFromSupabase(actualizarVistas = true) {
     if (!supabaseClient && typeof window.supabase !== 'undefined') {
         initSupabase();
     }
@@ -5988,15 +6011,18 @@ async function loadProductosFromSupabase() {
                     const campo = sufijo.charAt(0).toUpperCase() + sufijo.slice(1);
                     pres[`costo${campo}`] = p[`costo_${sufijo}`] ?? 0;
                     pres[`precio${campo}`] = p[`precio_${sufijo}`] ?? 0;
-                    pres[`stock${campo}`] = p[`stock_${sufijo}`] ?? 0;
+                    pres[`stock${campo}`] = p[`stock_${sufijo}`] ??
+                        (sufijo === 'unid' ? p.stock_unidad : undefined) ?? 0;
                     return pres;
                 }, {});
 
-                return {
+                const producto = {
                     id: p.id,
                     nombre: p.nombre,
                     categoria: p.categoria,
                     codigo: p.codigo,
+                    presentacion: p.presentacion,
+                    stock: p.stock,
                     ...presentaciones,
                     imagen: p.imagen,
                     precio_helado: precioHeladoProducto(p),
@@ -6017,6 +6043,9 @@ async function loadProductosFromSupabase() {
                         ? (p.unidades_caja || p.unidades_caja_box || 24)
                         : 24
                 };
+                producto.stockUnid = stockUnidadesBaseProducto(producto);
+                delete producto.stock;
+                return producto;
             });
 
         productos = productosSupabase;
@@ -6024,19 +6053,19 @@ async function loadProductosFromSupabase() {
         cachePresentaciones.clear();
         guardarEnLocalStorageSeguro('lista_productos', productosSupabase);
         console.log(`✔️ ${productosSupabase.length} productos cargados de Supabase`);
-        refrescarVistasProductos();
+        if (actualizarVistas) refrescarVistasProductos();
     } catch (error) {
         console.error('Error de red al cargar productos:', error);
     }
 }
 
 // Cargar almacén desde Supabase
-async function loadAlmacenFromSupabase() {
+async function loadAlmacenFromSupabase(actualizarVista = true) {
     if (!supabaseClient && typeof window.supabase !== 'undefined') {
         initSupabase();
     }
     if (!supabaseClient || !isOnline) {
-        refrescarVistasAlmacen();
+        if (actualizarVista) refrescarVistasAlmacen();
         return;
     }
 
@@ -6048,7 +6077,7 @@ async function loadAlmacenFromSupabase() {
 
         if (error) {
             console.error('Error al cargar almacén:', error);
-            refrescarVistasAlmacen();
+            if (actualizarVista) refrescarVistasAlmacen();
             return;
         }
 
@@ -6072,16 +6101,16 @@ async function loadAlmacenFromSupabase() {
         console.error('Error de red al cargar almacén:', error);
     }
 
-    refrescarVistasAlmacen();
+    if (actualizarVista) refrescarVistasAlmacen();
 }
 
 // Cargar salidas de almacén desde Supabase
-async function loadSalidasAlmacenFromSupabase() {
+async function loadSalidasAlmacenFromSupabase(actualizarVista = true) {
     if (!supabaseClient && typeof window.supabase !== 'undefined') {
         initSupabase();
     }
     if (!supabaseClient || !isOnline) {
-        refrescarVistasAlmacen();
+        if (actualizarVista) refrescarVistasAlmacen();
         return;
     }
 
@@ -6093,7 +6122,7 @@ async function loadSalidasAlmacenFromSupabase() {
 
         if (error) {
             console.error('Error al cargar salidas de almacén:', error);
-            refrescarVistasAlmacen();
+            if (actualizarVista) refrescarVistasAlmacen();
             return;
         }
 
@@ -6115,7 +6144,7 @@ async function loadSalidasAlmacenFromSupabase() {
         console.error('Error de red al cargar salidas de almacén:', error);
     }
 
-    refrescarVistasAlmacen();
+    if (actualizarVista) refrescarVistasAlmacen();
 }
 
 // ============================================
@@ -6180,43 +6209,50 @@ function setupRealtimeSubscriptions() {
 // INICIALIZACIÓN DE SINCRONIZACIÓN
 // ============================================
 
-async function initSync() {
-    if (!supabaseClient && typeof window.supabase !== 'undefined') {
-        initSupabase();
-    }
+let initSyncPromise = null;
 
-    if (!supabaseClient) {
-        console.log('⚠️ Supabase no disponible, trabajando en modo offline-only');
+async function initSync() {
+    if (initSyncPromise) return initSyncPromise;
+
+    initSyncPromise = (async () => {
+        if (!supabaseClient && typeof window.supabase !== 'undefined') {
+            initSupabase();
+        }
+
+        if (!supabaseClient) {
+            console.log('⚠️ Supabase no disponible, trabajando en modo offline-only');
+            refrescarVistasProductos();
+            refrescarVistasAlmacen();
+            return;
+        }
+
+        const cargasIniciales = [
+            loadAlmacenFromSupabase(false),
+            loadSalidasAlmacenFromSupabase(false)
+        ];
+        if (!productosDesdeSupabase) cargasIniciales.push(loadProductosFromSupabase(false));
+        await Promise.all(cargasIniciales);
+
         refrescarVistasProductos();
         refrescarVistasAlmacen();
-        return;
+        setupRealtimeSubscriptions();
+
+        setTimeout(() => {
+            procesarColaSincronizacion();
+        }, 2000);
+    })();
+
+    try {
+        await initSyncPromise;
+    } finally {
+        initSyncPromise = null;
     }
-
-    await Promise.all([
-        loadProductosFromSupabase(),
-        loadAlmacenFromSupabase(),
-        loadSalidasAlmacenFromSupabase()
-    ]);
-
-    refrescarVistasProductos();
-    refrescarVistasAlmacen();
-
-    setupRealtimeSubscriptions();
-
-    setTimeout(() => {
-        procesarColaSincronizacion();
-    }, 2000);
 }
 
 function arrancarSincronizacion() {
     initSync();
 }
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', arrancarSincronizacion);
-} else {
-    arrancarSincronizacion();
-}
 
 // Exponer funciones de sincronización
 window.syncProductoToSupabase = syncProductoToSupabase;
