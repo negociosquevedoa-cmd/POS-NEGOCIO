@@ -2735,6 +2735,7 @@ function actualizarCarritoUI() {
     let total = 0;
     const subtotalesPromo = calcularSubtotalesPromocionalesCarrito();
     carrito.forEach(item => {
+        const prodItem = productos.find(prod => String(prod.id) === String(item.id));
         let subtotal;
         let displayInfo;
 
@@ -2747,7 +2748,6 @@ function actualizarCarritoUI() {
             const precio = Number(item.cantidad) > 0
                 ? subtotal / Number(item.cantidad)
                 : precioUnitarioAplicado(item);
-            const prodItem = productos.find(prod => String(prod.id) === String(item.id));
             const unidadesTxt = item.factorUnidades > 1
                 ? ` · ${item.cantidad * item.factorUnidades} ${prodItem && esProductoPH(prodItem) ? 'parejas' : 'unid'}`
                 : '';
